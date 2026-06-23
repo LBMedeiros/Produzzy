@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
 from app import models
-from app.routers import products
+from app.routers import products, qrcode
 
 
 Base.metadata.create_all(bind=engine)
@@ -26,6 +26,7 @@ app.add_middleware(
 
 
 app.include_router(products.router)
+app.include_router(qrcode.router)
 
 
 @app.get("/")
