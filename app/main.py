@@ -25,8 +25,8 @@ app.add_middleware(
 )
 
 
-app.include_router(products.router)
 app.include_router(qrcode.router)
+app.include_router(products.router)
 
 
 @app.get("/")

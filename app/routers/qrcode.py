@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -7,6 +7,7 @@ from app.dependencies import get_db
 from app.services.qrcode_service import (
     generate_qrcode_image,
     generate_product_label_image,
+    generate_products_labels_sheet_image,
 )
 
 
@@ -14,6 +15,57 @@ router = APIRouter(
     prefix="/products",
     tags=["QR Code"],
 )
+
+
+@router.get("/labels-sheet")
+def generate_products_labels_sheet(
+    request: Request,
+    label_width_mm: int = Query(default=70, ge=40, le=100),
+    label_height_mm: int = Query(default=90, ge=50, le=140),
+    qr_size_mm: int = Query(default=45, ge=25, le=80),
+    db: Session = Depends(get_db),
+):
+    products = crud.list_products(db=db)
+
+    if not products:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhum produto cadastrado para gerar etiquetas.",
+        )
+
+    labels_data = []
+
+    for product in products:
+        product_url = str(
+            request.url_for(
+                "get_product",
+                product_id=product.id,
+            )
+        )
+
+        labels_data.append(
+            {
+                "data": product_url,
+                "product_name": product.name,
+                "product_category": product.category,
+                "product_id": product.id,
+            }
+        )
+
+    sheet_image = generate_products_labels_sheet_image(
+        labels_data=labels_data,
+        label_width_mm=label_width_mm,
+        label_height_mm=label_height_mm,
+        qr_size_mm=qr_size_mm,
+    )
+
+    return StreamingResponse(
+        sheet_image,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": 'inline; filename="products-labels-sheet-a4.png"'
+        },
+    )
 
 
 @router.get("/{product_id}/qrcode")
