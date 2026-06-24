@@ -3,8 +3,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app import crud, schemas
-from app.dependencies import get_db
+from app.dependencies import get_db, get_current_user
+from app import crud, schemas, models
 
 
 router = APIRouter(
@@ -20,6 +20,7 @@ router = APIRouter(
 )
 def create_product(
     product_data: schemas.ProductCreate,
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     return crud.create_product(product_data, db)
@@ -55,6 +56,7 @@ def get_product(
 def update_product(
     product_id: int,
     product_data: schemas.ProductUpdate,
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     return crud.update_product(product_id, product_data, db)
@@ -63,6 +65,7 @@ def update_product(
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(
     product_id: int,
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     crud.delete_product(product_id, db)
@@ -78,6 +81,7 @@ def delete_product(
 def create_stock_movement(
     product_id: int,
     movement_data: schemas.StockMovementCreate,
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     return crud.create_stock_movement(product_id, movement_data, db)
