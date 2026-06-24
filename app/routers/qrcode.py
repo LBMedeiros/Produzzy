@@ -4,7 +4,10 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.dependencies import get_db
-from app.services.qrcode_service import generate_qrcode_image
+from app.services.qrcode_service import (
+    generate_qrcode_image,
+    generate_product_label_image,
+)
 
 
 router = APIRouter(
@@ -34,6 +37,39 @@ def generate_product_qrcode(
 
     return StreamingResponse(
         qr_image,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"'
+        },
+    )
+
+
+@router.get("/{product_id}/label")
+def generate_product_label(
+    product_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    product = crud.get_product_by_id(product_id, db)
+
+    product_url = str(
+        request.url_for(
+            "get_product",
+            product_id=product.id,
+        )
+    )
+
+    label_image = generate_product_label_image(
+        data=product_url,
+        product_name=product.name,
+        product_category=product.category,
+        product_id=product.id,
+    )
+
+    filename = f"product-{product.id}-label.png"
+
+    return StreamingResponse(
+        label_image,
         media_type="image/png",
         headers={
             "Content-Disposition": f'inline; filename="{filename}"'
