@@ -1,0 +1,18 @@
+# Backend
+backend/venv/
+backend/.env
+backend/produzzy.db
+backend/__pycache__/
+backend/**/*.pyc
+backend/.pytest_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# OS/editor
+.DS_Store
+.vscode/
