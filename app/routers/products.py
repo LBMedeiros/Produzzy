@@ -84,7 +84,12 @@ def create_stock_movement(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return crud.create_stock_movement(product_id, movement_data, db)
+    return crud.create_stock_movement(
+        product_id,
+        movement_data,
+        db,
+        user_id=current_user.id,
+    )
 
 
 @router.get(

@@ -90,6 +90,7 @@ class StockMovementResponse(BaseModel):
     quantity_before: int
     quantity_after: int
     reason: Optional[str] = None
+    user_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

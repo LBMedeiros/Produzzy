@@ -72,6 +72,11 @@ class User(Base):
         nullable=False,
     )
 
+    stock_movements = relationship(
+        "StockMovement",
+        back_populates="user",
+    )
+
 
 class StockMovement(Base):
     __tablename__ = "stock_movements"
@@ -82,6 +87,12 @@ class StockMovement(Base):
         Integer,
         ForeignKey("products.id"),
         nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
         index=True,
     )
 
@@ -97,5 +108,9 @@ class StockMovement(Base):
 
     product = relationship(
         "Product",
+        back_populates="stock_movements",
+    )
+    user = relationship(
+        "User",
         back_populates="stock_movements",
     )

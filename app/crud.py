@@ -166,6 +166,7 @@ def create_stock_movement(
     product_id: int,
     movement_data: schemas.StockMovementCreate,
     db: Session,
+    user_id: int | None = None,
 ):
     product = get_product_by_id(product_id, db)
 
@@ -196,6 +197,7 @@ def create_stock_movement(
 
     movement = models.StockMovement(
         product_id=product.id,
+        user_id=user_id,
         movement_type=movement_data.movement_type.value,
         quantity=movement_data.quantity,
         quantity_before=quantity_before,

@@ -1,12 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import engine, Base
+from app.database import (
+    engine,
+    Base,
+    ensure_stock_movements_user_id_column,
+)
 from app import models
 from app.routers import auth, categories, dashboard, products, qrcode
 
 
 Base.metadata.create_all(bind=engine)
+ensure_stock_movements_user_id_column()
 
 
 app = FastAPI(
