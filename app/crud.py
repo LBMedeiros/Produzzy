@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas
 from app.services.security_service import get_password_hash, verify_password
@@ -217,6 +217,7 @@ def list_product_stock_movements(product_id: int, db: Session):
 
     return (
         db.query(models.StockMovement)
+        .options(joinedload(models.StockMovement.user))
         .filter(models.StockMovement.product_id == product.id)
         .order_by(models.StockMovement.created_at.desc())
         .all()

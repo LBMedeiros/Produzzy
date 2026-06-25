@@ -1,18 +1,18 @@
-import os
 from datetime import datetime, timedelta, timezone
 
 from jose import jwt
 from passlib.context import CryptContext
 
+from app.config import (
+    PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES,
+    PRODUZZY_JWT_ALGORITHM,
+    PRODUZZY_SECRET_KEY,
+)
 
-SECRET_KEY = os.getenv(
-    "PRODUZZY_SECRET_KEY",
-    "change-this-secret-key-before-production",
-)
-ALGORITHM = os.getenv("PRODUZZY_JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES", "60")
-)
+
+SECRET_KEY = PRODUZZY_SECRET_KEY
+ALGORITHM = PRODUZZY_JWT_ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

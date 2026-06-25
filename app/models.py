@@ -114,3 +114,17 @@ class StockMovement(Base):
         "User",
         back_populates="stock_movements",
     )
+
+    @property
+    def user_name(self):
+        if self.user is None:
+            return None
+
+        return self.user.name
+
+    @property
+    def user_email(self):
+        if self.user is None:
+            return None
+
+        return self.user.email
