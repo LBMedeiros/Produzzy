@@ -48,6 +48,12 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+  transform: none;
+}
+
 h1,
 h2,
 h3,
@@ -99,11 +105,18 @@ a {
   transform: translateY(-1px);
 }
 
+.button:disabled:hover {
+  transform: none;
+}
+
 .button:focus-visible,
 .sidebar__item:focus-visible,
+.sidebar__logout:focus-visible,
 .filter-pill:focus-visible,
 .table-actions button:focus-visible,
-.login-panel__footer button:focus-visible {
+.login-panel__footer button:focus-visible,
+.workspace-form button:focus-visible,
+.workspace-switcher select:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.22);
   outline-offset: 2px;
 }
@@ -279,7 +292,8 @@ a {
 
 .sidebar.is-collapsed .brand__text,
 .sidebar.is-collapsed .sidebar__user-text,
-.sidebar.is-collapsed .sidebar__item strong {
+.sidebar.is-collapsed .sidebar__item strong,
+.sidebar.is-collapsed .sidebar__logout strong {
   display: none;
 }
 
@@ -360,6 +374,44 @@ a {
   justify-content: center;
 }
 
+.sidebar__logout {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.24);
+  color: #cbd5e1;
+  margin-top: 10px;
+  padding: 0 10px;
+  font-weight: 800;
+}
+
+.sidebar__logout span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.14);
+  color: #bfdbfe;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.sidebar__logout:hover {
+  background: rgba(37, 99, 235, 0.22);
+  color: #ffffff;
+}
+
+.sidebar.is-collapsed .sidebar__logout {
+  justify-content: center;
+  padding: 0;
+}
+
 .avatar {
   display: grid;
   width: 38px;
@@ -403,6 +455,18 @@ a {
   padding: 0;
 }
 
+.workspace-switcher select {
+  max-width: 240px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 850;
+  outline: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .workspace-switcher span {
   display: grid;
   width: 22px;
@@ -443,7 +507,8 @@ a {
 .search-field input,
 .settings-list input,
 .settings-list select,
-.login-form input {
+.login-form input,
+.workspace-form input {
   width: 100%;
   border: 0;
   color: var(--text);
@@ -461,6 +526,19 @@ a {
   align-items: center;
   gap: 14px;
   margin-left: auto;
+}
+
+.topbar__user {
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 4px 10px 4px 4px;
+}
+
+.topbar__user strong {
+  color: #334155;
+  font-size: 13px;
 }
 
 .topbar__members {
@@ -947,12 +1025,23 @@ a {
 
 .settings-list input,
 .settings-list select,
-.login-form input {
+.login-form input,
+.workspace-form input {
   min-height: 42px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #ffffff;
   padding: 0 12px;
+}
+
+.form-error {
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: #991b1b;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .api-url {
@@ -1220,6 +1309,68 @@ a {
   display: block;
 }
 
+.loading-screen,
+.workspace-empty-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.loading-screen {
+  gap: 14px;
+  align-content: center;
+}
+
+.loading-screen strong {
+  color: var(--muted);
+}
+
+.workspace-empty-card {
+  display: grid;
+  width: min(620px, 100%);
+  gap: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  padding: clamp(24px, 5vw, 44px);
+}
+
+.workspace-empty-card__copy {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-empty-card__copy span {
+  color: var(--blue);
+  font-weight: 850;
+}
+
+.workspace-empty-card__copy p {
+  color: var(--muted);
+}
+
+.workspace-form {
+  display: grid;
+  gap: 16px;
+}
+
+.workspace-form label {
+  display: grid;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.workspace-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 @media (max-width: 1180px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1298,6 +1449,14 @@ a {
   .workspace-switcher,
   .search-field {
     min-width: 100%;
+  }
+
+  .workspace-switcher {
+    justify-content: flex-start;
+  }
+
+  .workspace-switcher select {
+    max-width: calc(100% - 30px);
   }
 
   .topbar__actions {

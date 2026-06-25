@@ -1,4 +1,6 @@
-import { workspace } from '../../data/mockData'
+import { useAuth } from '../../contexts/AuthContext'
+import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { getInitials, getWorkspaceRole } from '../../lib/formatters'
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: 'D' },
@@ -9,6 +11,10 @@ const navItems = [
 ]
 
 function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
+  const { logout, user } = useAuth()
+  const { activeWorkspace } = useWorkspace()
+  const role = getWorkspaceRole(user, activeWorkspace)
+
   return (
     <aside className={`sidebar ${isCollapsed ? 'is-collapsed' : ''}`}>
       <div className="brand">
@@ -45,12 +51,22 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
       </nav>
 
       <div className="sidebar__user">
-        <div className="avatar">{workspace.user.initials}</div>
+        <div className="avatar">{getInitials(user?.name)}</div>
         <div className="sidebar__user-text">
-          <strong>{workspace.user.name}</strong>
-          <span>{workspace.user.role}</span>
+          <strong>{user?.name ?? 'Usuário'}</strong>
+          <span>{role}</span>
         </div>
       </div>
+
+      <button
+        className="sidebar__logout"
+        type="button"
+        onClick={logout}
+        title="Sair da conta"
+      >
+        <span>S</span>
+        <strong>Sair</strong>
+      </button>
     </aside>
   )
 }

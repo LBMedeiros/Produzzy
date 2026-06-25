@@ -1,8 +1,14 @@
 import Card from '../components/ui/Card'
-import { categories, workspace } from '../data/mockData'
+import { useAuth } from '../contexts/AuthContext'
+import { useWorkspace } from '../contexts/WorkspaceContext'
+import { categories } from '../data/mockData'
 import { BASE_URL } from '../lib/api'
+import { getWorkspaceRole } from '../lib/formatters'
 
 function SettingsPage() {
+  const { user } = useAuth()
+  const { activeWorkspace } = useWorkspace()
+
   return (
     <div className="page-stack">
       <div className="page-heading">
@@ -17,11 +23,11 @@ function SettingsPage() {
           <div className="settings-list">
             <label>
               Nome
-              <input defaultValue={workspace.name} />
+              <input value={activeWorkspace?.name ?? ''} readOnly />
             </label>
             <label>
               Identificador
-              <input defaultValue="bordados-medeiros" />
+              <input value={activeWorkspace?.id ?? ''} readOnly />
             </label>
           </div>
         </Card>
@@ -57,11 +63,15 @@ function SettingsPage() {
           <div className="settings-list">
             <label>
               Nome
-              <input defaultValue={workspace.user.name} />
+              <input value={user?.name ?? ''} readOnly />
             </label>
             <label>
               Cargo
-              <input defaultValue={workspace.user.role} />
+              <input value={getWorkspaceRole(user, activeWorkspace)} readOnly />
+            </label>
+            <label>
+              Email
+              <input value={user?.email ?? ''} readOnly />
             </label>
           </div>
         </Card>

@@ -1,5 +1,6 @@
 function Button({
   children,
+  disabled = false,
   type = 'button',
   variant = 'primary',
   size = 'md',
@@ -10,6 +11,7 @@ function Button({
   return (
     <button
       className={`button button--${variant} button--${size} ${className}`}
+      disabled={disabled}
       type={type}
       onClick={onClick}
     >
