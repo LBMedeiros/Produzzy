@@ -15,7 +15,21 @@ def get_int_env(name: str, default: int) -> int:
     return int(value)
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./produzzy.db")
+DEFAULT_DATABASE_URL = (
+    "postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_db"
+)
+
+
+def get_database_url():
+    value = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+
+    if value.startswith("postgres://"):
+        return value.replace("postgres://", "postgresql://", 1)
+
+    return value
+
+
+DATABASE_URL = get_database_url()
 PRODUZZY_SECRET_KEY = os.getenv(
     "PRODUZZY_SECRET_KEY",
     "change-this-secret-key-before-production",

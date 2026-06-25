@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -21,7 +21,7 @@ class Category(Base):
     workspace_id = Column(
         Integer,
         ForeignKey("workspaces.id"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
 
@@ -52,7 +52,7 @@ class Product(Base):
     workspace_id = Column(
         Integer,
         ForeignKey("workspaces.id"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
 
@@ -234,6 +234,15 @@ class WorkspaceMember(Base):
 
 class WorkspaceInvite(Base):
     __tablename__ = "workspace_invites"
+    __table_args__ = (
+        Index(
+            "uq_workspace_invites_pending_email",
+            "workspace_id",
+            "email",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
@@ -297,7 +306,7 @@ class StockMovement(Base):
     workspace_id = Column(
         Integer,
         ForeignKey("workspaces.id"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
     user_id = Column(

@@ -23,7 +23,8 @@ Produzzy API is an MVP backend for inventory and production control. It is built
 - Python
 - FastAPI
 - SQLAlchemy
-- SQLite for local development
+- PostgreSQL as the recommended database
+- Alembic for database migrations
 - Pydantic
 - JWT with `python-jose`
 - Password hashing with `passlib` and bcrypt
@@ -34,10 +35,13 @@ Produzzy API is an MVP backend for inventory and production control. It is built
 ## Project Structure
 
 ```text
+alembic/
+  env.py                    Alembic environment using app metadata
+  versions/                 Database migration files
 app/
   config.py                 Environment configuration
   crud.py                   Database operations, workspace rules, and permissions
-  database.py               SQLAlchemy engine, session, and local schema helpers
+  database.py               SQLAlchemy engine, session, and legacy SQLite helpers
   dependencies.py           FastAPI dependencies for database and auth
   main.py                   FastAPI application setup
   models.py                 SQLAlchemy models
@@ -65,13 +69,68 @@ cp .env.example .env
 Available variables:
 
 ```env
-DATABASE_URL=sqlite:///./produzzy.db
+DATABASE_URL=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_db
 PRODUZZY_SECRET_KEY=replace-with-a-long-random-secret-key
 PRODUZZY_JWT_ALGORITHM=HS256
 PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
 Do not commit a real `.env` file or production secrets.
+
+## PostgreSQL Setup
+
+Create a local PostgreSQL user and database:
+
+```bash
+sudo -u postgres psql
+```
+
+```sql
+CREATE USER produzzy_user WITH PASSWORD 'produzzy_password';
+CREATE DATABASE produzzy_db OWNER produzzy_user;
+GRANT ALL PRIVILEGES ON DATABASE produzzy_db TO produzzy_user;
+```
+
+Then set `DATABASE_URL` in `.env`:
+
+```env
+DATABASE_URL=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_db
+```
+
+SQLite was used during the initial development phase. PostgreSQL + Alembic is now the recommended flow for local development and production-like environments.
+
+## Alembic Migrations
+
+Run migrations before starting the API:
+
+```bash
+alembic upgrade head
+```
+
+Useful Alembic commands:
+
+```bash
+alembic current
+alembic history
+alembic revision --autogenerate -m "describe change"
+```
+
+The initial migration creates the multi-workspace schema:
+
+- `users`
+- `workspaces`
+- `workspace_members`
+- `workspace_invites`
+- `categories`
+- `products`
+- `stock_movements`
+
+Workspace-scoped uniqueness is enforced at the database level:
+
+- product names are unique per workspace
+- category names are unique per workspace
+- a user can only be a member of a workspace once
+- pending invite emails are unique per workspace
 
 ## How to Run Locally
 
@@ -86,6 +145,12 @@ Install dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+Run migrations:
+
+```bash
+alembic upgrade head
 ```
 
 Start the API:
@@ -241,19 +306,17 @@ Each product can expose a QR Code pointing to its workspace-scoped product detai
 ## Development Notes
 
 - This project is currently an MVP backend.
-- SQLite is used by default for local development.
-- Alembic migrations are not configured yet.
-- Existing local databases are not recreated automatically.
-- The development schema helper adds missing workspace columns and assigns existing products, categories, and stock movements to a `Default Workspace` when an active user exists.
-- If no active user exists when old data is present, the helper leaves old data untouched until a proper migration path is available.
-- Older SQLite databases may still contain legacy global unique constraints on `products.name` and `categories.name`. The application validates duplicates per workspace, but SQLite may still reject duplicate names across workspaces until Alembic migrations remove the old constraints.
+- PostgreSQL + Alembic is the official database flow.
+- The API no longer creates tables at startup with `Base.metadata.create_all`.
+- Existing SQLite development helpers remain in the codebase only as a legacy fallback and are not called by the main application startup.
+- The initial PostgreSQL migration creates workspace-scoped constraints for products and categories.
+- SQLite databases created before Alembic may still contain old global unique constraints. Use PostgreSQL migrations for new work.
 - Automated tests are planned but not included yet.
 
 ## Next Steps / Roadmap
 
 - Add automated tests for auth, workspace permissions, invites, data isolation, products, categories, stock movements, dashboard, and image endpoints.
-- Add Alembic migrations before production deployment.
-- Move production deployments to PostgreSQL.
+- Add migration tests and schema drift checks.
 - Replace symbolic invites with real email delivery.
 - Add organization-level billing/subscription metadata if needed.
 - Add audit logs for member, invite, product, category, and stock changes.

@@ -1,17 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import (
-    engine,
-    Base,
-    ensure_development_schema,
-)
-from app import models
 from app.routers import auth, categories, dashboard, products, qrcode, workspaces
-
-
-Base.metadata.create_all(bind=engine)
-ensure_development_schema()
 
 
 app = FastAPI(
