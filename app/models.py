@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy import UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
@@ -126,6 +126,10 @@ class User(Base):
         "StockMovement",
         back_populates="user",
     )
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="user",
+    )
     deleted_products = relationship(
         "Product",
         back_populates="deleted_by_user",
@@ -190,6 +194,10 @@ class Workspace(Base):
     )
     products = relationship(
         "Product",
+        back_populates="workspace",
+    )
+    audit_logs = relationship(
+        "AuditLog",
         back_populates="workspace",
     )
     categories = relationship(
@@ -317,6 +325,38 @@ class WorkspaceInvite(Base):
     @property
     def invite_url(self):
         return f"/invites/{self.token}/accept"
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id"),
+        nullable=True,
+        index=True,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+    action = Column(String(100), nullable=False, index=True)
+    entity_type = Column(String(100), nullable=False, index=True)
+    entity_id = Column(Integer, nullable=True, index=True)
+    metadata_json = Column("metadata", JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    workspace = relationship(
+        "Workspace",
+        back_populates="audit_logs",
+    )
+    user = relationship(
+        "User",
+        back_populates="audit_logs",
+    )
 
 
 class StockMovement(Base):

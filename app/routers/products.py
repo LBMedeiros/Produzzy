@@ -31,7 +31,12 @@ def create_product(
         crud.PRODUCT_WRITE_ROLES,
     )
 
-    return crud.create_product(product_data, db, workspace_id)
+    return crud.create_product(
+        product_data,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )
 
 
 @router.get("", response_model=list[schemas.ProductResponse])
@@ -122,7 +127,13 @@ def update_product(
         crud.PRODUCT_WRITE_ROLES,
     )
 
-    return crud.update_product(product_id, product_data, db, workspace_id)
+    return crud.update_product(
+        product_id,
+        product_data,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )
 
 
 @router.delete("/{product_id}", response_model=schemas.ProductResponse)
@@ -160,7 +171,12 @@ def restore_product(
         crud.PRODUCT_WRITE_ROLES,
     )
 
-    return crud.restore_product(product_id, db, workspace_id)
+    return crud.restore_product(
+        product_id,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )
 
 
 @router.post(

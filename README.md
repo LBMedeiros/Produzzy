@@ -12,6 +12,7 @@ Produzzy API is an MVP backend for inventory and production control. It is built
 - Workspace-scoped product and category management.
 - Product soft delete with trash listing and restore support.
 - Workspace-scoped stock movements with authenticated user audit fields.
+- Basic workspace-scoped audit logs for key mutations.
 - Low-stock product listing per workspace.
 - Dashboard summary per workspace.
 - Product QR Code generation with workspace-scoped URLs.
@@ -50,6 +51,7 @@ app/
   routers/
     auth.py                 Authentication routes
     workspaces.py           Workspace, member, and invite routes
+    audit_logs.py           Workspace-scoped audit log routes
     categories.py           Workspace-scoped category routes
     dashboard.py            Workspace-scoped dashboard routes
     products.py             Workspace-scoped product and stock movement routes
@@ -71,6 +73,8 @@ Available variables:
 
 ```env
 DATABASE_URL=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_db
+# DATABASE_URL_TEST=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_test_db
+PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
 PRODUZZY_SECRET_KEY=replace-with-a-long-random-secret-key
 PRODUZZY_JWT_ALGORITHM=HS256
 PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES=60
@@ -89,16 +93,29 @@ sudo -u postgres psql
 ```sql
 CREATE USER produzzy_user WITH PASSWORD 'produzzy_password';
 CREATE DATABASE produzzy_db OWNER produzzy_user;
+CREATE DATABASE produzzy_test_db OWNER produzzy_user;
 GRANT ALL PRIVILEGES ON DATABASE produzzy_db TO produzzy_user;
+GRANT ALL PRIVILEGES ON DATABASE produzzy_test_db TO produzzy_user;
 ```
 
 Then set `DATABASE_URL` in `.env`:
 
 ```env
 DATABASE_URL=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_db
+DATABASE_URL_TEST=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_test_db
 ```
 
 SQLite was used during the initial development phase. PostgreSQL + Alembic is now the recommended flow for local development and production-like environments.
+
+## CORS
+
+CORS is configured with `PRODUZZY_ALLOWED_ORIGINS`, a comma-separated list of allowed frontend origins:
+
+```env
+PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+```
+
+If the variable is missing, the API falls back to the local development origins above. Avoid using `*` in production.
 
 ## Alembic Migrations
 
@@ -125,6 +142,7 @@ The initial migration creates the multi-workspace schema:
 - `categories`
 - `products`
 - `stock_movements`
+- `audit_logs`
 
 Workspace-scoped uniqueness is enforced at the database level:
 
@@ -287,6 +305,13 @@ QR Codes and labels:
 - `GET /workspaces/{workspace_id}/products/{product_id}/label`
 - `GET /workspaces/{workspace_id}/products/labels-sheet`
 
+Audit logs:
+
+- `GET /workspaces/{workspace_id}/audit-logs`
+- `GET /workspaces/{workspace_id}/audit-logs?action=product.created`
+- `GET /workspaces/{workspace_id}/audit-logs?entity_type=product`
+- `GET /workspaces/{workspace_id}/audit-logs?user_id={user_id}`
+
 ## Data Isolation
 
 Before any workspace data is queried, the API validates that the authenticated user is a member of that workspace. Product, category, stock movement, dashboard, QR Code, and label queries are filtered by `workspace_id`.
@@ -333,9 +358,64 @@ POST /workspaces/{workspace_id}/products/{product_id}/restore
 
 Restoring clears `deleted_at` and `deleted_by_user_id` and marks the product active again. Product names are unique among active products in the same workspace, so restoring fails with a `400` response if another active product already uses the same name.
 
+## Audit Logs
+
+The API records basic audit logs for key workspace mutations:
+
+- `workspace.created`
+- `workspace.updated`
+- `invite.created`
+- `invite.accepted`
+- `invite.revoked`
+- `member.role_updated`
+- `member.removed`
+- `product.created`
+- `product.updated`
+- `product.deleted`
+- `product.restored`
+- `category.created`
+- `category.updated`
+- `category.deleted`
+- `stock.movement_created`
+
+Audit logs are scoped by `workspace_id`. Only `owner` and `admin` members can list them:
+
+```text
+GET /workspaces/{workspace_id}/audit-logs?page=1&limit=20
+```
+
+Optional filters are available for `action`, `entity_type`, and `user_id`. Audit metadata is intentionally small and does not include passwords, JWTs, password hashes, or invite tokens.
+
 ## QR Code and Label Features
 
 Each product can expose a QR Code pointing to its workspace-scoped product detail endpoint. The API can also generate a printable individual product label and an A4 label sheet for the workspace catalog. Images are returned as PNG responses.
+
+## Testing
+
+Tests use `pytest`, `httpx`, and FastAPI's `TestClient`. They are designed to run against a dedicated PostgreSQL test database configured by `DATABASE_URL_TEST`.
+
+Never point `DATABASE_URL_TEST` at your development or production database. The test setup runs migrations on the test database and truncates application tables between tests.
+
+Create the test database:
+
+```sql
+CREATE DATABASE produzzy_test_db OWNER produzzy_user;
+GRANT ALL PRIVILEGES ON DATABASE produzzy_test_db TO produzzy_user;
+```
+
+Set `.env`:
+
+```env
+DATABASE_URL_TEST=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_test_db
+```
+
+Run tests:
+
+```bash
+venv/bin/python -m pytest
+```
+
+The test suite currently covers auth, workspace ownership, invites, role permissions, workspace isolation, product soft delete/restore, dashboard behavior, and audit log access.
 
 ## Development Notes
 
@@ -345,13 +425,11 @@ Each product can expose a QR Code pointing to its workspace-scoped product detai
 - Existing SQLite development helpers remain in the codebase only as a legacy fallback and are not called by the main application startup.
 - The initial PostgreSQL migration creates workspace-scoped constraints for products and categories.
 - SQLite databases created before Alembic may still contain old global unique constraints. Use PostgreSQL migrations for new work.
-- Automated tests are planned but not included yet.
+- Automated tests require `DATABASE_URL_TEST` and must not be run against a development or production database.
 
 ## Next Steps / Roadmap
 
-- Add automated tests for auth, workspace permissions, invites, data isolation, products, categories, stock movements, dashboard, and image endpoints.
 - Add migration tests and schema drift checks.
 - Replace symbolic invites with real email delivery.
 - Add organization-level billing/subscription metadata if needed.
-- Add audit logs for member, invite, product, category, and stock changes.
 - Add pagination metadata for larger datasets.

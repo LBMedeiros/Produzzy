@@ -16,6 +16,7 @@ CATEGORY_WRITE_ROLES = {"owner", "admin"}
 STOCK_WRITE_ROLES = {"owner", "admin", "employee"}
 MEMBER_MANAGE_ROLES = {"owner"}
 INVITE_MANAGE_ROLES = {"owner", "admin"}
+AUDIT_LOG_READ_ROLES = {"owner", "admin"}
 ACTIVE_PRODUCT_NAME_EXISTS = (
     "An active product with this name already exists in this workspace."
 )
@@ -94,6 +95,29 @@ def paginate_query(query, page: int = 1, limit: int = 20):
     offset = (page - 1) * limit
 
     return query.offset(offset).limit(limit)
+
+
+def create_audit_log(
+    db: Session,
+    workspace_id: int | None,
+    user_id: int | None,
+    action: str,
+    entity_type: str,
+    entity_id: int | None = None,
+    metadata: dict | None = None,
+):
+    audit_log = models.AuditLog(
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        metadata_json=metadata,
+    )
+
+    db.add(audit_log)
+
+    return audit_log
 
 
 def aware_utc_now():
@@ -218,6 +242,15 @@ def create_workspace(
     )
 
     db.add(member)
+    create_audit_log(
+        db=db,
+        workspace_id=workspace.id,
+        user_id=current_user.id,
+        action="workspace.created",
+        entity_type="workspace",
+        entity_id=workspace.id,
+        metadata={"name": workspace.name},
+    )
     db.commit()
     db.refresh(workspace)
 
@@ -247,7 +280,17 @@ def update_workspace(
         {schemas.WorkspaceRole.owner.value},
     )
     workspace = get_workspace_by_id(workspace_id, db)
+    old_name = workspace.name
     workspace.name = workspace_data.name.strip()
+    create_audit_log(
+        db=db,
+        workspace_id=workspace.id,
+        user_id=current_user.id,
+        action="workspace.updated",
+        entity_type="workspace",
+        entity_id=workspace.id,
+        metadata={"old_name": old_name, "new_name": workspace.name},
+    )
 
     db.commit()
     db.refresh(workspace)
@@ -335,7 +378,21 @@ def update_workspace_member(
             detail="Não é possível remover o último owner do workspace.",
         )
 
+    old_role = member.role
     member.role = new_role
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        action="member.role_updated",
+        entity_type="workspace_member",
+        entity_id=member.id,
+        metadata={
+            "member_user_id": member.user_id,
+            "old_role": old_role,
+            "new_role": member.role,
+        },
+    )
 
     db.commit()
     db.refresh(member)
@@ -366,6 +423,18 @@ def delete_workspace_member(
             detail="Não é possível remover o último owner do workspace.",
         )
 
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        action="member.removed",
+        entity_type="workspace_member",
+        entity_id=member.id,
+        metadata={
+            "member_user_id": member.user_id,
+            "role": member.role,
+        },
+    )
     db.delete(member)
     db.commit()
 
@@ -424,6 +493,16 @@ def create_workspace_invite(
     )
 
     db.add(invite)
+    db.flush()
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        action="invite.created",
+        entity_type="workspace_invite",
+        entity_id=invite.id,
+        metadata={"role": invite.role},
+    )
     db.commit()
     db.refresh(invite)
 
@@ -449,6 +528,34 @@ def list_workspace_invites(
         .filter(models.WorkspaceInvite.workspace_id == workspace_id)
         .order_by(models.WorkspaceInvite.created_at.desc())
     )
+
+    return paginate_query(query, page, limit).all()
+
+
+def list_audit_logs(
+    db: Session,
+    workspace_id: int,
+    action: str | None = None,
+    entity_type: str | None = None,
+    user_id: int | None = None,
+    page: int = 1,
+    limit: int = 20,
+):
+    query = (
+        db.query(models.AuditLog)
+        .filter(models.AuditLog.workspace_id == workspace_id)
+    )
+
+    if action:
+        query = query.filter(models.AuditLog.action == action)
+
+    if entity_type:
+        query = query.filter(models.AuditLog.entity_type == entity_type)
+
+    if user_id:
+        query = query.filter(models.AuditLog.user_id == user_id)
+
+    query = query.order_by(models.AuditLog.created_at.desc())
 
     return paginate_query(query, page, limit).all()
 
@@ -504,6 +611,15 @@ def accept_workspace_invite(
     invite.status = schemas.InviteStatus.accepted.value
     invite.accepted_by_user_id = current_user.id
     invite.accepted_at = aware_utc_now()
+    create_audit_log(
+        db=db,
+        workspace_id=invite.workspace_id,
+        user_id=current_user.id,
+        action="invite.accepted",
+        entity_type="workspace_invite",
+        entity_id=invite.id,
+        metadata={"role": invite.role},
+    )
 
     db.commit()
     db.refresh(member)
@@ -543,6 +659,15 @@ def revoke_workspace_invite(
         )
 
     invite.status = schemas.InviteStatus.revoked.value
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        action="invite.revoked",
+        entity_type="workspace_invite",
+        entity_id=invite.id,
+        metadata={"role": invite.role},
+    )
 
     db.commit()
     db.refresh(invite)
@@ -599,6 +724,7 @@ def create_product(
     product_data: schemas.ProductCreate,
     db: Session,
     workspace_id: int,
+    user_id: int | None = None,
 ):
     name = product_data.name.strip()
     existing_product = get_product_by_name(
@@ -623,6 +749,19 @@ def create_product(
     )
 
     db.add(new_product)
+    db.flush()
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="product.created",
+        entity_type="product",
+        entity_id=new_product.id,
+        metadata={
+            "name": new_product.name,
+            "category": new_product.category,
+        },
+    )
 
     try:
         db.commit()
@@ -695,6 +834,7 @@ def update_product(
     product_data: schemas.ProductUpdate,
     db: Session,
     workspace_id: int,
+    user_id: int | None = None,
 ):
     product = get_product_by_id(product_id, db, workspace_id)
 
@@ -722,6 +862,19 @@ def update_product(
 
     for field, value in update_data.items():
         setattr(product, field, value)
+
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="product.updated",
+        entity_type="product",
+        entity_id=product.id,
+        metadata={
+            "name": product.name,
+            "fields": sorted(update_data.keys()),
+        },
+    )
 
     try:
         db.commit()
@@ -756,6 +909,15 @@ def delete_product(
     product.is_active = False
     product.deleted_at = aware_utc_now()
     product.deleted_by_user_id = deleted_by_user_id
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=deleted_by_user_id,
+        action="product.deleted",
+        entity_type="product",
+        entity_id=product.id,
+        metadata={"name": product.name},
+    )
 
     db.commit()
     db.refresh(product)
@@ -763,7 +925,12 @@ def delete_product(
     return product
 
 
-def restore_product(product_id: int, db: Session, workspace_id: int):
+def restore_product(
+    product_id: int,
+    db: Session,
+    workspace_id: int,
+    user_id: int | None = None,
+):
     product = get_product_by_id(
         product_id,
         db,
@@ -793,6 +960,15 @@ def restore_product(product_id: int, db: Session, workspace_id: int):
     product.is_active = True
     product.deleted_at = None
     product.deleted_by_user_id = None
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="product.restored",
+        entity_type="product",
+        entity_id=product.id,
+        metadata={"name": product.name},
+    )
 
     try:
         db.commit()
@@ -865,6 +1041,22 @@ def create_stock_movement(
     )
 
     db.add(movement)
+    db.flush()
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="stock.movement_created",
+        entity_type="stock_movement",
+        entity_id=movement.id,
+        metadata={
+            "product_id": product.id,
+            "movement_type": movement.movement_type,
+            "quantity": movement.quantity,
+            "quantity_before": movement.quantity_before,
+            "quantity_after": movement.quantity_after,
+        },
+    )
     db.commit()
     db.refresh(movement)
 
@@ -938,6 +1130,7 @@ def create_category(
     category_data: schemas.CategoryCreate,
     db: Session,
     workspace_id: int,
+    user_id: int | None = None,
 ):
     name = normalize_category_name(category_data.name)
 
@@ -956,6 +1149,16 @@ def create_category(
     )
 
     db.add(new_category)
+    db.flush()
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="category.created",
+        entity_type="category",
+        entity_id=new_category.id,
+        metadata={"name": new_category.name},
+    )
 
     try:
         db.commit()
@@ -998,6 +1201,7 @@ def update_category(
     category_data: schemas.CategoryUpdate,
     db: Session,
     workspace_id: int,
+    user_id: int | None = None,
 ):
     category = get_category_by_id(category_id, db, workspace_id)
 
@@ -1019,6 +1223,19 @@ def update_category(
     for field, value in update_data.items():
         setattr(category, field, value)
 
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="category.updated",
+        entity_type="category",
+        entity_id=category.id,
+        metadata={
+            "name": category.name,
+            "fields": sorted(update_data.keys()),
+        },
+    )
+
     try:
         db.commit()
     except IntegrityError:
@@ -1036,7 +1253,12 @@ def update_category(
     return category
 
 
-def delete_category(category_id: int, db: Session, workspace_id: int):
+def delete_category(
+    category_id: int,
+    db: Session,
+    workspace_id: int,
+    user_id: int | None = None,
+):
     category = get_category_by_id(category_id, db, workspace_id)
     active_products_count = (
         db.query(models.Product)
@@ -1052,6 +1274,15 @@ def delete_category(category_id: int, db: Session, workspace_id: int):
             detail="Cannot delete category while active products use it.",
         )
 
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="category.deleted",
+        entity_type="category",
+        entity_id=category.id,
+        metadata={"name": category.name},
+    )
     db.delete(category)
     db.commit()
 

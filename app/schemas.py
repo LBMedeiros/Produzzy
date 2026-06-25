@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -211,3 +211,22 @@ class DashboardSummary(BaseModel):
     low_stock_products: int
     total_stock_quantity: int
     total_stock_movements: int
+
+
+class AuditLogResponse(BaseModel):
+    id: int
+    workspace_id: Optional[int] = None
+    user_id: Optional[int] = None
+    action: str
+    entity_type: str
+    entity_id: Optional[int] = None
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None,
+        validation_alias="metadata_json",
+    )
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+    )

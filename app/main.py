@@ -1,7 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, categories, dashboard, products, qrcode, workspaces
+from app.config import PRODUZZY_ALLOWED_ORIGINS
+from app.routers import (
+    audit_logs,
+    auth,
+    categories,
+    dashboard,
+    products,
+    qrcode,
+    workspaces,
+)
 
 
 app = FastAPI(
@@ -13,7 +22,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Depois podemos trocar pelo domínio real do front-end
+    allow_origins=PRODUZZY_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -22,6 +31,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(workspaces.router)
+app.include_router(audit_logs.router)
 app.include_router(dashboard.router)
 app.include_router(qrcode.router)
 app.include_router(products.router)

@@ -31,7 +31,12 @@ def create_category(
         crud.CATEGORY_WRITE_ROLES,
     )
 
-    return crud.create_category(category_data, db, workspace_id)
+    return crud.create_category(
+        category_data,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )
 
 
 @router.get("", response_model=list[schemas.CategoryResponse])
@@ -91,7 +96,13 @@ def update_category(
         crud.CATEGORY_WRITE_ROLES,
     )
 
-    return crud.update_category(category_id, category_data, db, workspace_id)
+    return crud.update_category(
+        category_id,
+        category_data,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )
 
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -107,6 +118,11 @@ def delete_category(
         db,
         crud.CATEGORY_WRITE_ROLES,
     )
-    crud.delete_category(category_id, db, workspace_id)
+    crud.delete_category(
+        category_id,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )
 
     return None
