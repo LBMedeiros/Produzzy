@@ -41,6 +41,10 @@ def list_products(
     current_user: models.User = Depends(get_current_user),
     category: Optional[str] = None,
     search: Optional[str] = None,
+    product_status: schemas.ProductStatus = Query(
+        default=schemas.ProductStatus.active,
+        alias="status",
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
 ):
@@ -56,6 +60,7 @@ def list_products(
         workspace_id=workspace_id,
         category=category,
         search=search,
+        product_status=product_status,
         page=page,
         limit=limit,
     )
@@ -83,6 +88,7 @@ def list_low_stock_products(
 def get_workspace_product(
     workspace_id: int,
     product_id: int,
+    include_deleted: bool = Query(default=False),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -93,7 +99,12 @@ def get_workspace_product(
         crud.READ_ROLES,
     )
 
-    return crud.get_product_by_id(product_id, db, workspace_id)
+    return crud.get_product_by_id(
+        product_id,
+        db,
+        workspace_id,
+        include_deleted=include_deleted,
+    )
 
 
 @router.patch("/{product_id}", response_model=schemas.ProductResponse)
@@ -114,7 +125,7 @@ def update_product(
     return crud.update_product(product_id, product_data, db, workspace_id)
 
 
-@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{product_id}", response_model=schemas.ProductResponse)
 def delete_product(
     workspace_id: int,
     product_id: int,
@@ -127,9 +138,29 @@ def delete_product(
         db,
         crud.PRODUCT_WRITE_ROLES,
     )
-    crud.delete_product(product_id, db, workspace_id)
+    return crud.delete_product(
+        product_id,
+        db,
+        workspace_id,
+        deleted_by_user_id=current_user.id,
+    )
 
-    return None
+
+@router.post("/{product_id}/restore", response_model=schemas.ProductResponse)
+def restore_product(
+    workspace_id: int,
+    product_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.PRODUCT_WRITE_ROLES,
+    )
+
+    return crud.restore_product(product_id, db, workspace_id)
 
 
 @router.post(

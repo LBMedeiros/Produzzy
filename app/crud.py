@@ -16,6 +16,12 @@ CATEGORY_WRITE_ROLES = {"owner", "admin"}
 STOCK_WRITE_ROLES = {"owner", "admin", "employee"}
 MEMBER_MANAGE_ROLES = {"owner"}
 INVITE_MANAGE_ROLES = {"owner", "admin"}
+ACTIVE_PRODUCT_NAME_EXISTS = (
+    "An active product with this name already exists in this workspace."
+)
+ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS = (
+    "Another active product with this name already exists in this workspace."
+)
 
 
 def normalize_email(email: str):
@@ -92,6 +98,13 @@ def paginate_query(query, page: int = 1, limit: int = 20):
 
 def aware_utc_now():
     return datetime.now(timezone.utc)
+
+
+def normalize_product_status(product_status):
+    if hasattr(product_status, "value"):
+        return product_status.value
+
+    return str(product_status)
 
 
 def is_expired(expires_at: datetime):
@@ -541,6 +554,7 @@ def get_product_by_id(
     product_id: int,
     db: Session,
     workspace_id: int | None = None,
+    include_deleted: bool = False,
 ):
     query = db.query(models.Product).filter(models.Product.id == product_id)
 
@@ -548,6 +562,9 @@ def get_product_by_id(
         query = query.filter(models.Product.workspace_id.is_(None))
     else:
         query = query.filter(models.Product.workspace_id == workspace_id)
+
+    if not include_deleted:
+        query = query.filter(models.Product.is_active.is_(True))
 
     product = query.first()
 
@@ -560,13 +577,22 @@ def get_product_by_id(
     return product
 
 
-def get_product_by_name(name: str, workspace_id: int, db: Session):
-    return (
+def get_product_by_name(
+    name: str,
+    workspace_id: int,
+    db: Session,
+    only_active: bool = False,
+):
+    query = (
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
         .filter(models.Product.name == name)
-        .first()
     )
+
+    if only_active:
+        query = query.filter(models.Product.is_active.is_(True))
+
+    return query.first()
 
 
 def create_product(
@@ -575,12 +601,17 @@ def create_product(
     workspace_id: int,
 ):
     name = product_data.name.strip()
-    existing_product = get_product_by_name(name, workspace_id, db)
+    existing_product = get_product_by_name(
+        name,
+        workspace_id,
+        db,
+        only_active=True,
+    )
 
     if existing_product:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Já existe um produto com esse nome neste workspace.",
+            detail=ACTIVE_PRODUCT_NAME_EXISTS,
         )
 
     new_product = models.Product(
@@ -599,10 +630,7 @@ def create_product(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Não foi possível criar o produto com esse nome. "
-                "No SQLite atual ainda pode existir uma constraint global antiga."
-            ),
+            detail=ACTIVE_PRODUCT_NAME_EXISTS,
         )
 
     db.refresh(new_product)
@@ -615,12 +643,24 @@ def list_products(
     workspace_id: int,
     category: str | None = None,
     search: str | None = None,
+    product_status: schemas.ProductStatus | str = schemas.ProductStatus.active,
     page: int = 1,
     limit: int = 20,
 ):
     query = db.query(models.Product).filter(
         models.Product.workspace_id == workspace_id
     )
+    status_value = normalize_product_status(product_status)
+
+    if status_value == schemas.ProductStatus.active.value:
+        query = query.filter(models.Product.is_active.is_(True))
+    elif status_value == schemas.ProductStatus.deleted.value:
+        query = query.filter(models.Product.is_active.is_(False))
+    elif status_value != schemas.ProductStatus.all.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid product status.",
+        )
 
     if category:
         query = query.filter(models.Product.category.ilike(f"%{category}%"))
@@ -642,6 +682,7 @@ def list_low_stock_products(
     query = (
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.is_active.is_(True))
         .filter(models.Product.quantity <= models.Product.minimum_quantity)
         .order_by(models.Product.quantity.asc())
     )
@@ -661,12 +702,17 @@ def update_product(
 
     if "name" in update_data:
         new_name = update_data["name"].strip()
-        existing_product = get_product_by_name(new_name, workspace_id, db)
+        existing_product = get_product_by_name(
+            new_name,
+            workspace_id,
+            db,
+            only_active=True,
+        )
 
         if existing_product and existing_product.id != product.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Já existe um produto com esse nome neste workspace.",
+                detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
             )
 
         update_data["name"] = new_name
@@ -683,10 +729,7 @@ def update_product(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Não foi possível atualizar o produto com esse nome. "
-                "No SQLite atual ainda pode existir uma constraint global antiga."
-            ),
+            detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
         )
 
     db.refresh(product)
@@ -694,13 +737,75 @@ def update_product(
     return product
 
 
-def delete_product(product_id: int, db: Session, workspace_id: int):
-    product = get_product_by_id(product_id, db, workspace_id)
+def delete_product(
+    product_id: int,
+    db: Session,
+    workspace_id: int,
+    deleted_by_user_id: int,
+):
+    product = get_product_by_id(
+        product_id,
+        db,
+        workspace_id,
+        include_deleted=True,
+    )
 
-    db.delete(product)
+    if not product.is_active:
+        return product
+
+    product.is_active = False
+    product.deleted_at = aware_utc_now()
+    product.deleted_by_user_id = deleted_by_user_id
+
     db.commit()
+    db.refresh(product)
 
-    return None
+    return product
+
+
+def restore_product(product_id: int, db: Session, workspace_id: int):
+    product = get_product_by_id(
+        product_id,
+        db,
+        workspace_id,
+        include_deleted=True,
+    )
+
+    if product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Product is already active.",
+        )
+
+    existing_product = get_product_by_name(
+        product.name,
+        workspace_id,
+        db,
+        only_active=True,
+    )
+
+    if existing_product and existing_product.id != product.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
+        )
+
+    product.is_active = True
+    product.deleted_at = None
+    product.deleted_by_user_id = None
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
+        )
+
+    db.refresh(product)
+
+    return product
 
 
 def create_stock_movement(
@@ -710,7 +815,18 @@ def create_stock_movement(
     db: Session,
     user_id: int | None = None,
 ):
-    product = get_product_by_id(product_id, db, workspace_id)
+    product = get_product_by_id(
+        product_id,
+        db,
+        workspace_id,
+        include_deleted=True,
+    )
+
+    if not product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot move stock for an inactive product.",
+        )
 
     quantity_before = product.quantity
 
@@ -762,7 +878,12 @@ def list_product_stock_movements(
     page: int = 1,
     limit: int = 20,
 ):
-    product = get_product_by_id(product_id, db, workspace_id)
+    product = get_product_by_id(
+        product_id,
+        db,
+        workspace_id,
+        include_deleted=True,
+    )
 
     query = (
         db.query(models.StockMovement)
@@ -773,6 +894,7 @@ def list_product_stock_movements(
     )
 
     return paginate_query(query, page, limit).all()
+
 
 def normalize_category_name(name: str):
     return name.strip()
@@ -916,6 +1038,19 @@ def update_category(
 
 def delete_category(category_id: int, db: Session, workspace_id: int):
     category = get_category_by_id(category_id, db, workspace_id)
+    active_products_count = (
+        db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.category == category.name)
+        .filter(models.Product.is_active.is_(True))
+        .count()
+    )
+
+    if active_products_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete category while active products use it.",
+        )
 
     db.delete(category)
     db.commit()
@@ -927,6 +1062,7 @@ def get_dashboard_summary(db: Session, workspace_id: int):
     total_products = (
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.is_active.is_(True))
         .count()
     )
 
@@ -939,6 +1075,7 @@ def get_dashboard_summary(db: Session, workspace_id: int):
     low_stock_products = (
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.is_active.is_(True))
         .filter(models.Product.quantity <= models.Product.minimum_quantity)
         .count()
     )
@@ -946,6 +1083,7 @@ def get_dashboard_summary(db: Session, workspace_id: int):
     total_stock_quantity = (
         db.query(func.coalesce(func.sum(models.Product.quantity), 0))
         .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.is_active.is_(True))
         .scalar()
     )
 

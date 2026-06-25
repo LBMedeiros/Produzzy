@@ -25,6 +25,12 @@ class InviteStatus(str, Enum):
     revoked = "revoked"
 
 
+class ProductStatus(str, Enum):
+    active = "active"
+    deleted = "deleted"
+    all = "all"
+
+
 class UserCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(
@@ -146,6 +152,9 @@ class ProductResponse(BaseModel):
     category: str
     quantity: int
     minimum_quantity: int
+    is_active: bool
+    deleted_at: Optional[datetime] = None
+    deleted_by_user_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

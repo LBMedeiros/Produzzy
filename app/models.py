@@ -45,7 +45,15 @@ class Category(Base):
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "name", name="uq_products_workspace_name"),
+        Index(
+            "uq_products_workspace_name_active",
+            "workspace_id",
+            "name",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+            sqlite_where=text("is_active = 1"),
+        ),
+        Index("ix_products_workspace_is_active", "workspace_id", "is_active"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -62,6 +70,15 @@ class Product(Base):
     quantity = Column(Integer, nullable=False, default=0)
     minimum_quantity = Column(Integer, nullable=False, default=0)
 
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(
         DateTime(timezone=True),
@@ -73,6 +90,11 @@ class Product(Base):
     workspace = relationship(
         "Workspace",
         back_populates="products",
+    )
+    deleted_by_user = relationship(
+        "User",
+        back_populates="deleted_products",
+        foreign_keys=[deleted_by_user_id],
     )
     stock_movements = relationship(
         "StockMovement",
@@ -103,6 +125,11 @@ class User(Base):
     stock_movements = relationship(
         "StockMovement",
         back_populates="user",
+    )
+    deleted_products = relationship(
+        "Product",
+        back_populates="deleted_by_user",
+        foreign_keys="Product.deleted_by_user_id",
     )
     owned_workspaces = relationship(
         "Workspace",

@@ -10,6 +10,7 @@ Produzzy API is an MVP backend for inventory and production control. It is built
 - Workspace members with roles: `owner`, `admin`, `employee`, and `viewer`.
 - Invite flow without email delivery: the API returns an invite token and symbolic accept URL.
 - Workspace-scoped product and category management.
+- Product soft delete with trash listing and restore support.
 - Workspace-scoped stock movements with authenticated user audit fields.
 - Low-stock product listing per workspace.
 - Dashboard summary per workspace.
@@ -127,7 +128,7 @@ The initial migration creates the multi-workspace schema:
 
 Workspace-scoped uniqueness is enforced at the database level:
 
-- product names are unique per workspace
+- active product names are unique per workspace
 - category names are unique per workspace
 - a user can only be a member of a workspace once
 - pending invite emails are unique per workspace
@@ -257,11 +258,14 @@ To accept an invite, the logged-in user's email must match the invite email.
 Products:
 
 - `GET /workspaces/{workspace_id}/products`
+- `GET /workspaces/{workspace_id}/products?status=active|deleted|all`
 - `POST /workspaces/{workspace_id}/products`
 - `GET /workspaces/{workspace_id}/products/low-stock`
 - `GET /workspaces/{workspace_id}/products/{product_id}`
+- `GET /workspaces/{workspace_id}/products/{product_id}?include_deleted=true`
 - `PATCH /workspaces/{workspace_id}/products/{product_id}`
 - `DELETE /workspaces/{workspace_id}/products/{product_id}`
+- `POST /workspaces/{workspace_id}/products/{product_id}/restore`
 - `POST /workspaces/{workspace_id}/products/{product_id}/stock`
 - `GET /workspaces/{workspace_id}/products/{product_id}/stock-movements`
 
@@ -298,6 +302,36 @@ Main list routes support simple pagination:
 ```
 
 The maximum `limit` is `100`.
+
+## Product Soft Delete
+
+Deleting a product does not remove it from the database. `DELETE /workspaces/{workspace_id}/products/{product_id}` marks the product as inactive, stores `deleted_at`, and records `deleted_by_user_id`. Stock movements remain in place for history.
+
+Product lists return active products by default. Use the `status` query parameter to browse the trash or all products:
+
+```text
+GET /workspaces/{workspace_id}/products?status=active
+GET /workspaces/{workspace_id}/products?status=deleted
+GET /workspaces/{workspace_id}/products?status=all
+```
+
+Deleted products are hidden from normal detail, QR Code, label, A4 label sheet, low-stock, and dashboard totals. To fetch a deleted product detail directly, use:
+
+```text
+GET /workspaces/{workspace_id}/products/{product_id}?include_deleted=true
+```
+
+Only `owner` and `admin` members can delete or restore products.
+
+## Restore Product
+
+Restore a deleted product with:
+
+```text
+POST /workspaces/{workspace_id}/products/{product_id}/restore
+```
+
+Restoring clears `deleted_at` and `deleted_by_user_id` and marks the product active again. Product names are unique among active products in the same workspace, so restoring fails with a `400` response if another active product already uses the same name.
 
 ## QR Code and Label Features
 
