@@ -12,7 +12,9 @@ import {
   createProduct,
   createStockMovement,
   deleteProduct,
+  getProduct,
   listLowStockProducts,
+  listProductStockMovements,
   listProducts,
   restoreProduct,
   updateProduct,
@@ -41,6 +43,18 @@ const emptyMovementForm = {
 const emptyCategoryForm = {
   description: '',
   name: '',
+}
+
+const MOVEMENT_LABELS = {
+  ajuste: 'Ajuste',
+  entrada: 'Entrada',
+  saida: 'Saída',
+}
+
+const MOVEMENT_TONES = {
+  ajuste: 'neutral',
+  entrada: 'success',
+  saida: 'danger',
 }
 
 function getFriendlyError(error) {
@@ -131,6 +145,14 @@ function StockPage() {
   const [categoryError, setCategoryError] = useState('')
   const [isSavingCategory, setIsSavingCategory] = useState(false)
 
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [detailProduct, setDetailProduct] = useState(null)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+  const [detailError, setDetailError] = useState('')
+  const [stockMovements, setStockMovements] = useState([])
+  const [isLoadingMovements, setIsLoadingMovements] = useState(false)
+  const [movementsError, setMovementsError] = useState('')
+
   const loadStockData = useCallback(async () => {
     if (!workspaceId) {
       return
@@ -175,6 +197,73 @@ function StockPage() {
 
     return categoryItems
   }, [workspaceId])
+
+  const loadProductMovements = useCallback(async (productId) => {
+    if (!workspaceId || !productId) {
+      return []
+    }
+
+    setIsLoadingMovements(true)
+    setMovementsError('')
+
+    try {
+      const items = await listProductStockMovements(workspaceId, productId, {
+        limit: 100,
+      })
+      setStockMovements(items)
+
+      return items
+    } catch (loadError) {
+      setMovementsError(getFriendlyError(loadError))
+      setStockMovements([])
+
+      return []
+    } finally {
+      setIsLoadingMovements(false)
+    }
+  }, [workspaceId])
+
+  const loadProductDetail = useCallback(
+    async (product, options = {}) => {
+      if (!workspaceId) {
+        return null
+      }
+
+      const productId = typeof product === 'object' ? product.id : product
+      const includeDeleted =
+        options.includeDeleted ??
+        (activeFilter === 'deleted' ||
+          (typeof product === 'object' && product.is_active === false))
+
+      setIsDetailOpen(true)
+      setDetailError('')
+      setMovementsError('')
+      setStockMovements([])
+
+      if (typeof product === 'object') {
+        setDetailProduct(product)
+      }
+
+      setIsLoadingDetail(true)
+
+      try {
+        const nextProduct = await getProduct(workspaceId, productId, {
+          includeDeleted,
+        })
+        setDetailProduct(nextProduct)
+        await loadProductMovements(productId)
+
+        return nextProduct
+      } catch (loadError) {
+        setDetailError(getFriendlyError(loadError))
+
+        return null
+      } finally {
+        setIsLoadingDetail(false)
+      }
+    },
+    [activeFilter, loadProductMovements, workspaceId],
+  )
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -232,6 +321,14 @@ function StockPage() {
     setMovementError('')
   }
 
+  function closeDetail() {
+    setIsDetailOpen(false)
+    setDetailProduct(null)
+    setDetailError('')
+    setStockMovements([])
+    setMovementsError('')
+  }
+
   async function handleSaveProduct(event) {
     event.preventDefault()
 
@@ -254,6 +351,7 @@ function StockPage() {
         minimum_quantity: Number(productForm.minimumQuantity),
         name: productForm.name.trim(),
       }
+      const editedProductId = productModal.product?.id
 
       if (productModal.mode === 'create') {
         await createProduct(workspaceId, {
@@ -269,6 +367,16 @@ function StockPage() {
       setProductModal(null)
       setProductForm(emptyProductForm)
       await loadStockData()
+
+      if (
+        productModal.mode === 'edit' &&
+        isDetailOpen &&
+        detailProduct?.id === editedProductId
+      ) {
+        await loadProductDetail(editedProductId, {
+          includeDeleted: detailProduct.is_active === false,
+        })
+      }
     } catch (saveError) {
       setProductFormError(getFriendlyError(saveError))
     } finally {
@@ -320,7 +428,9 @@ function StockPage() {
     setSuccessMessage('')
 
     try {
-      await createStockMovement(workspaceId, movementProduct.id, {
+      const movedProductId = movementProduct.id
+
+      await createStockMovement(workspaceId, movedProductId, {
         movement_type: movementForm.movementType,
         quantity: Number(movementForm.quantity),
         reason: movementForm.reason.trim() || null,
@@ -330,6 +440,12 @@ function StockPage() {
       setMovementForm(emptyMovementForm)
       setSuccessMessage('Movimentação registrada com sucesso.')
       await loadStockData()
+
+      if (isDetailOpen && detailProduct?.id === movedProductId) {
+        await loadProductDetail(movedProductId, {
+          includeDeleted: detailProduct.is_active === false,
+        })
+      }
     } catch (moveError) {
       setMovementError(getFriendlyError(moveError))
     } finally {
@@ -358,6 +474,12 @@ function StockPage() {
       await deleteProduct(workspaceId, product.id)
       setSuccessMessage('Produto enviado para a lixeira.')
       await loadStockData()
+
+      if (isDetailOpen && detailProduct?.id === product.id) {
+        await loadProductDetail(product.id, {
+          includeDeleted: true,
+        })
+      }
     } catch (deleteError) {
       setError(getFriendlyError(deleteError))
     } finally {
@@ -378,6 +500,10 @@ function StockPage() {
       await restoreProduct(workspaceId, product.id)
       setSuccessMessage('Produto restaurado com sucesso.')
       await loadStockData()
+
+      if (isDetailOpen && detailProduct?.id === product.id) {
+        await loadProductDetail(product.id)
+      }
     } catch (restoreError) {
       setError(getFriendlyError(restoreError))
     } finally {
@@ -424,6 +550,16 @@ function StockPage() {
         activeFilter === 'deleted' ? (
           <div className="table-actions">
             <button
+              type="button"
+              onClick={() =>
+                loadProductDetail(product, {
+                  includeDeleted: true,
+                })
+              }
+            >
+              Ver
+            </button>
+            <button
               disabled={actionProductId === product.id}
               type="button"
               onClick={() => handleRestoreProduct(product)}
@@ -433,6 +569,9 @@ function StockPage() {
           </div>
         ) : (
           <div className="table-actions">
+            <button type="button" onClick={() => loadProductDetail(product)}>
+              Ver
+            </button>
             <button type="button" onClick={() => openMovementModal(product)}>
               Movimentar
             </button>
@@ -531,6 +670,195 @@ function StockPage() {
           </div>
         )}
       </Card>
+
+      {isDetailOpen ? (
+        <div className="drawer-backdrop" role="presentation">
+          <aside
+            className="product-detail-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Detalhe do produto"
+          >
+            <div className="product-detail-drawer__header">
+              <div>
+                <span>Detalhe do produto</span>
+                <h2>{detailProduct?.name ?? 'Carregando produto...'}</h2>
+              </div>
+              <button
+                aria-label="Fechar detalhe"
+                className="icon-button"
+                type="button"
+                onClick={closeDetail}
+              >
+                x
+              </button>
+            </div>
+
+            {isLoadingDetail && !detailProduct ? (
+              <div className="stock-loading">Carregando detalhe...</div>
+            ) : detailError ? (
+              <p className="stock-feedback stock-feedback--error">{detailError}</p>
+            ) : detailProduct ? (
+              <>
+                <div className="product-detail-drawer__title">
+                  <Badge tone={getProductStatus(detailProduct).tone}>
+                    {getProductStatus(detailProduct).label}
+                  </Badge>
+                  <span>ID {detailProduct.id}</span>
+                </div>
+
+                <div className="product-detail-metrics">
+                  <div>
+                    <span>Quantidade atual</span>
+                    <strong>{detailProduct.quantity}</strong>
+                  </div>
+                  <div>
+                    <span>Quantidade mínima</span>
+                    <strong>{detailProduct.minimum_quantity}</strong>
+                  </div>
+                  <div>
+                    <span>Categoria</span>
+                    <strong>{detailProduct.category}</strong>
+                  </div>
+                </div>
+
+                <div className="product-detail-meta">
+                  <div>
+                    <span>Criado em</span>
+                    <strong>{formatDate(detailProduct.created_at)}</strong>
+                  </div>
+                  <div>
+                    <span>Atualizado em</span>
+                    <strong>{formatDate(detailProduct.updated_at)}</strong>
+                  </div>
+                  {!detailProduct.is_active ? (
+                    <>
+                      <div>
+                        <span>Removido em</span>
+                        <strong>{formatDate(detailProduct.deleted_at)}</strong>
+                      </div>
+                      <div>
+                        <span>Removido por</span>
+                        <strong>
+                          {detailProduct.deleted_by_user_id
+                            ? `Usuário #${detailProduct.deleted_by_user_id}`
+                            : 'Não informado'}
+                        </strong>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                <section className="product-detail-actions">
+                  <h3>Ações rápidas</h3>
+                  <div className="workspace-form__actions">
+                    {detailProduct.is_active ? (
+                      <>
+                        <Button
+                          onClick={() => openMovementModal(detailProduct)}
+                          variant="secondary"
+                        >
+                          Movimentar estoque
+                        </Button>
+                        <Button
+                          onClick={() => openEditProduct(detailProduct)}
+                          variant="secondary"
+                        >
+                          Editar produto
+                        </Button>
+                        <Button
+                          disabled={actionProductId === detailProduct.id}
+                          onClick={() => handleDeleteProduct(detailProduct)}
+                          variant="secondary"
+                        >
+                          Enviar para lixeira
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        disabled={actionProductId === detailProduct.id}
+                        onClick={() => handleRestoreProduct(detailProduct)}
+                      >
+                        Restaurar produto
+                      </Button>
+                    )}
+                  </div>
+                </section>
+
+                <section className="product-movements">
+                  <div className="product-movements__header">
+                    <div>
+                      <h3>Histórico de movimentações</h3>
+                      <p>Entradas, saídas e ajustes registrados no backend.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => loadProductMovements(detailProduct.id)}
+                    >
+                      Atualizar
+                    </button>
+                  </div>
+
+                  {isLoadingMovements ? (
+                    <div className="stock-loading">Carregando movimentações...</div>
+                  ) : movementsError ? (
+                    <p className="stock-feedback stock-feedback--error">
+                      {movementsError}
+                    </p>
+                  ) : stockMovements.length ? (
+                    <div className="movement-list">
+                      {stockMovements.map((movement) => (
+                        <article className="movement-item" key={movement.id}>
+                          <div className="movement-item__top">
+                            <Badge
+                              tone={
+                                MOVEMENT_TONES[movement.movement_type] ?? 'neutral'
+                              }
+                            >
+                              {MOVEMENT_LABELS[movement.movement_type] ??
+                                movement.movement_type}
+                            </Badge>
+                            <span>{formatDate(movement.created_at)}</span>
+                          </div>
+                          <div className="movement-item__numbers">
+                            <div>
+                              <span>Quantidade</span>
+                              <strong>{movement.quantity}</strong>
+                            </div>
+                            <div>
+                              <span>Antes</span>
+                              <strong>{movement.quantity_before}</strong>
+                            </div>
+                            <div>
+                              <span>Depois</span>
+                              <strong>{movement.quantity_after}</strong>
+                            </div>
+                          </div>
+                          <div className="movement-item__meta">
+                            <span>
+                              {movement.user_name ??
+                                movement.user_email ??
+                                'Usuário não informado'}
+                            </span>
+                            <p>{movement.reason || 'Sem observação.'}</p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="stock-empty">
+                      <h2>Nenhuma movimentação registrada ainda.</h2>
+                      <p>
+                        Movimente o estoque deste produto para começar o histórico.
+                      </p>
+                    </div>
+                  )}
+                </section>
+              </>
+            ) : null}
+          </aside>
+        </div>
+      ) : null}
 
       {productModal ? (
         <div className="modal-backdrop" role="presentation">

@@ -1127,6 +1127,201 @@ a {
   overflow-y: auto;
 }
 
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.product-detail-drawer {
+  display: grid;
+  width: min(720px, 100%);
+  max-height: 100vh;
+  grid-auto-rows: max-content;
+  gap: 18px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: #ffffff;
+  box-shadow: -24px 0 60px rgba(15, 23, 42, 0.18);
+  padding: 24px;
+}
+
+.product-detail-drawer__header,
+.product-detail-drawer__title,
+.product-movements__header,
+.movement-item__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.product-detail-drawer__header span {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.product-detail-drawer__title {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+
+.product-detail-drawer__title > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.product-detail-metrics,
+.product-detail-meta {
+  display: grid;
+  gap: 12px;
+}
+
+.product-detail-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.product-detail-metrics > div,
+.product-detail-meta > div,
+.product-detail-actions,
+.product-movements {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.product-detail-metrics span,
+.product-detail-meta span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.product-detail-metrics strong,
+.product-detail-meta strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text);
+}
+
+.product-detail-metrics strong {
+  font-size: 24px;
+}
+
+.product-detail-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.product-detail-actions {
+  display: grid;
+  gap: 12px;
+  background: #ffffff;
+}
+
+.product-detail-actions h3,
+.product-movements h3 {
+  font-size: 16px;
+}
+
+.product-movements {
+  display: grid;
+  gap: 14px;
+  background: #ffffff;
+}
+
+.product-movements__header p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.product-movements__header button {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.product-movements__header button:hover {
+  border-color: rgba(37, 99, 235, 0.28);
+  color: var(--blue);
+}
+
+.movement-list {
+  display: grid;
+  gap: 10px;
+}
+
+.movement-item {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.movement-item__top {
+  align-items: center;
+}
+
+.movement-item__top span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.movement-item__numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.movement-item__numbers div {
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.movement-item__numbers span,
+.movement-item__meta span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.movement-item__numbers strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.movement-item__meta {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid #eef2f7;
+  padding-top: 10px;
+}
+
+.movement-item__meta p {
+  color: #334155;
+  font-size: 13px;
+}
+
 .printed-label {
   display: grid;
   width: 100%;
@@ -1721,6 +1916,17 @@ a {
   }
 
   .stock-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .product-detail-drawer {
+    width: 100%;
+    padding: 18px;
+  }
+
+  .product-detail-metrics,
+  .product-detail-meta,
+  .movement-item__numbers {
     grid-template-columns: 1fr;
   }
 
