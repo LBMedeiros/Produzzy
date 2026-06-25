@@ -113,3 +113,11 @@ class CategoryResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DashboardSummary(BaseModel):
+    total_products: int
+    total_categories: int
+    low_stock_products: int
+    total_stock_quantity: int
+    total_stock_movements: int

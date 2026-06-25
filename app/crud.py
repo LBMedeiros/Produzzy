@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -319,3 +320,30 @@ def delete_category(category_id: int, db: Session):
     db.commit()
 
     return None
+
+
+def get_dashboard_summary(db: Session):
+    total_products = db.query(models.Product).count()
+
+    total_categories = db.query(models.Category).count()
+
+    low_stock_products = (
+        db.query(models.Product)
+        .filter(models.Product.quantity <= models.Product.minimum_quantity)
+        .count()
+    )
+
+    total_stock_quantity = (
+        db.query(func.coalesce(func.sum(models.Product.quantity), 0))
+        .scalar()
+    )
+
+    total_stock_movements = db.query(models.StockMovement).count()
+
+    return {
+        "total_products": total_products,
+        "total_categories": total_categories,
+        "low_stock_products": low_stock_products,
+        "total_stock_quantity": total_stock_quantity,
+        "total_stock_movements": total_stock_movements,
+    }
