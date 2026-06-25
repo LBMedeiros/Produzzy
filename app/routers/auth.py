@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -35,7 +36,34 @@ def login_user(
     db: Session = Depends(get_db),
 ):
     user = crud.authenticate_user(login_data, db)
+
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    access_token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=access_token_expires,
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+    }
+
+
+@router.post("/token", response_model=schemas.Token)
+def login_for_swagger(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    login_data = schemas.UserLogin(
+        email=form_data.username,
+        password=form_data.password,
+    )
+
+    user = crud.authenticate_user(login_data, db)
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
     access_token = create_access_token(
         data={"sub": user.email},
         expires_delta=access_token_expires,

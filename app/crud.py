@@ -218,3 +218,104 @@ def list_product_stock_movements(product_id: int, db: Session):
         .order_by(models.StockMovement.created_at.desc())
         .all()
     )
+
+def normalize_category_name(name: str):
+    return name.strip()
+
+
+def get_category_by_id(category_id: int, db: Session):
+    category = (
+        db.query(models.Category)
+        .filter(models.Category.id == category_id)
+        .first()
+    )
+
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Categoria não encontrada.",
+        )
+
+    return category
+
+
+def get_category_by_name(name: str, db: Session):
+    normalized_name = normalize_category_name(name)
+
+    return (
+        db.query(models.Category)
+        .filter(models.Category.name == normalized_name)
+        .first()
+    )
+
+
+def create_category(category_data: schemas.CategoryCreate, db: Session):
+    name = normalize_category_name(category_data.name)
+
+    existing_category = get_category_by_name(name, db)
+
+    if existing_category:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Já existe uma categoria com esse nome.",
+        )
+
+    new_category = models.Category(
+        name=name,
+        description=category_data.description,
+    )
+
+    db.add(new_category)
+    db.commit()
+    db.refresh(new_category)
+
+    return new_category
+
+
+def list_categories(db: Session, search: str | None = None):
+    query = db.query(models.Category)
+
+    if search:
+        query = query.filter(models.Category.name.ilike(f"%{search}%"))
+
+    return query.order_by(models.Category.name.asc()).all()
+
+
+def update_category(
+    category_id: int,
+    category_data: schemas.CategoryUpdate,
+    db: Session,
+):
+    category = get_category_by_id(category_id, db)
+
+    update_data = category_data.model_dump(exclude_unset=True)
+
+    if "name" in update_data:
+        new_name = normalize_category_name(update_data["name"])
+
+        existing_category = get_category_by_name(new_name, db)
+
+        if existing_category and existing_category.id != category.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Já existe uma categoria com esse nome.",
+            )
+
+        update_data["name"] = new_name
+
+    for field, value in update_data.items():
+        setattr(category, field, value)
+
+    db.commit()
+    db.refresh(category)
+
+    return category
+
+
+def delete_category(category_id: int, db: Session):
+    category = get_category_by_id(category_id, db)
+
+    db.delete(category)
+    db.commit()
+
+    return None
