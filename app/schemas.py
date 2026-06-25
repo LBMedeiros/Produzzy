@@ -11,6 +11,20 @@ class StockMovementType(str, Enum):
     ajuste = "ajuste"
 
 
+class WorkspaceRole(str, Enum):
+    owner = "owner"
+    admin = "admin"
+    employee = "employee"
+    viewer = "viewer"
+
+
+class InviteStatus(str, Enum):
+    pending = "pending"
+    accepted = "accepted"
+    expired = "expired"
+    revoked = "revoked"
+
+
 class UserCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(
@@ -50,6 +64,67 @@ class TokenData(BaseModel):
     email: Optional[str] = None
 
 
+class WorkspaceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class WorkspaceUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class WorkspaceResponse(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceMemberResponse(BaseModel):
+    id: int
+    workspace_id: int
+    user_id: int
+    role: str
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceMemberUpdate(BaseModel):
+    role: WorkspaceRole
+
+
+class WorkspaceInviteCreate(BaseModel):
+    email: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+    role: WorkspaceRole
+
+
+class WorkspaceInviteResponse(BaseModel):
+    id: int
+    workspace_id: int
+    email: str
+    role: str
+    token: str
+    status: str
+    invite_url: str
+    expires_at: datetime
+    created_by_user_id: int
+    accepted_by_user_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProductCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     category: str = Field(min_length=1, max_length=100)
@@ -66,6 +141,7 @@ class ProductUpdate(BaseModel):
 
 class ProductResponse(BaseModel):
     id: int
+    workspace_id: Optional[int] = None
     name: str
     category: str
     quantity: int
@@ -84,6 +160,7 @@ class StockMovementCreate(BaseModel):
 
 class StockMovementResponse(BaseModel):
     id: int
+    workspace_id: Optional[int] = None
     product_id: int
     movement_type: str
     quantity: int
@@ -110,6 +187,7 @@ class CategoryUpdate(BaseModel):
 
 class CategoryResponse(BaseModel):
     id: int
+    workspace_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     created_at: Optional[datetime] = None

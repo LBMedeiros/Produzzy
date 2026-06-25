@@ -4,14 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import (
     engine,
     Base,
-    ensure_stock_movements_user_id_column,
+    ensure_development_schema,
 )
 from app import models
-from app.routers import auth, categories, dashboard, products, qrcode
+from app.routers import auth, categories, dashboard, products, qrcode, workspaces
 
 
 Base.metadata.create_all(bind=engine)
-ensure_stock_movements_user_id_column()
+ensure_development_schema()
 
 
 app = FastAPI(
@@ -31,6 +31,7 @@ app.add_middleware(
 
 
 app.include_router(auth.router)
+app.include_router(workspaces.router)
 app.include_router(dashboard.router)
 app.include_router(qrcode.router)
 app.include_router(products.router)

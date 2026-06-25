@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app import crud
-from app.dependencies import get_db
+from app import crud, models
+from app.dependencies import get_current_user, get_db
 from app.services.qrcode_service import (
     generate_qrcode_image,
     generate_product_label_image,
@@ -12,20 +12,33 @@ from app.services.qrcode_service import (
 
 
 router = APIRouter(
-    prefix="/products",
+    prefix="/workspaces/{workspace_id}/products",
     tags=["QR Code"],
 )
 
 
 @router.get("/labels-sheet")
 def generate_products_labels_sheet(
+    workspace_id: int,
     request: Request,
     label_width_mm: int = Query(default=70, ge=40, le=100),
     label_height_mm: int = Query(default=90, ge=50, le=140),
     qr_size_mm: int = Query(default=45, ge=25, le=80),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
-    products = crud.list_products(db=db)
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+    products = crud.list_products(
+        db=db,
+        workspace_id=workspace_id,
+        page=1,
+        limit=100,
+    )
 
     if not products:
         raise HTTPException(
@@ -38,7 +51,8 @@ def generate_products_labels_sheet(
     for product in products:
         product_url = str(
             request.url_for(
-                "get_product",
+                "get_workspace_product",
+                workspace_id=workspace_id,
                 product_id=product.id,
             )
         )
@@ -70,15 +84,24 @@ def generate_products_labels_sheet(
 
 @router.get("/{product_id}/qrcode")
 def generate_product_qrcode(
+    workspace_id: int,
     product_id: int,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
-    product = crud.get_product_by_id(product_id, db)
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+    product = crud.get_product_by_id(product_id, db, workspace_id)
 
     product_url = str(
         request.url_for(
-            "get_product",
+            "get_workspace_product",
+            workspace_id=workspace_id,
             product_id=product.id,
         )
     )
@@ -98,15 +121,24 @@ def generate_product_qrcode(
 
 @router.get("/{product_id}/label")
 def generate_product_label(
+    workspace_id: int,
     product_id: int,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
-    product = crud.get_product_by_id(product_id, db)
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+    product = crud.get_product_by_id(product_id, db, workspace_id)
 
     product_url = str(
         request.url_for(
-            "get_product",
+            "get_workspace_product",
+            workspace_id=workspace_id,
             product_id=product.id,
         )
     )

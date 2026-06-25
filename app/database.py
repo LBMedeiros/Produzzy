@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -27,38 +29,235 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-def ensure_stock_movements_user_id_column():
+def _utc_now():
+    return datetime.now(timezone.utc)
+
+
+def _get_columns(inspector, table_name: str):
+    return {
+        column["name"]
+        for column in inspector.get_columns(table_name)
+    }
+
+
+def _ensure_column(connection, inspector, table_name: str, column_sql: str):
+    column_name = column_sql.split()[0]
+
+    if column_name not in _get_columns(inspector, table_name):
+        connection.execute(
+            text(f"ALTER TABLE {table_name} ADD COLUMN {column_sql}")
+        )
+
+
+def _get_or_create_default_workspace(connection):
+    owner = connection.execute(
+        text(
+            "SELECT id FROM users "
+            "WHERE is_active = 1 "
+            "ORDER BY id ASC "
+            "LIMIT 1"
+        )
+    ).first()
+
+    if owner is None:
+        return None
+
+    owner_id = owner[0]
+
+    existing_workspace = connection.execute(
+        text(
+            "SELECT id FROM workspaces "
+            "WHERE name = :name AND owner_id = :owner_id "
+            "ORDER BY id ASC "
+            "LIMIT 1"
+        ),
+        {"name": "Default Workspace", "owner_id": owner_id},
+    ).first()
+
+    if existing_workspace is not None:
+        workspace_id = existing_workspace[0]
+    else:
+        now = _utc_now()
+        result = connection.execute(
+            text(
+                "INSERT INTO workspaces "
+                "(name, owner_id, created_at, updated_at) "
+                "VALUES (:name, :owner_id, :created_at, :updated_at)"
+            ),
+            {
+                "name": "Default Workspace",
+                "owner_id": owner_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        workspace_id = result.lastrowid
+
+    existing_member = connection.execute(
+        text(
+            "SELECT id FROM workspace_members "
+            "WHERE workspace_id = :workspace_id AND user_id = :user_id "
+            "LIMIT 1"
+        ),
+        {"workspace_id": workspace_id, "user_id": owner_id},
+    ).first()
+
+    if existing_member is None:
+        now = _utc_now()
+        connection.execute(
+            text(
+                "INSERT INTO workspace_members "
+                "(workspace_id, user_id, role, created_at, updated_at) "
+                "VALUES (:workspace_id, :user_id, :role, :created_at, :updated_at)"
+            ),
+            {
+                "workspace_id": workspace_id,
+                "user_id": owner_id,
+                "role": "owner",
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+
+    return workspace_id
+
+
+def _assign_existing_data_to_default_workspace(connection):
+    unassigned_data_exists = connection.execute(
+        text(
+            "SELECT 1 FROM products WHERE workspace_id IS NULL LIMIT 1"
+        )
+    ).first()
+
+    if unassigned_data_exists is None:
+        unassigned_data_exists = connection.execute(
+            text(
+                "SELECT 1 FROM categories WHERE workspace_id IS NULL LIMIT 1"
+            )
+        ).first()
+
+    if unassigned_data_exists is None:
+        unassigned_data_exists = connection.execute(
+            text(
+                "SELECT 1 FROM stock_movements "
+                "WHERE workspace_id IS NULL LIMIT 1"
+            )
+        ).first()
+
+    if unassigned_data_exists is None:
+        return
+
+    workspace_id = _get_or_create_default_workspace(connection)
+
+    if workspace_id is None:
+        return
+
+    connection.execute(
+        text(
+            "UPDATE products "
+            "SET workspace_id = :workspace_id "
+            "WHERE workspace_id IS NULL"
+        ),
+        {"workspace_id": workspace_id},
+    )
+    connection.execute(
+        text(
+            "UPDATE categories "
+            "SET workspace_id = :workspace_id "
+            "WHERE workspace_id IS NULL"
+        ),
+        {"workspace_id": workspace_id},
+    )
+    connection.execute(
+        text(
+            "UPDATE stock_movements "
+            "SET workspace_id = ("
+            "SELECT products.workspace_id "
+            "FROM products "
+            "WHERE products.id = stock_movements.product_id"
+            ") "
+            "WHERE workspace_id IS NULL "
+            "AND EXISTS ("
+            "SELECT 1 FROM products "
+            "WHERE products.id = stock_movements.product_id "
+            "AND products.workspace_id IS NOT NULL"
+            ")"
+        )
+    )
+    connection.execute(
+        text(
+            "UPDATE stock_movements "
+            "SET workspace_id = :workspace_id "
+            "WHERE workspace_id IS NULL"
+        ),
+        {"workspace_id": workspace_id},
+    )
+
+
+def ensure_development_schema():
     if engine.dialect.name != "sqlite":
         return
 
     inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
 
-    if "stock_movements" not in inspector.get_table_names():
+    if not {"products", "categories", "stock_movements"}.issubset(table_names):
         return
 
-    columns = {
-        column["name"]
-        for column in inspector.get_columns("stock_movements")
-    }
-    indexes = {
-        index["name"]
-        for index in inspector.get_indexes("stock_movements")
-    }
-
     with engine.begin() as connection:
-        if "user_id" not in columns:
-            connection.execute(
-                text(
-                    "ALTER TABLE stock_movements "
-                    "ADD COLUMN user_id INTEGER REFERENCES users(id)"
-                )
-            )
+        _ensure_column(
+            connection,
+            inspector,
+            "products",
+            "workspace_id INTEGER REFERENCES workspaces(id)",
+        )
+        _ensure_column(
+            connection,
+            inspector,
+            "categories",
+            "workspace_id INTEGER REFERENCES workspaces(id)",
+        )
+        _ensure_column(
+            connection,
+            inspector,
+            "stock_movements",
+            "workspace_id INTEGER REFERENCES workspaces(id)",
+        )
+        _ensure_column(
+            connection,
+            inspector,
+            "stock_movements",
+            "user_id INTEGER REFERENCES users(id)",
+        )
 
-        if "ix_stock_movements_user_id" not in indexes:
-            connection.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS "
-                    "ix_stock_movements_user_id "
-                    "ON stock_movements (user_id)"
-                )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS "
+                "ix_products_workspace_id "
+                "ON products (workspace_id)"
             )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS "
+                "ix_categories_workspace_id "
+                "ON categories (workspace_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS "
+                "ix_stock_movements_workspace_id "
+                "ON stock_movements (workspace_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS "
+                "ix_stock_movements_user_id "
+                "ON stock_movements (user_id)"
+            )
+        )
+
+        if {"users", "workspaces", "workspace_members"}.issubset(table_names):
+            _assign_existing_data_to_default_workspace(connection)

@@ -1,9 +1,21 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas
 from app.services.security_service import get_password_hash, verify_password
+
+
+READ_ROLES = {"owner", "admin", "employee", "viewer"}
+PRODUCT_WRITE_ROLES = {"owner", "admin"}
+CATEGORY_WRITE_ROLES = {"owner", "admin"}
+STOCK_WRITE_ROLES = {"owner", "admin", "employee"}
+MEMBER_MANAGE_ROLES = {"owner"}
+INVITE_MANAGE_ROLES = {"owner", "admin"}
 
 
 def normalize_email(email: str):
@@ -63,12 +75,481 @@ def authenticate_user(login_data: schemas.UserLogin, db: Session):
     return user
 
 
-def get_product_by_id(product_id: int, db: Session):
-    product = (
-        db.query(models.Product)
-        .filter(models.Product.id == product_id)
+def normalize_role(role):
+    if hasattr(role, "value"):
+        return role.value
+
+    return str(role)
+
+
+def paginate_query(query, page: int = 1, limit: int = 20):
+    page = max(page, 1)
+    limit = min(max(limit, 1), 100)
+    offset = (page - 1) * limit
+
+    return query.offset(offset).limit(limit)
+
+
+def aware_utc_now():
+    return datetime.now(timezone.utc)
+
+
+def is_expired(expires_at: datetime):
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    return expires_at < aware_utc_now()
+
+
+def get_workspace_by_id(workspace_id: int, db: Session):
+    workspace = (
+        db.query(models.Workspace)
+        .filter(models.Workspace.id == workspace_id)
         .first()
     )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace não encontrado.",
+        )
+
+    return workspace
+
+
+def get_workspace_member(
+    workspace_id: int,
+    user_id: int,
+    db: Session,
+):
+    return (
+        db.query(models.WorkspaceMember)
+        .filter(models.WorkspaceMember.workspace_id == workspace_id)
+        .filter(models.WorkspaceMember.user_id == user_id)
+        .first()
+    )
+
+
+def require_workspace_member(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+):
+    get_workspace_by_id(workspace_id, db)
+
+    member = get_workspace_member(
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        db=db,
+    )
+
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário não é membro deste workspace.",
+        )
+
+    return member
+
+
+def require_workspace_role(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+    allowed_roles: set[str],
+):
+    member = require_workspace_member(workspace_id, current_user, db)
+
+    if member.role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permissão insuficiente neste workspace.",
+        )
+
+    return member
+
+
+def list_user_workspaces(
+    current_user: models.User,
+    db: Session,
+    page: int = 1,
+    limit: int = 20,
+):
+    query = (
+        db.query(models.Workspace)
+        .join(models.WorkspaceMember)
+        .filter(models.WorkspaceMember.user_id == current_user.id)
+        .order_by(models.Workspace.name.asc())
+    )
+
+    return paginate_query(query, page, limit).all()
+
+
+def create_workspace(
+    workspace_data: schemas.WorkspaceCreate,
+    current_user: models.User,
+    db: Session,
+):
+    workspace = models.Workspace(
+        name=workspace_data.name.strip(),
+        owner_id=current_user.id,
+    )
+
+    db.add(workspace)
+    db.flush()
+
+    member = models.WorkspaceMember(
+        workspace_id=workspace.id,
+        user_id=current_user.id,
+        role=schemas.WorkspaceRole.owner.value,
+    )
+
+    db.add(member)
+    db.commit()
+    db.refresh(workspace)
+
+    return workspace
+
+
+def get_workspace_for_user(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_member(workspace_id, current_user, db)
+
+    return get_workspace_by_id(workspace_id, db)
+
+
+def update_workspace(
+    workspace_id: int,
+    workspace_data: schemas.WorkspaceUpdate,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        {schemas.WorkspaceRole.owner.value},
+    )
+    workspace = get_workspace_by_id(workspace_id, db)
+    workspace.name = workspace_data.name.strip()
+
+    db.commit()
+    db.refresh(workspace)
+
+    return workspace
+
+
+def list_workspace_members(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+    page: int = 1,
+    limit: int = 20,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        INVITE_MANAGE_ROLES,
+    )
+
+    query = (
+        db.query(models.WorkspaceMember)
+        .options(joinedload(models.WorkspaceMember.user))
+        .filter(models.WorkspaceMember.workspace_id == workspace_id)
+        .order_by(models.WorkspaceMember.id.asc())
+    )
+
+    return paginate_query(query, page, limit).all()
+
+
+def get_member_by_id(
+    workspace_id: int,
+    member_id: int,
+    db: Session,
+):
+    member = (
+        db.query(models.WorkspaceMember)
+        .filter(models.WorkspaceMember.workspace_id == workspace_id)
+        .filter(models.WorkspaceMember.id == member_id)
+        .first()
+    )
+
+    if member is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Membro não encontrado.",
+        )
+
+    return member
+
+
+def count_workspace_owners(workspace_id: int, db: Session):
+    return (
+        db.query(models.WorkspaceMember)
+        .filter(models.WorkspaceMember.workspace_id == workspace_id)
+        .filter(models.WorkspaceMember.role == schemas.WorkspaceRole.owner.value)
+        .count()
+    )
+
+
+def update_workspace_member(
+    workspace_id: int,
+    member_id: int,
+    member_data: schemas.WorkspaceMemberUpdate,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        MEMBER_MANAGE_ROLES,
+    )
+    member = get_member_by_id(workspace_id, member_id, db)
+    new_role = normalize_role(member_data.role)
+
+    if (
+        member.role == schemas.WorkspaceRole.owner.value
+        and new_role != schemas.WorkspaceRole.owner.value
+        and count_workspace_owners(workspace_id, db) <= 1
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não é possível remover o último owner do workspace.",
+        )
+
+    member.role = new_role
+
+    db.commit()
+    db.refresh(member)
+
+    return member
+
+
+def delete_workspace_member(
+    workspace_id: int,
+    member_id: int,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        MEMBER_MANAGE_ROLES,
+    )
+    member = get_member_by_id(workspace_id, member_id, db)
+
+    if (
+        member.role == schemas.WorkspaceRole.owner.value
+        and count_workspace_owners(workspace_id, db) <= 1
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não é possível remover o último owner do workspace.",
+        )
+
+    db.delete(member)
+    db.commit()
+
+    return None
+
+
+def create_workspace_invite(
+    workspace_id: int,
+    invite_data: schemas.WorkspaceInviteCreate,
+    current_user: models.User,
+    db: Session,
+):
+    current_member = require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        INVITE_MANAGE_ROLES,
+    )
+    role = normalize_role(invite_data.role)
+
+    if (
+        current_member.role == schemas.WorkspaceRole.admin.value
+        and role not in {
+            schemas.WorkspaceRole.employee.value,
+            schemas.WorkspaceRole.viewer.value,
+        }
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin só pode convidar employee ou viewer.",
+        )
+
+    if role == schemas.WorkspaceRole.owner.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Convites não podem criar novos owners.",
+        )
+
+    email = normalize_email(invite_data.email)
+    existing_user = get_user_by_email(email, db)
+
+    if existing_user and get_workspace_member(workspace_id, existing_user.id, db):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Usuário já é membro deste workspace.",
+        )
+
+    invite = models.WorkspaceInvite(
+        workspace_id=workspace_id,
+        email=email,
+        role=role,
+        token=secrets.token_urlsafe(32),
+        status=schemas.InviteStatus.pending.value,
+        expires_at=aware_utc_now() + timedelta(days=7),
+        created_by_user_id=current_user.id,
+    )
+
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+
+    return invite
+
+
+def list_workspace_invites(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+    page: int = 1,
+    limit: int = 20,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        INVITE_MANAGE_ROLES,
+    )
+
+    query = (
+        db.query(models.WorkspaceInvite)
+        .filter(models.WorkspaceInvite.workspace_id == workspace_id)
+        .order_by(models.WorkspaceInvite.created_at.desc())
+    )
+
+    return paginate_query(query, page, limit).all()
+
+
+def accept_workspace_invite(
+    token: str,
+    current_user: models.User,
+    db: Session,
+):
+    invite = (
+        db.query(models.WorkspaceInvite)
+        .filter(models.WorkspaceInvite.token == token)
+        .first()
+    )
+
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Convite não encontrado.",
+        )
+
+    if invite.status != schemas.InviteStatus.pending.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Convite não está pendente.",
+        )
+
+    if is_expired(invite.expires_at):
+        invite.status = schemas.InviteStatus.expired.value
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Convite expirado.",
+        )
+
+    if normalize_email(current_user.email) != normalize_email(invite.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="O e-mail do usuário não corresponde ao convite.",
+        )
+
+    member = get_workspace_member(invite.workspace_id, current_user.id, db)
+
+    if member is None:
+        member = models.WorkspaceMember(
+            workspace_id=invite.workspace_id,
+            user_id=current_user.id,
+            role=invite.role,
+        )
+        db.add(member)
+        db.flush()
+
+    invite.status = schemas.InviteStatus.accepted.value
+    invite.accepted_by_user_id = current_user.id
+    invite.accepted_at = aware_utc_now()
+
+    db.commit()
+    db.refresh(member)
+
+    return member
+
+
+def revoke_workspace_invite(
+    workspace_id: int,
+    invite_id: int,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        INVITE_MANAGE_ROLES,
+    )
+    invite = (
+        db.query(models.WorkspaceInvite)
+        .filter(models.WorkspaceInvite.workspace_id == workspace_id)
+        .filter(models.WorkspaceInvite.id == invite_id)
+        .first()
+    )
+
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Convite não encontrado.",
+        )
+
+    if invite.status != schemas.InviteStatus.pending.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Somente convites pendentes podem ser revogados.",
+        )
+
+    invite.status = schemas.InviteStatus.revoked.value
+
+    db.commit()
+    db.refresh(invite)
+
+    return invite
+
+
+def get_product_by_id(
+    product_id: int,
+    db: Session,
+    workspace_id: int | None = None,
+):
+    query = db.query(models.Product).filter(models.Product.id == product_id)
+
+    if workspace_id is None:
+        query = query.filter(models.Product.workspace_id.is_(None))
+    else:
+        query = query.filter(models.Product.workspace_id == workspace_id)
+
+    product = query.first()
 
     if not product:
         raise HTTPException(
@@ -79,32 +560,51 @@ def get_product_by_id(product_id: int, db: Session):
     return product
 
 
-def get_product_by_name(name: str, db: Session):
+def get_product_by_name(name: str, workspace_id: int, db: Session):
     return (
         db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
         .filter(models.Product.name == name)
         .first()
     )
 
 
-def create_product(product_data: schemas.ProductCreate, db: Session):
-    existing_product = get_product_by_name(product_data.name, db)
+def create_product(
+    product_data: schemas.ProductCreate,
+    db: Session,
+    workspace_id: int,
+):
+    name = product_data.name.strip()
+    existing_product = get_product_by_name(name, workspace_id, db)
 
     if existing_product:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Já existe um produto com esse nome.",
+            detail="Já existe um produto com esse nome neste workspace.",
         )
 
     new_product = models.Product(
-        name=product_data.name,
-        category=product_data.category,
+        workspace_id=workspace_id,
+        name=name,
+        category=product_data.category.strip(),
         quantity=product_data.quantity,
         minimum_quantity=product_data.minimum_quantity,
     )
 
     db.add(new_product)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Não foi possível criar o produto com esse nome. "
+                "No SQLite atual ainda pode existir uma constraint global antiga."
+            ),
+        )
+
     db.refresh(new_product)
 
     return new_product
@@ -112,10 +612,15 @@ def create_product(product_data: schemas.ProductCreate, db: Session):
 
 def list_products(
     db: Session,
+    workspace_id: int,
     category: str | None = None,
     search: str | None = None,
+    page: int = 1,
+    limit: int = 20,
 ):
-    query = db.query(models.Product)
+    query = db.query(models.Product).filter(
+        models.Product.workspace_id == workspace_id
+    )
 
     if category:
         query = query.filter(models.Product.category.ilike(f"%{category}%"))
@@ -123,38 +628,74 @@ def list_products(
     if search:
         query = query.filter(models.Product.name.ilike(f"%{search}%"))
 
-    return query.order_by(models.Product.name.asc()).all()
+    query = query.order_by(models.Product.name.asc())
+
+    return paginate_query(query, page, limit).all()
 
 
-def list_low_stock_products(db: Session):
-    return (
+def list_low_stock_products(
+    db: Session,
+    workspace_id: int,
+    page: int = 1,
+    limit: int = 20,
+):
+    query = (
         db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
         .filter(models.Product.quantity <= models.Product.minimum_quantity)
         .order_by(models.Product.quantity.asc())
-        .all()
     )
+
+    return paginate_query(query, page, limit).all()
 
 
 def update_product(
     product_id: int,
     product_data: schemas.ProductUpdate,
     db: Session,
+    workspace_id: int,
 ):
-    product = get_product_by_id(product_id, db)
+    product = get_product_by_id(product_id, db, workspace_id)
 
     update_data = product_data.model_dump(exclude_unset=True)
+
+    if "name" in update_data:
+        new_name = update_data["name"].strip()
+        existing_product = get_product_by_name(new_name, workspace_id, db)
+
+        if existing_product and existing_product.id != product.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Já existe um produto com esse nome neste workspace.",
+            )
+
+        update_data["name"] = new_name
+
+    if "category" in update_data:
+        update_data["category"] = update_data["category"].strip()
 
     for field, value in update_data.items():
         setattr(product, field, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Não foi possível atualizar o produto com esse nome. "
+                "No SQLite atual ainda pode existir uma constraint global antiga."
+            ),
+        )
+
     db.refresh(product)
 
     return product
 
 
-def delete_product(product_id: int, db: Session):
-    product = get_product_by_id(product_id, db)
+def delete_product(product_id: int, db: Session, workspace_id: int):
+    product = get_product_by_id(product_id, db, workspace_id)
 
     db.delete(product)
     db.commit()
@@ -163,12 +704,13 @@ def delete_product(product_id: int, db: Session):
 
 
 def create_stock_movement(
+    workspace_id: int,
     product_id: int,
     movement_data: schemas.StockMovementCreate,
     db: Session,
     user_id: int | None = None,
 ):
-    product = get_product_by_id(product_id, db)
+    product = get_product_by_id(product_id, db, workspace_id)
 
     quantity_before = product.quantity
 
@@ -196,6 +738,7 @@ def create_stock_movement(
     product.quantity = quantity_after
 
     movement = models.StockMovement(
+        workspace_id=workspace_id,
         product_id=product.id,
         user_id=user_id,
         movement_type=movement_data.movement_type.value,
@@ -212,27 +755,42 @@ def create_stock_movement(
     return movement
 
 
-def list_product_stock_movements(product_id: int, db: Session):
-    product = get_product_by_id(product_id, db)
+def list_product_stock_movements(
+    product_id: int,
+    db: Session,
+    workspace_id: int,
+    page: int = 1,
+    limit: int = 20,
+):
+    product = get_product_by_id(product_id, db, workspace_id)
 
-    return (
+    query = (
         db.query(models.StockMovement)
         .options(joinedload(models.StockMovement.user))
+        .filter(models.StockMovement.workspace_id == workspace_id)
         .filter(models.StockMovement.product_id == product.id)
         .order_by(models.StockMovement.created_at.desc())
-        .all()
     )
+
+    return paginate_query(query, page, limit).all()
 
 def normalize_category_name(name: str):
     return name.strip()
 
 
-def get_category_by_id(category_id: int, db: Session):
-    category = (
-        db.query(models.Category)
-        .filter(models.Category.id == category_id)
-        .first()
-    )
+def get_category_by_id(
+    category_id: int,
+    db: Session,
+    workspace_id: int | None = None,
+):
+    query = db.query(models.Category).filter(models.Category.id == category_id)
+
+    if workspace_id is None:
+        query = query.filter(models.Category.workspace_id.is_(None))
+    else:
+        query = query.filter(models.Category.workspace_id == workspace_id)
+
+    category = query.first()
 
     if not category:
         raise HTTPException(
@@ -243,66 +801,95 @@ def get_category_by_id(category_id: int, db: Session):
     return category
 
 
-def get_category_by_name(name: str, db: Session):
+def get_category_by_name(name: str, db: Session, workspace_id: int):
     normalized_name = normalize_category_name(name)
 
     return (
         db.query(models.Category)
+        .filter(models.Category.workspace_id == workspace_id)
         .filter(models.Category.name == normalized_name)
         .first()
     )
 
 
-def create_category(category_data: schemas.CategoryCreate, db: Session):
+def create_category(
+    category_data: schemas.CategoryCreate,
+    db: Session,
+    workspace_id: int,
+):
     name = normalize_category_name(category_data.name)
 
-    existing_category = get_category_by_name(name, db)
+    existing_category = get_category_by_name(name, db, workspace_id)
 
     if existing_category:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Já existe uma categoria com esse nome.",
+            detail="Já existe uma categoria com esse nome neste workspace.",
         )
 
     new_category = models.Category(
+        workspace_id=workspace_id,
         name=name,
         description=category_data.description,
     )
 
     db.add(new_category)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Não foi possível criar a categoria com esse nome. "
+                "No SQLite atual ainda pode existir uma constraint global antiga."
+            ),
+        )
+
     db.refresh(new_category)
 
     return new_category
 
 
-def list_categories(db: Session, search: str | None = None):
-    query = db.query(models.Category)
+def list_categories(
+    db: Session,
+    workspace_id: int,
+    search: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+):
+    query = db.query(models.Category).filter(
+        models.Category.workspace_id == workspace_id
+    )
 
     if search:
         query = query.filter(models.Category.name.ilike(f"%{search}%"))
 
-    return query.order_by(models.Category.name.asc()).all()
+    query = query.order_by(models.Category.name.asc())
+
+    return paginate_query(query, page, limit).all()
 
 
 def update_category(
     category_id: int,
     category_data: schemas.CategoryUpdate,
     db: Session,
+    workspace_id: int,
 ):
-    category = get_category_by_id(category_id, db)
+    category = get_category_by_id(category_id, db, workspace_id)
 
     update_data = category_data.model_dump(exclude_unset=True)
 
     if "name" in update_data:
         new_name = normalize_category_name(update_data["name"])
 
-        existing_category = get_category_by_name(new_name, db)
+        existing_category = get_category_by_name(new_name, db, workspace_id)
 
         if existing_category and existing_category.id != category.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Já existe uma categoria com esse nome.",
+                detail="Já existe uma categoria com esse nome neste workspace.",
             )
 
         update_data["name"] = new_name
@@ -310,14 +897,25 @@ def update_category(
     for field, value in update_data.items():
         setattr(category, field, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Não foi possível atualizar a categoria com esse nome. "
+                "No SQLite atual ainda pode existir uma constraint global antiga."
+            ),
+        )
+
     db.refresh(category)
 
     return category
 
 
-def delete_category(category_id: int, db: Session):
-    category = get_category_by_id(category_id, db)
+def delete_category(category_id: int, db: Session, workspace_id: int):
+    category = get_category_by_id(category_id, db, workspace_id)
 
     db.delete(category)
     db.commit()
@@ -325,23 +923,37 @@ def delete_category(category_id: int, db: Session):
     return None
 
 
-def get_dashboard_summary(db: Session):
-    total_products = db.query(models.Product).count()
+def get_dashboard_summary(db: Session, workspace_id: int):
+    total_products = (
+        db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
+        .count()
+    )
 
-    total_categories = db.query(models.Category).count()
+    total_categories = (
+        db.query(models.Category)
+        .filter(models.Category.workspace_id == workspace_id)
+        .count()
+    )
 
     low_stock_products = (
         db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
         .filter(models.Product.quantity <= models.Product.minimum_quantity)
         .count()
     )
 
     total_stock_quantity = (
         db.query(func.coalesce(func.sum(models.Product.quantity), 0))
+        .filter(models.Product.workspace_id == workspace_id)
         .scalar()
     )
 
-    total_stock_movements = db.query(models.StockMovement).count()
+    total_stock_movements = (
+        db.query(models.StockMovement)
+        .filter(models.StockMovement.workspace_id == workspace_id)
+        .count()
+    )
 
     return {
         "total_products": total_products,
