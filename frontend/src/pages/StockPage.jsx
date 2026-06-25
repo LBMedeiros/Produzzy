@@ -57,6 +57,8 @@ const MOVEMENT_TONES = {
   saida: 'danger',
 }
 
+const MOVEMENTS_PAGE_LIMIT = 20
+
 function getFriendlyError(error) {
   if (error?.status === 403) {
     return 'Você não tem permissão para realizar esta ação.'
@@ -151,6 +153,9 @@ function StockPage() {
   const [detailError, setDetailError] = useState('')
   const [stockMovements, setStockMovements] = useState([])
   const [isLoadingMovements, setIsLoadingMovements] = useState(false)
+  const [isLoadingMoreMovements, setIsLoadingMoreMovements] = useState(false)
+  const [movementsPage, setMovementsPage] = useState(1)
+  const [hasMoreMovements, setHasMoreMovements] = useState(false)
   const [movementsError, setMovementsError] = useState('')
 
   const loadStockData = useCallback(async () => {
@@ -198,30 +203,53 @@ function StockPage() {
     return categoryItems
   }, [workspaceId])
 
-  const loadProductMovements = useCallback(async (productId) => {
-    if (!workspaceId || !productId) {
-      return []
-    }
+  const loadProductMovements = useCallback(
+    async (productId, options = {}) => {
+      if (!workspaceId || !productId) {
+        return []
+      }
 
-    setIsLoadingMovements(true)
-    setMovementsError('')
+      const page = options.page ?? 1
+      const shouldAppend = options.append ?? false
 
-    try {
-      const items = await listProductStockMovements(workspaceId, productId, {
-        limit: 100,
-      })
-      setStockMovements(items)
+      if (shouldAppend) {
+        setIsLoadingMoreMovements(true)
+      } else {
+        setIsLoadingMovements(true)
+      }
+      setMovementsError('')
 
-      return items
-    } catch (loadError) {
-      setMovementsError(getFriendlyError(loadError))
-      setStockMovements([])
+      try {
+        const items = await listProductStockMovements(workspaceId, productId, {
+          limit: MOVEMENTS_PAGE_LIMIT,
+          page,
+        })
 
-      return []
-    } finally {
-      setIsLoadingMovements(false)
-    }
-  }, [workspaceId])
+        setStockMovements((currentMovements) =>
+          shouldAppend ? [...currentMovements, ...items] : items,
+        )
+        setMovementsPage(page)
+        setHasMoreMovements(items.length === MOVEMENTS_PAGE_LIMIT)
+
+        return items
+      } catch (loadError) {
+        setMovementsError(getFriendlyError(loadError))
+        if (!shouldAppend) {
+          setStockMovements([])
+          setHasMoreMovements(false)
+        }
+
+        return []
+      } finally {
+        if (shouldAppend) {
+          setIsLoadingMoreMovements(false)
+        } else {
+          setIsLoadingMovements(false)
+        }
+      }
+    },
+    [workspaceId],
+  )
 
   const loadProductDetail = useCallback(
     async (product, options = {}) => {
@@ -239,6 +267,8 @@ function StockPage() {
       setDetailError('')
       setMovementsError('')
       setStockMovements([])
+      setMovementsPage(1)
+      setHasMoreMovements(false)
 
       if (typeof product === 'object') {
         setDetailProduct(product)
@@ -251,7 +281,7 @@ function StockPage() {
           includeDeleted,
         })
         setDetailProduct(nextProduct)
-        await loadProductMovements(productId)
+        await loadProductMovements(productId, { page: 1 })
 
         return nextProduct
       } catch (loadError) {
@@ -326,7 +356,20 @@ function StockPage() {
     setDetailProduct(null)
     setDetailError('')
     setStockMovements([])
+    setMovementsPage(1)
+    setHasMoreMovements(false)
     setMovementsError('')
+  }
+
+  async function loadMoreMovements() {
+    if (!detailProduct) {
+      return
+    }
+
+    await loadProductMovements(detailProduct.id, {
+      append: true,
+      page: movementsPage + 1,
+    })
   }
 
   async function handleSaveProduct(event) {
@@ -789,11 +832,15 @@ function StockPage() {
                   <div className="product-movements__header">
                     <div>
                       <h3>Histórico de movimentações</h3>
-                      <p>Entradas, saídas e ajustes registrados no backend.</p>
+                      <p>
+                        {stockMovements.length
+                          ? `Mostrando ${stockMovements.length} movimentações`
+                          : 'Entradas, saídas e ajustes registrados no backend.'}
+                      </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => loadProductMovements(detailProduct.id)}
+                      onClick={() => loadProductMovements(detailProduct.id, { page: 1 })}
                     >
                       Atualizar
                     </button>
@@ -853,6 +900,17 @@ function StockPage() {
                       </p>
                     </div>
                   )}
+
+                  {hasMoreMovements && !isLoadingMovements ? (
+                    <button
+                      className="load-more-button"
+                      disabled={isLoadingMoreMovements}
+                      type="button"
+                      onClick={loadMoreMovements}
+                    >
+                      {isLoadingMoreMovements ? 'Carregando histórico...' : 'Carregar mais'}
+                    </button>
+                  ) : null}
                 </section>
               </>
             ) : null}

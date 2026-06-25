@@ -1260,6 +1260,20 @@ a {
   color: var(--blue);
 }
 
+.load-more-button {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--blue);
+  font-weight: 850;
+}
+
+.load-more-button:hover {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: var(--blue-soft);
+}
+
 .movement-list {
   display: grid;
   gap: 10px;

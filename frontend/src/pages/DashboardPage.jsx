@@ -1,25 +1,186 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import StatCard from '../components/ui/StatCard'
+import { useWorkspace } from '../contexts/WorkspaceContext'
+import { productionColumns } from '../data/mockData'
 import {
-  activities,
-  attentionProducts,
-  dashboardMetrics,
-  productionColumns,
-} from '../data/mockData'
+  getDashboardSummary,
+  listLowStockProducts,
+  listRecentActivity,
+} from '../services/dashboardService'
+
+function getFriendlyError(error) {
+  if (error?.status === 403) {
+    return 'Você não tem permissão para visualizar estes dados.'
+  }
+
+  if (error?.status === 0) {
+    return 'Não foi possível conectar ao servidor.'
+  }
+
+  return error?.message ?? 'Não foi possível carregar o dashboard.'
+}
+
+function getProductStatus(product) {
+  if (product.quantity === 0) {
+    return { label: 'Sem estoque', tone: 'danger' }
+  }
+
+  if (product.quantity <= product.minimum_quantity) {
+    return { label: 'Baixo estoque', tone: 'warning' }
+  }
+
+  return { label: 'Em estoque', tone: 'success' }
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat('pt-BR').format(value ?? 0)
+}
+
+function formatDate(value) {
+  if (!value) {
+    return 'Sem data'
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+  }).format(new Date(value))
+}
+
+const auditActionLabels = {
+  'category.created': 'Categoria criada',
+  'category.deleted': 'Categoria removida',
+  'category.updated': 'Categoria atualizada',
+  'product.created': 'Produto criado',
+  'product.deleted': 'Produto enviado para lixeira',
+  'product.restored': 'Produto restaurado',
+  'product.updated': 'Produto atualizado',
+  'stock.movement_created': 'Estoque movimentado',
+  'workspace.created': 'Workspace criado',
+  'workspace.updated': 'Workspace atualizado',
+}
+
+function formatAuditLog(log) {
+  const title = auditActionLabels[log.action] ?? log.action
+  const metadata = log.metadata ?? {}
+  const detail =
+    metadata.name ??
+    metadata.product_id ??
+    metadata.category_id ??
+    metadata.movement_type ??
+    log.entity_type
+
+  return {
+    detail: `Referência: ${detail}`,
+    id: log.id,
+    time: formatDate(log.created_at),
+    title,
+  }
+}
 
 function DashboardPage() {
+  const { activeWorkspace } = useWorkspace()
+  const workspaceId = activeWorkspace?.id
+  const [summary, setSummary] = useState(null)
+  const [lowStockProducts, setLowStockProducts] = useState([])
+  const [recentActivity, setRecentActivity] = useState([])
+  const [activityError, setActivityError] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const loadDashboard = useCallback(async () => {
+    if (!workspaceId) {
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    setActivityError('')
+
+    try {
+      const [summaryData, lowStockItems] = await Promise.all([
+        getDashboardSummary(workspaceId),
+        listLowStockProducts(workspaceId, { limit: 6 }),
+      ])
+
+      setSummary(summaryData)
+      setLowStockProducts(lowStockItems)
+
+      try {
+        const activityItems = await listRecentActivity(workspaceId, { limit: 6 })
+        setRecentActivity(activityItems.map(formatAuditLog))
+      } catch (activityLoadError) {
+        setRecentActivity([])
+        setActivityError(getFriendlyError(activityLoadError))
+      }
+    } catch (loadError) {
+      setError(getFriendlyError(loadError))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [workspaceId])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadDashboard()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadDashboard])
+
+  const stats = useMemo(
+    () => [
+      {
+        label: 'Produtos ativos',
+        tone: 'blue',
+        trend: `${formatNumber(summary?.total_categories)} categorias cadastradas`,
+        value: formatNumber(summary?.total_products),
+      },
+      {
+        label: 'Baixo estoque',
+        tone: 'yellow',
+        trend: 'Produtos que precisam de atenção',
+        value: formatNumber(summary?.low_stock_products),
+      },
+      {
+        label: 'Quantidade em estoque',
+        tone: 'green',
+        trend: 'Soma dos produtos ativos',
+        value: formatNumber(summary?.total_stock_quantity),
+      },
+      {
+        label: 'Movimentações registradas',
+        tone: 'slate',
+        trend: 'Histórico do workspace',
+        value: formatNumber(summary?.total_stock_movements),
+      },
+    ],
+    [summary],
+  )
+
   const attentionColumns = [
     { key: 'name', label: 'Produto' },
     { key: 'category', label: 'Categoria' },
     { key: 'quantity', label: 'Quantidade' },
-    { key: 'minimumQuantity', label: 'Mínimo' },
+    {
+      key: 'minimum_quantity',
+      label: 'Mínimo',
+      render: (product) => product.minimum_quantity,
+    },
     {
       key: 'status',
       label: 'Status',
-      render: (product) => <Badge tone={product.statusTone}>{product.status}</Badge>,
+      render: (product) => {
+        const status = getProductStatus(product)
+
+        return <Badge tone={status.tone}>{status.label}</Badge>
+      },
     },
   ]
 
@@ -40,51 +201,83 @@ function DashboardPage() {
       <div className="page-heading">
         <div>
           <h1>Dashboard</h1>
-          <p>Visão geral do estoque e produção</p>
+          <p>Visão geral real do estoque do workspace</p>
         </div>
-        <Button variant="secondary">Exportar resumo</Button>
+        <Button onClick={loadDashboard} variant="secondary">
+          Atualizar dados
+        </Button>
       </div>
 
-      <section className="stats-grid">
-        {dashboardMetrics.map((stat) => (
-          <StatCard key={stat.label} {...stat} />
-        ))}
-      </section>
+      {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
 
-      <section className="content-grid content-grid--two">
-        <Card title="Produtos que precisam de atenção" eyebrow="Estoque">
-          <DataTable columns={attentionColumns} rows={attentionProducts} />
-        </Card>
-        <Card title="Atividades recentes" eyebrow="Operação">
-          <DataTable columns={activityColumns} rows={activities} />
-        </Card>
-      </section>
-
-      <section className="feature-grid">
-        <Card className="feature-card" title="Produção em andamento" eyebrow="Kanban">
-          <div className="mini-production-list">
-            {activeProduction.slice(0, 3).map((task) => (
-              <div className="mini-production-item" key={task.id}>
-                <div>
-                  <strong>{task.product}</strong>
-                  <span>{task.stage}</span>
-                </div>
-                <Badge tone={task.statusTone}>{task.status}</Badge>
-              </div>
+      {isLoading ? (
+        <div className="stock-loading">Carregando dashboard...</div>
+      ) : (
+        <>
+          <section className="stats-grid">
+            {stats.map((stat) => (
+              <StatCard key={stat.label} {...stat} />
             ))}
-          </div>
-        </Card>
-        <Card className="feature-card" title="Atalho para etiquetas/QR Code" eyebrow="Identificação">
-          <p>
-            Gere etiquetas individuais ou folhas A4 para identificar produtos na
-            expedição, estoque e produção.
-          </p>
-          <div className="feature-card__visual">
-            <div className="qr-grid"></div>
-            <span>Etiqueta pronta para impressão</span>
-          </div>
-        </Card>
-      </section>
+          </section>
+
+          <section className="content-grid content-grid--two">
+            <Card title="Produtos que precisam de atenção" eyebrow="Estoque real">
+              {lowStockProducts.length ? (
+                <DataTable columns={attentionColumns} rows={lowStockProducts} />
+              ) : (
+                <div className="stock-empty">
+                  <h2>Nenhum produto em baixo estoque</h2>
+                  <p>Os produtos ativos estão acima da quantidade mínima cadastrada.</p>
+                </div>
+              )}
+            </Card>
+            <Card title="Atividades recentes" eyebrow="Audit logs">
+              {activityError ? (
+                <p className="stock-feedback stock-feedback--error">
+                  {activityError}
+                </p>
+              ) : recentActivity.length ? (
+                <DataTable columns={activityColumns} rows={recentActivity} />
+              ) : (
+                <div className="stock-empty">
+                  <h2>Nenhuma atividade recente</h2>
+                  <p>As ações do workspace aparecerão aqui conforme forem registradas.</p>
+                </div>
+              )}
+            </Card>
+          </section>
+
+          <section className="feature-grid">
+            <Card className="feature-card" title="Produção em andamento" eyebrow="Mock">
+              <div className="mini-production-list">
+                {activeProduction.slice(0, 3).map((task) => (
+                  <div className="mini-production-item" key={task.id}>
+                    <div>
+                      <strong>{task.product}</strong>
+                      <span>{task.stage}</span>
+                    </div>
+                    <Badge tone={task.statusTone}>{task.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card
+              className="feature-card"
+              title="Atalho para etiquetas/QR Code"
+              eyebrow="Visual"
+            >
+              <p>
+                Gere etiquetas individuais ou folhas A4 para identificar produtos na
+                expedição, estoque e produção.
+              </p>
+              <div className="feature-card__visual">
+                <div className="qr-grid"></div>
+                <span>Etiqueta pronta para impressão</span>
+              </div>
+            </Card>
+          </section>
+        </>
+      )}
     </div>
   )
 }
