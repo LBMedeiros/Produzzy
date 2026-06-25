@@ -1,17 +1,25 @@
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { getInitials, getWorkspaceRole } from '../../lib/formatters'
+import {
+  ChevronIcon,
+  DashboardIcon,
+  LabelsIcon,
+  ProductionIcon,
+  SettingsIcon,
+  StockIcon,
+} from './SidebarIcons'
 
 const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'D' },
-  { id: 'stock', label: 'Estoque', icon: 'E' },
-  { id: 'production', label: 'Produção', icon: 'P' },
-  { id: 'labels', label: 'Etiquetas', icon: 'QR' },
-  { id: 'settings', label: 'Configurações', icon: 'C' },
+  { id: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
+  { id: 'stock', label: 'Estoque', icon: StockIcon },
+  { id: 'production', label: 'Produção', icon: ProductionIcon },
+  { id: 'labels', label: 'Etiquetas', icon: LabelsIcon },
+  { id: 'settings', label: 'Configurações', icon: SettingsIcon },
 ]
 
 function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
-  const { logout, user } = useAuth()
+  const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const role = getWorkspaceRole(user, activeWorkspace)
 
@@ -32,22 +40,28 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
         title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
         aria-label={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
       >
-        {isCollapsed ? '>' : '<'}
+        <ChevronIcon direction={isCollapsed ? 'right' : 'left'} />
       </button>
 
       <nav className="sidebar__nav" aria-label="Navegação principal">
-        {navItems.map((item) => (
-          <button
-            className={`sidebar__item ${activePage === item.id ? 'is-active' : ''}`}
-            key={item.id}
-            type="button"
-            onClick={() => onNavigate(item.id)}
-            title={item.label}
-          >
-            <span>{item.icon}</span>
-            <strong>{item.label}</strong>
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const Icon = item.icon
+
+          return (
+            <button
+              className={`sidebar__item ${activePage === item.id ? 'is-active' : ''}`}
+              key={item.id}
+              type="button"
+              onClick={() => onNavigate(item.id)}
+              title={item.label}
+            >
+              <span>
+                <Icon />
+              </span>
+              <strong>{item.label}</strong>
+            </button>
+          )
+        })}
       </nav>
 
       <div className="sidebar__user">
@@ -57,16 +71,6 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
           <span>{role}</span>
         </div>
       </div>
-
-      <button
-        className="sidebar__logout"
-        type="button"
-        onClick={logout}
-        title="Sair da conta"
-      >
-        <span>S</span>
-        <strong>Sair</strong>
-      </button>
     </aside>
   )
 }

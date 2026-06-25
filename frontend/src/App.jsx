@@ -40,7 +40,7 @@ function ProtectedApp() {
     return <LoginPage />
   }
 
-  if (workspaceLoading) {
+  if (workspaceLoading && !activeWorkspace) {
     return <LoadingScreen message="Carregando workspaces..." />
   }
 

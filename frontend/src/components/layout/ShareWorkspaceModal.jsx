@@ -1,0 +1,36 @@
+import Button from '../ui/Button'
+import { useWorkspace } from '../../contexts/WorkspaceContext'
+
+function ShareWorkspaceModal({ onClose }) {
+  const { activeWorkspace } = useWorkspace()
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="workspace-modal" role="dialog" aria-modal="true">
+        <div className="workspace-modal__header">
+          <div>
+            <span>Compartilhamento</span>
+            <h2>{activeWorkspace?.name ?? 'Workspace'}</h2>
+          </div>
+          <button
+            aria-label="Fechar modal"
+            className="icon-button"
+            type="button"
+            onClick={onClose}
+          >
+            x
+          </button>
+        </div>
+        <p className="workspace-modal__text">
+          Convites reais ficam para a próxima etapa. Por enquanto, este botão apenas
+          reserva o espaço da ação na topbar.
+        </p>
+        <div className="workspace-form__actions">
+          <Button onClick={onClose}>Entendi</Button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+export default ShareWorkspaceModal

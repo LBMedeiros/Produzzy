@@ -23,5 +23,5 @@ export function getWorkspaceRole(user, workspace) {
     return 'Owner'
   }
 
-  return 'Membro'
+  return 'Admin'
 }
