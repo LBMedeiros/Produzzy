@@ -1151,11 +1151,52 @@ a {
   font-size: 14px;
 }
 
+.category-manager-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.category-manager-tabs button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.category-manager-tabs button.is-active {
+  border-bottom-color: var(--blue);
+  color: var(--blue);
+}
+
+.category-manager-tabs button span {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #475569;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
 .category-manager-toolbar {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto;
   align-items: end;
   gap: 12px;
+}
+
+.category-manager-toolbar.is-trash {
+  grid-template-columns: 1fr;
 }
 
 .category-manager-search {
@@ -1242,7 +1283,15 @@ a {
   font-weight: 800;
 }
 
-.category-editor-item .category-editor-item__edit {
+.category-editor-item__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.category-editor-item .category-editor-item__edit,
+.category-editor-item .category-editor-item__delete,
+.category-editor-item .category-editor-item__restore {
   min-height: 32px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1256,6 +1305,25 @@ a {
 .category-editor-item .category-editor-item__edit:hover {
   border-color: rgba(37, 99, 235, 0.28);
   color: var(--blue);
+}
+
+.category-editor-item .category-editor-item__delete {
+  color: var(--danger);
+}
+
+.category-editor-item .category-editor-item__delete:hover {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: var(--danger-soft);
+}
+
+.category-editor-item .category-editor-item__restore {
+  border-color: rgba(22, 163, 74, 0.24);
+  color: var(--success);
+}
+
+.category-editor-item .category-editor-item__restore:hover {
+  border-color: rgba(22, 163, 74, 0.38);
+  background: var(--success-soft);
 }
 
 .category-editor-form {
@@ -2241,7 +2309,13 @@ a {
     flex-direction: column;
   }
 
-  .category-editor-item .category-editor-item__edit {
+  .category-editor-item__actions {
+    width: 100%;
+  }
+
+  .category-editor-item .category-editor-item__edit,
+  .category-editor-item .category-editor-item__delete,
+  .category-editor-item .category-editor-item__restore {
     width: 100%;
   }
 

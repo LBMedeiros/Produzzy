@@ -6,7 +6,9 @@ import DataTable from '../components/ui/DataTable'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import {
   createCategory,
+  deleteCategory,
   listCategories,
+  restoreCategory,
   updateCategory,
 } from '../services/categoryService'
 import {
@@ -68,6 +70,10 @@ function getFriendlyError(error) {
     return 'Você não tem permissão para realizar esta ação.'
   }
 
+  if (error?.message === 'Restore the category before restoring this product.') {
+    return 'Restaure a categoria antes de restaurar este produto.'
+  }
+
   if (error?.status === 0) {
     return 'Não foi possível conectar ao servidor.'
   }
@@ -122,6 +128,16 @@ function formatProductsToUpdate(count) {
     : `${count} produtos ativos serão atualizados.`
 }
 
+function formatProductsRemovedWithCategory(count) {
+  if (count === 0) {
+    return 'Nenhum produto aguardando restauração'
+  }
+
+  return count === 1
+    ? '1 produto removido junto com a categoria'
+    : `${count} produtos removidos junto com a categoria`
+}
+
 function normalizeProductForm(product, categories) {
   const firstCategory = categories[0]?.name ?? ''
 
@@ -146,6 +162,7 @@ function StockPage() {
 
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
+  const [deletedCategories, setDeletedCategories] = useState([])
   const [activeFilter, setActiveFilter] = useState('active')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -176,11 +193,15 @@ function StockPage() {
   const [isSavingCategoryEdit, setIsSavingCategoryEdit] = useState(false)
   const [categorySearchTerm, setCategorySearchTerm] = useState('')
   const [categoryProducts, setCategoryProducts] = useState([])
+  const [deletedCategoryProducts, setDeletedCategoryProducts] = useState([])
   const [isLoadingCategoryProducts, setIsLoadingCategoryProducts] =
     useState(false)
   const [categoryManagerError, setCategoryManagerError] = useState('')
   const [categoryManagerSuccess, setCategoryManagerSuccess] = useState('')
   const [updateLinkedProducts, setUpdateLinkedProducts] = useState(false)
+  const [deletingCategoryId, setDeletingCategoryId] = useState(null)
+  const [restoringCategoryId, setRestoringCategoryId] = useState(null)
+  const [categoryManagerView, setCategoryManagerView] = useState('active')
 
   const [workspaceMovements, setWorkspaceMovements] = useState([])
   const [historyPage, setHistoryPage] = useState(1)
@@ -297,6 +318,26 @@ function StockPage() {
     return categoryItems
   }, [workspaceId])
 
+  const loadDeletedCategories = useCallback(async () => {
+    if (!workspaceId) {
+      return []
+    }
+
+    try {
+      const categoryItems = await listCategories(workspaceId, {
+        status: 'deleted',
+      })
+      setDeletedCategories(categoryItems)
+
+      return categoryItems
+    } catch (loadError) {
+      setCategoryManagerError(getFriendlyError(loadError))
+      setDeletedCategories([])
+
+      return []
+    }
+  }, [workspaceId])
+
   const loadCategoryProducts = useCallback(async () => {
     if (!workspaceId) {
       return []
@@ -306,16 +347,24 @@ function StockPage() {
     setCategoryManagerError('')
 
     try {
-      const activeProducts = await listProducts(workspaceId, {
-        limit: 100,
-        status: 'active',
-      })
+      const [activeProducts, deletedProducts] = await Promise.all([
+        listProducts(workspaceId, {
+          limit: 100,
+          status: 'active',
+        }),
+        listProducts(workspaceId, {
+          limit: 100,
+          status: 'deleted',
+        }),
+      ])
       setCategoryProducts(activeProducts)
+      setDeletedCategoryProducts(deletedProducts)
 
       return activeProducts
     } catch (loadError) {
       setCategoryManagerError(getFriendlyError(loadError))
       setCategoryProducts([])
+      setDeletedCategoryProducts([])
 
       return []
     } finally {
@@ -470,21 +519,39 @@ function StockPage() {
     }, {})
   }, [categoryProducts])
 
+  const deletedCategoryProductCounts = useMemo(() => {
+    return deletedCategoryProducts.reduce((counts, product) => {
+      if (product.deleted_by_category_id) {
+        counts[product.deleted_by_category_id] =
+          (counts[product.deleted_by_category_id] ?? 0) + 1
+      }
+
+      return counts
+    }, {})
+  }, [deletedCategoryProducts])
+
   const filteredManagedCategories = useMemo(() => {
     const normalizedSearch = categorySearchTerm.trim().toLowerCase()
+    const managedCategories =
+      categoryManagerView === 'deleted' ? deletedCategories : categories
 
     if (!normalizedSearch) {
-      return categories
+      return managedCategories
     }
 
-    return categories.filter((category) =>
+    return managedCategories.filter((category) =>
       [category.name, category.description]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch),
     )
-  }, [categories, categorySearchTerm])
+  }, [
+    categories,
+    categoryManagerView,
+    categorySearchTerm,
+    deletedCategories,
+  ])
 
   const editingCategory =
     categories.find((category) => category.id === editingCategoryId) ?? null
@@ -565,8 +632,10 @@ function StockPage() {
     setCategoryManagerError('')
     setCategoryManagerSuccess('')
     setUpdateLinkedProducts(false)
+    setCategoryManagerView('active')
     setIsEditCategoriesOpen(true)
     loadCategoryProducts()
+    loadDeletedCategories()
   }
 
   function handleCategoryAction(event) {
@@ -679,6 +748,107 @@ function StockPage() {
       }
     } finally {
       setIsSavingCategoryEdit(false)
+    }
+  }
+
+  async function handleDeleteCategory(category) {
+    if (!workspaceId) {
+      return
+    }
+
+    const linkedProductsCount = categoryProductCounts[category.name] ?? 0
+
+    setCategoryManagerError('')
+    setCategoryManagerSuccess('')
+
+    const shouldDelete = window.confirm(
+      linkedProductsCount > 0
+        ? `Esta categoria possui ${formatLinkedProducts(
+            linkedProductsCount,
+          ).toLowerCase()}. Ao continuar, a categoria e os produtos ativos vinculados a ela serão enviados para a lixeira. Você poderá restaurá-los depois. Deseja continuar?`
+        : 'Tem certeza que deseja enviar esta categoria para a lixeira?',
+    )
+
+    if (!shouldDelete) {
+      return
+    }
+
+    setDeletingCategoryId(category.id)
+
+    try {
+      await deleteCategory(workspaceId, category.id)
+      const [remainingCategories] = await Promise.all([
+        refreshCategories(),
+        loadDeletedCategories(),
+        loadCategoryProducts(),
+        loadStockData(),
+      ])
+
+      setCategoryFilter((currentFilter) =>
+        currentFilter === category.name ? 'all' : currentFilter,
+      )
+      setProductForm((currentForm) =>
+        currentForm.category === category.name
+          ? {
+              ...currentForm,
+              category: remainingCategories[0]?.name ?? '',
+            }
+          : currentForm,
+      )
+      setCategoryManagerSuccess(
+        'Categoria enviada para a lixeira com sucesso.',
+      )
+    } catch (deleteError) {
+      setCategoryManagerError(getFriendlyError(deleteError))
+    } finally {
+      setDeletingCategoryId(null)
+    }
+  }
+
+  async function handleRestoreCategory(category) {
+    if (!workspaceId) {
+      return
+    }
+
+    setRestoringCategoryId(category.id)
+    setCategoryManagerError('')
+    setCategoryManagerSuccess('')
+
+    try {
+      const restoreResult = await restoreCategory(workspaceId, category.id)
+      const [activeCategories] = await Promise.all([
+        refreshCategories(),
+        loadDeletedCategories(),
+        loadCategoryProducts(),
+        loadStockData(),
+      ])
+
+      setProductForm((currentForm) =>
+        currentForm.category
+          ? currentForm
+          : {
+              ...currentForm,
+              category: activeCategories[0]?.name ?? '',
+            },
+      )
+      setCategoryManagerSuccess(
+        restoreResult.skipped_products_count > 0
+          ? `Categoria restaurada. ${restoreResult.skipped_products_count} ${
+              restoreResult.skipped_products_count === 1
+                ? 'produto não foi restaurado'
+                : 'produtos não foram restaurados'
+            } por conflito de nome.`
+          : 'Categoria restaurada com sucesso.',
+      )
+    } catch (restoreError) {
+      setCategoryManagerError(
+        restoreError?.message ===
+          'Another active category with this name already exists in this workspace.'
+          ? 'Já existe uma categoria ativa com esse nome neste workspace.'
+          : getFriendlyError(restoreError),
+      )
+    } finally {
+      setRestoringCategoryId(null)
     }
   }
 
@@ -1592,7 +1762,48 @@ function StockPage() {
               </button>
             </div>
 
-            <div className="category-manager-toolbar">
+            <div
+              aria-label="Visualização das categorias"
+              className="category-manager-tabs"
+              role="tablist"
+            >
+              <button
+                aria-selected={categoryManagerView === 'active'}
+                className={categoryManagerView === 'active' ? 'is-active' : ''}
+                role="tab"
+                type="button"
+                onClick={() => {
+                  setCategoryManagerView('active')
+                  setEditingCategoryId(null)
+                  setCategoryManagerError('')
+                  setCategoryManagerSuccess('')
+                }}
+              >
+                Ativas
+                <span>{categories.length}</span>
+              </button>
+              <button
+                aria-selected={categoryManagerView === 'deleted'}
+                className={categoryManagerView === 'deleted' ? 'is-active' : ''}
+                role="tab"
+                type="button"
+                onClick={() => {
+                  setCategoryManagerView('deleted')
+                  setEditingCategoryId(null)
+                  setCategoryManagerError('')
+                  setCategoryManagerSuccess('')
+                }}
+              >
+                Lixeira
+                <span>{deletedCategories.length}</span>
+              </button>
+            </div>
+
+            <div
+              className={`category-manager-toolbar ${
+                categoryManagerView === 'deleted' ? 'is-trash' : ''
+              }`}
+            >
               <label className="category-manager-search">
                 <span>Buscar categoria</span>
                 <input
@@ -1602,15 +1813,17 @@ function StockPage() {
                   value={categorySearchTerm}
                 />
               </label>
-              <Button
-                onClick={() => {
-                  setIsEditCategoriesOpen(false)
-                  openCreateCategoryModal()
-                }}
-                variant="secondary"
-              >
-                Nova categoria
-              </Button>
+              {categoryManagerView === 'active' ? (
+                <Button
+                  onClick={() => {
+                    setIsEditCategoriesOpen(false)
+                    openCreateCategoryModal()
+                  }}
+                  variant="secondary"
+                >
+                  Nova categoria
+                </Button>
+              ) : null}
             </div>
 
             {isLoadingCategoryProducts ? (
@@ -1634,11 +1847,41 @@ function StockPage() {
                 {filteredManagedCategories.map((category) => (
                   <article
                     className={`category-editor-item ${
-                      editingCategoryId === category.id ? 'is-editing' : ''
+                      categoryManagerView === 'active' &&
+                      editingCategoryId === category.id
+                        ? 'is-editing'
+                        : ''
                     }`}
                     key={category.id}
                   >
-                    {editingCategoryId === category.id ? (
+                    {categoryManagerView === 'deleted' ? (
+                      <>
+                        <div className="category-editor-item__copy">
+                          <strong>{category.name}</strong>
+                          <p>{category.description || 'Sem descrição.'}</p>
+                          <span>
+                            Excluída em {formatDate(category.deleted_at)}
+                          </span>
+                          <span>
+                            {formatProductsRemovedWithCategory(
+                              deletedCategoryProductCounts[category.id] ?? 0,
+                            )}
+                          </span>
+                        </div>
+                        <div className="category-editor-item__actions">
+                          <button
+                            className="category-editor-item__restore"
+                            disabled={restoringCategoryId === category.id}
+                            type="button"
+                            onClick={() => handleRestoreCategory(category)}
+                          >
+                            {restoringCategoryId === category.id
+                              ? 'Restaurando...'
+                              : 'Restaurar'}
+                          </button>
+                        </div>
+                      </>
+                    ) : editingCategoryId === category.id ? (
                       <form
                         className="stock-form category-editor-form"
                         onSubmit={handleSaveCategoryEdit}
@@ -1731,13 +1974,26 @@ function StockPage() {
                             )}
                           </span>
                         </div>
-                        <button
-                          className="category-editor-item__edit"
-                          type="button"
-                          onClick={() => openEditCategory(category)}
-                        >
-                          Editar
-                        </button>
+                        <div className="category-editor-item__actions">
+                          <button
+                            className="category-editor-item__edit"
+                            disabled={deletingCategoryId === category.id}
+                            type="button"
+                            onClick={() => openEditCategory(category)}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="category-editor-item__delete"
+                            disabled={deletingCategoryId === category.id}
+                            type="button"
+                            onClick={() => handleDeleteCategory(category)}
+                          >
+                            {deletingCategoryId === category.id
+                              ? 'Excluindo...'
+                              : 'Excluir'}
+                          </button>
+                        </div>
                       </>
                     )}
                   </article>
@@ -1746,14 +2002,24 @@ function StockPage() {
             ) : (
               <div className="stock-empty">
                 <h2>
-                  {categories.length
+                  {(categoryManagerView === 'deleted'
+                    ? deletedCategories
+                    : categories
+                  ).length
                     ? 'Nenhuma categoria encontrada'
-                    : 'Nenhuma categoria cadastrada'}
+                    : categoryManagerView === 'deleted'
+                      ? 'A lixeira está vazia'
+                      : 'Nenhuma categoria cadastrada'}
                 </h2>
                 <p>
-                  {categories.length
+                  {(categoryManagerView === 'deleted'
+                    ? deletedCategories
+                    : categories
+                  ).length
                     ? 'Tente buscar usando outro nome ou descrição.'
-                    : 'Crie uma categoria para organizar os produtos do estoque.'}
+                    : categoryManagerView === 'deleted'
+                      ? 'Categorias enviadas para a lixeira aparecerão aqui.'
+                      : 'Crie uma categoria para organizar os produtos do estoque.'}
                 </p>
               </div>
             )}

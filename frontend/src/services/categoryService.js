@@ -15,13 +15,19 @@ function withQuery(path, params = {}) {
 }
 
 export function listCategories(workspaceId, options = {}) {
-  const { limit = 100, page = 1, search } = options
+  const {
+    limit = 100,
+    page = 1,
+    search,
+    status = 'active',
+  } = options
 
   return request(
     withQuery(`/workspaces/${workspaceId}/categories`, {
       limit,
       page,
       search,
+      status,
     }),
   )
 }
@@ -44,4 +50,13 @@ export function deleteCategory(workspaceId, categoryId) {
   return request(`/workspaces/${workspaceId}/categories/${categoryId}`, {
     method: 'DELETE',
   })
+}
+
+export function restoreCategory(workspaceId, categoryId) {
+  return request(
+    `/workspaces/${workspaceId}/categories/${categoryId}/restore`,
+    {
+      method: 'POST',
+    },
+  )
 }
