@@ -104,6 +104,24 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
+function formatLinkedProducts(count) {
+  if (count === 0) {
+    return 'Nenhum produto vinculado'
+  }
+
+  return count === 1 ? '1 produto vinculado' : `${count} produtos vinculados`
+}
+
+function formatProductsToUpdate(count) {
+  if (count === 0) {
+    return 'Nenhum produto ativo será atualizado.'
+  }
+
+  return count === 1
+    ? '1 produto ativo será atualizado.'
+    : `${count} produtos ativos serão atualizados.`
+}
+
 function normalizeProductForm(product, categories) {
   const firstCategory = categories[0]?.name ?? ''
 
@@ -156,6 +174,13 @@ function StockPage() {
   const [categoryEditForm, setCategoryEditForm] = useState(emptyCategoryForm)
   const [categoryEditError, setCategoryEditError] = useState('')
   const [isSavingCategoryEdit, setIsSavingCategoryEdit] = useState(false)
+  const [categorySearchTerm, setCategorySearchTerm] = useState('')
+  const [categoryProducts, setCategoryProducts] = useState([])
+  const [isLoadingCategoryProducts, setIsLoadingCategoryProducts] =
+    useState(false)
+  const [categoryManagerError, setCategoryManagerError] = useState('')
+  const [categoryManagerSuccess, setCategoryManagerSuccess] = useState('')
+  const [updateLinkedProducts, setUpdateLinkedProducts] = useState(false)
 
   const [workspaceMovements, setWorkspaceMovements] = useState([])
   const [historyPage, setHistoryPage] = useState(1)
@@ -270,6 +295,32 @@ function StockPage() {
     setCategories(categoryItems)
 
     return categoryItems
+  }, [workspaceId])
+
+  const loadCategoryProducts = useCallback(async () => {
+    if (!workspaceId) {
+      return []
+    }
+
+    setIsLoadingCategoryProducts(true)
+    setCategoryManagerError('')
+
+    try {
+      const activeProducts = await listProducts(workspaceId, {
+        limit: 100,
+        status: 'active',
+      })
+      setCategoryProducts(activeProducts)
+
+      return activeProducts
+    } catch (loadError) {
+      setCategoryManagerError(getFriendlyError(loadError))
+      setCategoryProducts([])
+
+      return []
+    } finally {
+      setIsLoadingCategoryProducts(false)
+    }
   }, [workspaceId])
 
   const loadProductMovements = useCallback(
@@ -412,6 +463,35 @@ function StockPage() {
     })
   }, [searchTerm, workspaceMovements])
 
+  const categoryProductCounts = useMemo(() => {
+    return categoryProducts.reduce((counts, product) => {
+      counts[product.category] = (counts[product.category] ?? 0) + 1
+      return counts
+    }, {})
+  }, [categoryProducts])
+
+  const filteredManagedCategories = useMemo(() => {
+    const normalizedSearch = categorySearchTerm.trim().toLowerCase()
+
+    if (!normalizedSearch) {
+      return categories
+    }
+
+    return categories.filter((category) =>
+      [category.name, category.description]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch),
+    )
+  }, [categories, categorySearchTerm])
+
+  const editingCategory =
+    categories.find((category) => category.id === editingCategoryId) ?? null
+  const isRenamingCategory =
+    Boolean(editingCategory) &&
+    categoryEditForm.name.trim() !== editingCategory.name
+
   function updateProductField(field, value) {
     setProductForm((currentForm) => ({
       ...currentForm,
@@ -481,7 +561,12 @@ function StockPage() {
     setEditingCategoryId(null)
     setCategoryEditForm(emptyCategoryForm)
     setCategoryEditError('')
+    setCategorySearchTerm('')
+    setCategoryManagerError('')
+    setCategoryManagerSuccess('')
+    setUpdateLinkedProducts(false)
     setIsEditCategoriesOpen(true)
+    loadCategoryProducts()
   }
 
   function handleCategoryAction(event) {
@@ -505,6 +590,8 @@ function StockPage() {
       name: category.name ?? '',
     })
     setCategoryEditError('')
+    setCategoryManagerSuccess('')
+    setUpdateLinkedProducts(false)
   }
 
   async function handleSaveCategoryEdit(event) {
@@ -514,21 +601,82 @@ function StockPage() {
       return
     }
 
+    const nextName = categoryEditForm.name.trim()
+
+    if (!nextName) {
+      setCategoryEditError('Informe um nome válido para a categoria.')
+      return
+    }
+
     setIsSavingCategoryEdit(true)
     setCategoryEditError('')
-    setSuccessMessage('')
+    setCategoryManagerError('')
+    setCategoryManagerSuccess('')
+
+    const originalName = editingCategory?.name ?? ''
+    const shouldRenameProducts =
+      updateLinkedProducts && Boolean(originalName) && nextName !== originalName
+    const linkedProducts = shouldRenameProducts
+      ? categoryProducts.filter((product) => product.category === originalName)
+      : []
+    let categoryWasUpdated = false
 
     try {
       await updateCategory(workspaceId, editingCategoryId, {
         description: categoryEditForm.description.trim() || null,
-        name: categoryEditForm.name.trim(),
+        name: nextName,
       })
+      categoryWasUpdated = true
+
+      if (linkedProducts.length) {
+        await Promise.all(
+          linkedProducts.map((product) =>
+            updateProduct(workspaceId, product.id, {
+              category: nextName,
+            }),
+          ),
+        )
+      }
+
       await refreshCategories()
+      await loadCategoryProducts()
+      setProducts((currentProducts) =>
+        currentProducts.map((product) =>
+          shouldRenameProducts && product.category === originalName
+            ? { ...product, category: nextName }
+            : product,
+        ),
+      )
+      setCategoryFilter((currentFilter) => {
+        if (currentFilter !== originalName) {
+          return currentFilter
+        }
+
+        return shouldRenameProducts ? nextName : 'all'
+      })
       setEditingCategoryId(null)
       setCategoryEditForm(emptyCategoryForm)
-      setSuccessMessage('Categoria atualizada com sucesso.')
+      setUpdateLinkedProducts(false)
+      setCategoryManagerSuccess(
+        linkedProducts.length
+          ? `Categoria atualizada e ${linkedProducts.length} ${
+              linkedProducts.length === 1 ? 'produto vinculado' : 'produtos vinculados'
+            } também ${
+              linkedProducts.length === 1 ? 'foi atualizado' : 'foram atualizados'
+            }.`
+          : 'Categoria atualizada com sucesso.',
+      )
     } catch (saveError) {
-      setCategoryEditError(getFriendlyError(saveError))
+      if (categoryWasUpdated) {
+        setCategoryEditError(
+          'A categoria foi salva, mas não foi possível atualizar todos os produtos vinculados.',
+        )
+        await refreshCategories()
+        await loadCategoryProducts()
+        await loadStockData()
+      } else {
+        setCategoryEditError(getFriendlyError(saveError))
+      }
     } finally {
       setIsSavingCategoryEdit(false)
     }
@@ -1419,28 +1567,88 @@ function StockPage() {
 
       {isEditCategoriesOpen ? (
         <div className="modal-backdrop" role="presentation">
-          <section className="workspace-modal stock-modal" role="dialog" aria-modal="true">
+          <section
+            aria-labelledby="category-manager-title"
+            aria-modal="true"
+            className="workspace-modal stock-modal category-manager-modal"
+            role="dialog"
+          >
             <div className="workspace-modal__header">
               <div>
                 <span>Categorias</span>
-                <h2>Editar categorias</h2>
+                <h2 id="category-manager-title">Gerenciar categorias</h2>
+                <p>Organize os grupos usados nos produtos do estoque.</p>
               </div>
               <button
                 aria-label="Fechar modal"
                 className="icon-button"
                 type="button"
-                onClick={() => setIsEditCategoriesOpen(false)}
+                onClick={() => {
+                  setIsEditCategoriesOpen(false)
+                  setEditingCategoryId(null)
+                }}
               >
                 x
               </button>
             </div>
 
-            {categories.length ? (
+            <div className="category-manager-toolbar">
+              <label className="category-manager-search">
+                <span>Buscar categoria</span>
+                <input
+                  onChange={(event) => setCategorySearchTerm(event.target.value)}
+                  placeholder="Buscar categoria..."
+                  type="search"
+                  value={categorySearchTerm}
+                />
+              </label>
+              <Button
+                onClick={() => {
+                  setIsEditCategoriesOpen(false)
+                  openCreateCategoryModal()
+                }}
+                variant="secondary"
+              >
+                Nova categoria
+              </Button>
+            </div>
+
+            {isLoadingCategoryProducts ? (
+              <p className="category-manager-status">
+                Calculando produtos vinculados...
+              </p>
+            ) : null}
+            {categoryManagerError ? (
+              <p className="stock-feedback stock-feedback--error">
+                {categoryManagerError}
+              </p>
+            ) : null}
+            {categoryManagerSuccess ? (
+              <p className="stock-feedback stock-feedback--success">
+                {categoryManagerSuccess}
+              </p>
+            ) : null}
+
+            {filteredManagedCategories.length ? (
               <div className="category-editor-list">
-                {categories.map((category) => (
-                  <article className="category-editor-item" key={category.id}>
+                {filteredManagedCategories.map((category) => (
+                  <article
+                    className={`category-editor-item ${
+                      editingCategoryId === category.id ? 'is-editing' : ''
+                    }`}
+                    key={category.id}
+                  >
                     {editingCategoryId === category.id ? (
-                      <form className="stock-form" onSubmit={handleSaveCategoryEdit}>
+                      <form
+                        className="stock-form category-editor-form"
+                        onSubmit={handleSaveCategoryEdit}
+                      >
+                        <div className="category-editor-form__heading">
+                          <div>
+                            <strong>Editar categoria</strong>
+                            <span>Atualize o nome e a descrição deste grupo.</span>
+                          </div>
+                        </div>
                         <label>
                           Nome
                           <input
@@ -1469,6 +1677,29 @@ function StockPage() {
                             value={categoryEditForm.description}
                           />
                         </label>
+                        {isRenamingCategory ? (
+                          <div className="category-rename-options">
+                            <label className="category-update-products">
+                              <input
+                                checked={updateLinkedProducts}
+                                onChange={(event) =>
+                                  setUpdateLinkedProducts(event.target.checked)
+                                }
+                                type="checkbox"
+                              />
+                              <span>
+                                Atualizar produtos que usam esta categoria
+                              </span>
+                            </label>
+                            <p>
+                              {updateLinkedProducts
+                                ? formatProductsToUpdate(
+                                    categoryProductCounts[category.name] ?? 0,
+                                  )
+                                : 'Produtos existentes podem continuar vinculados ao nome antigo.'}
+                            </p>
+                          </div>
+                        ) : null}
                         {categoryEditError ? (
                           <p className="form-error">{categoryEditError}</p>
                         ) : null}
@@ -1478,7 +1709,11 @@ function StockPage() {
                           </Button>
                           <Button
                             disabled={isSavingCategoryEdit}
-                            onClick={() => setEditingCategoryId(null)}
+                            onClick={() => {
+                              setEditingCategoryId(null)
+                              setCategoryEditError('')
+                              setUpdateLinkedProducts(false)
+                            }}
                             variant="secondary"
                           >
                             Cancelar
@@ -1487,11 +1722,20 @@ function StockPage() {
                       </form>
                     ) : (
                       <>
-                        <div>
+                        <div className="category-editor-item__copy">
                           <strong>{category.name}</strong>
                           <p>{category.description || 'Sem descrição.'}</p>
+                          <span>
+                            {formatLinkedProducts(
+                              categoryProductCounts[category.name] ?? 0,
+                            )}
+                          </span>
                         </div>
-                        <button type="button" onClick={() => openEditCategory(category)}>
+                        <button
+                          className="category-editor-item__edit"
+                          type="button"
+                          onClick={() => openEditCategory(category)}
+                        >
                           Editar
                         </button>
                       </>
@@ -1501,8 +1745,16 @@ function StockPage() {
               </div>
             ) : (
               <div className="stock-empty">
-                <h2>Nenhuma categoria cadastrada</h2>
-                <p>Crie uma categoria para organizar os produtos do estoque.</p>
+                <h2>
+                  {categories.length
+                    ? 'Nenhuma categoria encontrada'
+                    : 'Nenhuma categoria cadastrada'}
+                </h2>
+                <p>
+                  {categories.length
+                    ? 'Tente buscar usando outro nome ou descrição.'
+                    : 'Crie uma categoria para organizar os produtos do estoque.'}
+                </p>
               </div>
             )}
           </section>

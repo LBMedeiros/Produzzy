@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
@@ -8,7 +8,7 @@ import { listProducts } from '../services/productService'
 
 function getFriendlyError(error) {
   if (error?.status === 400 || error?.status === 422) {
-    return 'Não foi possível gerar a imagem. Verifique se um produto válido foi selecionado.'
+    return 'Selecione um produto válido antes de gerar QR Code ou etiqueta.'
   }
 
   if (error?.status === 403) {
@@ -63,6 +63,25 @@ function LabelsPage() {
   const [isLoadingSheet, setIsLoadingSheet] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const qrPreviewUrlRef = useRef('')
+  const labelPreviewUrlRef = useRef('')
+
+  const clearPreviews = useCallback(() => {
+    if (qrPreviewUrlRef.current) {
+      URL.revokeObjectURL(qrPreviewUrlRef.current)
+      qrPreviewUrlRef.current = ''
+    }
+
+    if (labelPreviewUrlRef.current) {
+      URL.revokeObjectURL(labelPreviewUrlRef.current)
+      labelPreviewUrlRef.current = ''
+    }
+
+    setQrPreviewUrl('')
+    setLabelPreviewUrl('')
+    setQrBlob(null)
+    setLabelBlob(null)
+  }, [])
 
   const selectedProduct = useMemo(() => {
     const numericProductId = getValidId(selectedProductId)
@@ -75,15 +94,21 @@ function LabelsPage() {
   }, [products, selectedProductId])
 
   const loadProducts = useCallback(async () => {
-    if (!workspaceId) {
+    const numericWorkspaceId = getValidId(workspaceId)
+
+    if (!numericWorkspaceId) {
+      setProducts([])
+      setSelectedProductId('')
+      setIsLoadingProducts(false)
       return
     }
 
+    clearPreviews()
     setIsLoadingProducts(true)
     setError('')
 
     try {
-      const activeProducts = await listProducts(workspaceId, {
+      const activeProducts = await listProducts(numericWorkspaceId, {
         limit: 100,
         status: 'active',
       })
@@ -105,7 +130,7 @@ function LabelsPage() {
     } finally {
       setIsLoadingProducts(false)
     }
-  }, [workspaceId])
+  }, [clearPreviews, workspaceId])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -117,21 +142,21 @@ function LabelsPage() {
 
   useEffect(() => {
     return () => {
-      if (qrPreviewUrl) {
-        URL.revokeObjectURL(qrPreviewUrl)
+      if (qrPreviewUrlRef.current) {
+        URL.revokeObjectURL(qrPreviewUrlRef.current)
       }
 
-      if (labelPreviewUrl) {
-        URL.revokeObjectURL(labelPreviewUrl)
+      if (labelPreviewUrlRef.current) {
+        URL.revokeObjectURL(labelPreviewUrlRef.current)
       }
     }
-  }, [labelPreviewUrl, qrPreviewUrl])
+  }, [])
 
   function requireSelectedProduct(product = selectedProduct) {
     const productId = getValidId(product?.id)
 
     if (!product || !productId) {
-      setError('Selecione um produto antes de gerar QR Code ou etiqueta.')
+      setError('Selecione um produto válido antes de gerar QR Code ou etiqueta.')
       return false
     }
 
@@ -139,47 +164,38 @@ function LabelsPage() {
   }
 
   function setQrPreview(blob) {
-    if (qrPreviewUrl) {
-      URL.revokeObjectURL(qrPreviewUrl)
+    if (qrPreviewUrlRef.current) {
+      URL.revokeObjectURL(qrPreviewUrlRef.current)
     }
 
+    const previewUrl = URL.createObjectURL(blob)
+    qrPreviewUrlRef.current = previewUrl
     setQrBlob(blob)
-    setQrPreviewUrl(URL.createObjectURL(blob))
+    setQrPreviewUrl(previewUrl)
   }
 
   function setLabelPreview(blob) {
-    if (labelPreviewUrl) {
-      URL.revokeObjectURL(labelPreviewUrl)
+    if (labelPreviewUrlRef.current) {
+      URL.revokeObjectURL(labelPreviewUrlRef.current)
     }
 
+    const previewUrl = URL.createObjectURL(blob)
+    labelPreviewUrlRef.current = previewUrl
     setLabelBlob(blob)
-    setLabelPreviewUrl(URL.createObjectURL(blob))
-  }
-
-  function clearPreviews() {
-    if (qrPreviewUrl) {
-      URL.revokeObjectURL(qrPreviewUrl)
-    }
-
-    if (labelPreviewUrl) {
-      URL.revokeObjectURL(labelPreviewUrl)
-    }
-
-    setQrPreviewUrl('')
-    setLabelPreviewUrl('')
-    setQrBlob(null)
-    setLabelBlob(null)
+    setLabelPreviewUrl(previewUrl)
   }
 
   async function handleGenerateQrCode(product = selectedProduct) {
-    if (!workspaceId || !requireSelectedProduct(product)) {
+    const numericWorkspaceId = getValidId(workspaceId)
+
+    if (!numericWorkspaceId || !requireSelectedProduct(product)) {
       return null
     }
 
     const productId = getValidId(product.id)
 
     if (!productId) {
-      setError('Selecione um produto antes de gerar QR Code ou etiqueta.')
+      setError('Selecione um produto válido antes de gerar QR Code ou etiqueta.')
       return null
     }
 
@@ -192,7 +208,7 @@ function LabelsPage() {
     setSuccessMessage('')
 
     try {
-      const blob = await getProductQrCode(workspaceId, productId)
+      const blob = await getProductQrCode(numericWorkspaceId, productId)
       setQrPreview(blob)
       setSuccessMessage('QR Code gerado com sucesso.')
 
@@ -206,14 +222,16 @@ function LabelsPage() {
   }
 
   async function handleGenerateLabel(product = selectedProduct) {
-    if (!workspaceId || !requireSelectedProduct(product)) {
+    const numericWorkspaceId = getValidId(workspaceId)
+
+    if (!numericWorkspaceId || !requireSelectedProduct(product)) {
       return null
     }
 
     const productId = getValidId(product.id)
 
     if (!productId) {
-      setError('Selecione um produto antes de gerar QR Code ou etiqueta.')
+      setError('Selecione um produto válido antes de gerar QR Code ou etiqueta.')
       return null
     }
 
@@ -226,7 +244,7 @@ function LabelsPage() {
     setSuccessMessage('')
 
     try {
-      const blob = await getProductLabel(workspaceId, productId)
+      const blob = await getProductLabel(numericWorkspaceId, productId)
       setLabelPreview(blob)
       setSuccessMessage('Etiqueta gerada com sucesso.')
 
