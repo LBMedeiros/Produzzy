@@ -147,7 +147,7 @@ function StockPage() {
   const [isMovingStock, setIsMovingStock] = useState(false)
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
-  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false)
+  const [categoryAction, setCategoryAction] = useState('')
   const [isEditCategoriesOpen, setIsEditCategoriesOpen] = useState(false)
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm)
   const [categoryError, setCategoryError] = useState('')
@@ -473,17 +473,29 @@ function StockPage() {
   }
 
   function openCreateCategoryModal() {
-    setIsCategoryMenuOpen(false)
     setCategoryError('')
     setIsCategoryModalOpen(true)
   }
 
   function openEditCategoriesModal() {
-    setIsCategoryMenuOpen(false)
     setEditingCategoryId(null)
     setCategoryEditForm(emptyCategoryForm)
     setCategoryEditError('')
     setIsEditCategoriesOpen(true)
+  }
+
+  function handleCategoryAction(event) {
+    const action = event.target.value
+
+    setCategoryAction('')
+
+    if (action === 'create') {
+      openCreateCategoryModal()
+    }
+
+    if (action === 'edit') {
+      openEditCategoriesModal()
+    }
   }
 
   function openEditCategory(category) {
@@ -832,30 +844,18 @@ function StockPage() {
           <p>Gerencie produtos, categorias e quantidades reais do workspace</p>
         </div>
         <div className="page-heading__actions">
-          <div className="split-action">
-            <Button onClick={openCreateCategoryModal} variant="secondary">
-              Nova categoria
-            </Button>
-            <button
-              className="split-action__toggle"
-              type="button"
-              onClick={() => setIsCategoryMenuOpen((value) => !value)}
-              aria-expanded={isCategoryMenuOpen}
-              aria-label="Abrir opções de categoria"
-            >
-              v
-            </button>
-            {isCategoryMenuOpen ? (
-              <div className="split-action__menu">
-                <button type="button" onClick={openCreateCategoryModal}>
-                  Nova categoria
-                </button>
-                <button type="button" onClick={openEditCategoriesModal}>
-                  Editar categorias
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <select
+            aria-label="Ações de categorias"
+            className="category-action-select"
+            onChange={handleCategoryAction}
+            value={categoryAction}
+          >
+            <option disabled value="">
+              Categorias
+            </option>
+            <option value="create">Nova categoria</option>
+            <option value="edit">Editar categorias</option>
+          </select>
           <Button icon="+" onClick={openCreateProduct}>
             Novo produto
           </Button>
