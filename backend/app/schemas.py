@@ -171,6 +171,7 @@ class StockMovementResponse(BaseModel):
     id: int
     workspace_id: Optional[int] = None
     product_id: int
+    product_name: Optional[str] = None
     movement_type: str
     quantity: int
     quantity_before: int

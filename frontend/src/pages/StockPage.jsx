@@ -7,6 +7,7 @@ import { useWorkspace } from '../contexts/WorkspaceContext'
 import {
   createCategory,
   listCategories,
+  updateCategory,
 } from '../services/categoryService'
 import {
   createProduct,
@@ -19,11 +20,13 @@ import {
   restoreProduct,
   updateProduct,
 } from '../services/productService'
+import { listWorkspaceStockMovements } from '../services/stockMovementService'
 
 const STOCK_FILTERS = [
   { id: 'active', label: 'Ativos' },
   { id: 'low-stock', label: 'Baixo estoque' },
   { id: 'empty', label: 'Sem estoque' },
+  { id: 'history', label: 'Histórico' },
   { id: 'deleted', label: 'Lixeira' },
 ]
 
@@ -58,6 +61,7 @@ const MOVEMENT_TONES = {
 }
 
 const MOVEMENTS_PAGE_LIMIT = 20
+const WORKSPACE_MOVEMENTS_PAGE_LIMIT = 20
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -143,9 +147,22 @@ function StockPage() {
   const [isMovingStock, setIsMovingStock] = useState(false)
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false)
+  const [isEditCategoriesOpen, setIsEditCategoriesOpen] = useState(false)
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm)
   const [categoryError, setCategoryError] = useState('')
   const [isSavingCategory, setIsSavingCategory] = useState(false)
+  const [editingCategoryId, setEditingCategoryId] = useState(null)
+  const [categoryEditForm, setCategoryEditForm] = useState(emptyCategoryForm)
+  const [categoryEditError, setCategoryEditError] = useState('')
+  const [isSavingCategoryEdit, setIsSavingCategoryEdit] = useState(false)
+
+  const [workspaceMovements, setWorkspaceMovements] = useState([])
+  const [historyPage, setHistoryPage] = useState(1)
+  const [hasMoreHistory, setHasMoreHistory] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [isLoadingMoreHistory, setIsLoadingMoreHistory] = useState(false)
+  const [historyError, setHistoryError] = useState('')
 
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [detailProduct, setDetailProduct] = useState(null)
@@ -158,6 +175,54 @@ function StockPage() {
   const [hasMoreMovements, setHasMoreMovements] = useState(false)
   const [movementsError, setMovementsError] = useState('')
 
+  const loadWorkspaceHistory = useCallback(
+    async (options = {}) => {
+      if (!workspaceId) {
+        return []
+      }
+
+      const page = options.page ?? 1
+      const shouldAppend = options.append ?? false
+
+      if (shouldAppend) {
+        setIsLoadingMoreHistory(true)
+      } else {
+        setIsLoadingHistory(true)
+      }
+      setHistoryError('')
+
+      try {
+        const items = await listWorkspaceStockMovements(workspaceId, {
+          limit: WORKSPACE_MOVEMENTS_PAGE_LIMIT,
+          page,
+        })
+
+        setWorkspaceMovements((currentMovements) =>
+          shouldAppend ? [...currentMovements, ...items] : items,
+        )
+        setHistoryPage(page)
+        setHasMoreHistory(items.length === WORKSPACE_MOVEMENTS_PAGE_LIMIT)
+
+        return items
+      } catch (loadError) {
+        setHistoryError(getFriendlyError(loadError))
+        if (!shouldAppend) {
+          setWorkspaceMovements([])
+          setHasMoreHistory(false)
+        }
+
+        return []
+      } finally {
+        if (shouldAppend) {
+          setIsLoadingMoreHistory(false)
+        } else {
+          setIsLoadingHistory(false)
+        }
+      }
+    },
+    [workspaceId],
+  )
+
   const loadStockData = useCallback(async () => {
     if (!workspaceId) {
       return
@@ -167,30 +232,34 @@ function StockPage() {
     setError('')
 
     try {
+      const categoryItems = await listCategories(workspaceId)
+      setCategories(categoryItems)
+
+      if (activeFilter === 'history') {
+        setProducts([])
+        await loadWorkspaceHistory({ page: 1 })
+        return
+      }
+
       const productRequest =
         activeFilter === 'low-stock'
           ? listLowStockProducts(workspaceId)
           : listProducts(workspaceId, {
               status: activeFilter === 'deleted' ? 'deleted' : 'active',
             })
-
-      const [categoryItems, productItems] = await Promise.all([
-        listCategories(workspaceId),
-        productRequest,
-      ])
+      const productItems = await productRequest
       const nextProducts =
         activeFilter === 'empty'
           ? productItems.filter((product) => product.quantity === 0)
           : productItems
 
-      setCategories(categoryItems)
       setProducts(nextProducts)
     } catch (loadError) {
       setError(getFriendlyError(loadError))
     } finally {
       setIsLoading(false)
     }
-  }, [activeFilter, workspaceId])
+  }, [activeFilter, loadWorkspaceHistory, workspaceId])
 
   const refreshCategories = useCallback(async () => {
     if (!workspaceId) {
@@ -319,6 +388,30 @@ function StockPage() {
     })
   }, [categoryFilter, products, searchTerm])
 
+  const filteredWorkspaceMovements = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+
+    if (!normalizedSearch) {
+      return workspaceMovements
+    }
+
+    return workspaceMovements.filter((movement) => {
+      const searchableText = [
+        movement.product_name,
+        movement.movement_type,
+        movement.reason,
+        movement.user_name,
+        movement.user_email,
+        String(movement.product_id),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return searchableText.includes(normalizedSearch)
+    })
+  }, [searchTerm, workspaceMovements])
+
   function updateProductField(field, value) {
     setProductForm((currentForm) => ({
       ...currentForm,
@@ -370,6 +463,63 @@ function StockPage() {
       append: true,
       page: movementsPage + 1,
     })
+  }
+
+  async function loadMoreWorkspaceHistory() {
+    await loadWorkspaceHistory({
+      append: true,
+      page: historyPage + 1,
+    })
+  }
+
+  function openCreateCategoryModal() {
+    setIsCategoryMenuOpen(false)
+    setCategoryError('')
+    setIsCategoryModalOpen(true)
+  }
+
+  function openEditCategoriesModal() {
+    setIsCategoryMenuOpen(false)
+    setEditingCategoryId(null)
+    setCategoryEditForm(emptyCategoryForm)
+    setCategoryEditError('')
+    setIsEditCategoriesOpen(true)
+  }
+
+  function openEditCategory(category) {
+    setEditingCategoryId(category.id)
+    setCategoryEditForm({
+      description: category.description ?? '',
+      name: category.name ?? '',
+    })
+    setCategoryEditError('')
+  }
+
+  async function handleSaveCategoryEdit(event) {
+    event.preventDefault()
+
+    if (!workspaceId || !editingCategoryId) {
+      return
+    }
+
+    setIsSavingCategoryEdit(true)
+    setCategoryEditError('')
+    setSuccessMessage('')
+
+    try {
+      await updateCategory(workspaceId, editingCategoryId, {
+        description: categoryEditForm.description.trim() || null,
+        name: categoryEditForm.name.trim(),
+      })
+      await refreshCategories()
+      setEditingCategoryId(null)
+      setCategoryEditForm(emptyCategoryForm)
+      setSuccessMessage('Categoria atualizada com sucesso.')
+    } catch (saveError) {
+      setCategoryEditError(getFriendlyError(saveError))
+    } finally {
+      setIsSavingCategoryEdit(false)
+    }
   }
 
   async function handleSaveProduct(event) {
@@ -554,6 +704,47 @@ function StockPage() {
     }
   }
 
+  const historyColumns = [
+    {
+      key: 'created_at',
+      label: 'Data',
+      render: (movement) => formatDate(movement.created_at),
+    },
+    {
+      key: 'product_name',
+      label: 'Produto',
+      render: (movement) => (
+        <div className="product-cell">
+          <strong>{movement.product_name ?? `Produto #${movement.product_id}`}</strong>
+          <span>ID {movement.product_id}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'movement_type',
+      label: 'Tipo',
+      render: (movement) => (
+        <Badge tone={MOVEMENT_TONES[movement.movement_type] ?? 'neutral'}>
+          {MOVEMENT_LABELS[movement.movement_type] ?? movement.movement_type}
+        </Badge>
+      ),
+    },
+    { key: 'quantity', label: 'Quantidade' },
+    { key: 'quantity_before', label: 'Antes' },
+    { key: 'quantity_after', label: 'Depois' },
+    {
+      key: 'user',
+      label: 'Usuário',
+      render: (movement) =>
+        movement.user_name ?? movement.user_email ?? 'Usuário não informado',
+    },
+    {
+      key: 'reason',
+      label: 'Motivo',
+      render: (movement) => movement.reason || 'Sem observação',
+    },
+  ]
+
   const columns = [
     {
       key: 'name',
@@ -641,9 +832,30 @@ function StockPage() {
           <p>Gerencie produtos, categorias e quantidades reais do workspace</p>
         </div>
         <div className="page-heading__actions">
-          <Button onClick={() => setIsCategoryModalOpen(true)} variant="secondary">
-            Nova categoria
-          </Button>
+          <div className="split-action">
+            <Button onClick={openCreateCategoryModal} variant="secondary">
+              Nova categoria
+            </Button>
+            <button
+              className="split-action__toggle"
+              type="button"
+              onClick={() => setIsCategoryMenuOpen((value) => !value)}
+              aria-expanded={isCategoryMenuOpen}
+              aria-label="Abrir opções de categoria"
+            >
+              v
+            </button>
+            {isCategoryMenuOpen ? (
+              <div className="split-action__menu">
+                <button type="button" onClick={openCreateCategoryModal}>
+                  Nova categoria
+                </button>
+                <button type="button" onClick={openEditCategoriesModal}>
+                  Editar categorias
+                </button>
+              </div>
+            ) : null}
+          </div>
           <Button icon="+" onClick={openCreateProduct}>
             Novo produto
           </Button>
@@ -656,11 +868,16 @@ function StockPage() {
             <input
               type="search"
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar por nome, categoria ou ID"
+              placeholder={
+                activeFilter === 'history'
+                  ? 'Buscar por produto, usuário, tipo ou motivo'
+                  : 'Buscar por nome, categoria ou ID'
+              }
               value={searchTerm}
             />
           </label>
           <select
+            disabled={activeFilter === 'history'}
             onChange={(event) => setCategoryFilter(event.target.value)}
             value={categoryFilter}
           >
@@ -694,7 +911,44 @@ function StockPage() {
         {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
 
         {isLoading ? (
-          <div className="stock-loading">Carregando estoque...</div>
+          <div className="stock-loading">
+            {activeFilter === 'history'
+              ? 'Carregando histórico...'
+              : 'Carregando estoque...'}
+          </div>
+        ) : activeFilter === 'history' ? (
+          <>
+            {historyError ? (
+              <p className="stock-feedback stock-feedback--error">{historyError}</p>
+            ) : null}
+            {filteredWorkspaceMovements.length ? (
+              <>
+                <DataTable
+                  columns={historyColumns}
+                  rows={filteredWorkspaceMovements}
+                />
+                {hasMoreHistory ? (
+                  <button
+                    className="load-more-button"
+                    disabled={isLoadingMoreHistory || isLoadingHistory}
+                    type="button"
+                    onClick={loadMoreWorkspaceHistory}
+                  >
+                    {isLoadingMoreHistory
+                      ? 'Carregando histórico...'
+                      : 'Carregar mais'}
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <div className="stock-empty">
+                <h2>Nenhuma movimentação encontrada</h2>
+                <p>
+                  As entradas, saídas e ajustes do workspace aparecerão aqui.
+                </p>
+              </div>
+            )}
+          </>
         ) : filteredProducts.length ? (
           <DataTable columns={columns} rows={filteredProducts} />
         ) : (
@@ -1159,6 +1413,98 @@ function StockPage() {
                 </Button>
               </div>
             </form>
+          </section>
+        </div>
+      ) : null}
+
+      {isEditCategoriesOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="workspace-modal stock-modal" role="dialog" aria-modal="true">
+            <div className="workspace-modal__header">
+              <div>
+                <span>Categorias</span>
+                <h2>Editar categorias</h2>
+              </div>
+              <button
+                aria-label="Fechar modal"
+                className="icon-button"
+                type="button"
+                onClick={() => setIsEditCategoriesOpen(false)}
+              >
+                x
+              </button>
+            </div>
+
+            {categories.length ? (
+              <div className="category-editor-list">
+                {categories.map((category) => (
+                  <article className="category-editor-item" key={category.id}>
+                    {editingCategoryId === category.id ? (
+                      <form className="stock-form" onSubmit={handleSaveCategoryEdit}>
+                        <label>
+                          Nome
+                          <input
+                            maxLength="100"
+                            onChange={(event) =>
+                              setCategoryEditForm((currentForm) => ({
+                                ...currentForm,
+                                name: event.target.value,
+                              }))
+                            }
+                            required
+                            value={categoryEditForm.name}
+                          />
+                        </label>
+                        <label>
+                          Descrição
+                          <textarea
+                            maxLength="255"
+                            onChange={(event) =>
+                              setCategoryEditForm((currentForm) => ({
+                                ...currentForm,
+                                description: event.target.value,
+                              }))
+                            }
+                            placeholder="Descrição opcional"
+                            value={categoryEditForm.description}
+                          />
+                        </label>
+                        {categoryEditError ? (
+                          <p className="form-error">{categoryEditError}</p>
+                        ) : null}
+                        <div className="workspace-form__actions">
+                          <Button disabled={isSavingCategoryEdit} type="submit">
+                            {isSavingCategoryEdit ? 'Salvando...' : 'Salvar'}
+                          </Button>
+                          <Button
+                            disabled={isSavingCategoryEdit}
+                            onClick={() => setEditingCategoryId(null)}
+                            variant="secondary"
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        <div>
+                          <strong>{category.name}</strong>
+                          <p>{category.description || 'Sem descrição.'}</p>
+                        </div>
+                        <button type="button" onClick={() => openEditCategory(category)}>
+                          Editar
+                        </button>
+                      </>
+                    )}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="stock-empty">
+                <h2>Nenhuma categoria cadastrada</h2>
+                <p>Crie uma categoria para organizar os produtos do estoque.</p>
+              </div>
+            )}
           </section>
         </div>
       ) : null}

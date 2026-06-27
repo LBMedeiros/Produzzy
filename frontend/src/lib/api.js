@@ -142,3 +142,52 @@ export async function request(path, options = {}) {
 
   return data
 }
+
+export async function requestBlob(path, options = {}) {
+  const {
+    headers = {},
+    skipAuth = false,
+    token = getStoredToken(),
+    ...fetchOptions
+  } = options
+
+  const requestHeaders = new Headers(headers)
+
+  if (!requestHeaders.has('Accept')) {
+    requestHeaders.set('Accept', 'image/png,*/*')
+  }
+
+  if (!skipAuth && token) {
+    requestHeaders.set('Authorization', `Bearer ${token}`)
+  }
+
+  let response
+
+  try {
+    response = await fetch(apiUrl(path), {
+      ...fetchOptions,
+      headers: requestHeaders,
+    })
+  } catch (error) {
+    throw new ApiError('Não foi possível conectar ao servidor.', {
+      data: error,
+      status: 0,
+    })
+  }
+
+  if (!response.ok) {
+    const data = await readResponse(response)
+    const message = getErrorMessage(data, 'Não foi possível baixar o arquivo.')
+
+    if (response.status === 401) {
+      unauthorizedHandlers.forEach((handler) => handler())
+    }
+
+    throw new ApiError(message, {
+      data,
+      status: response.status,
+    })
+  }
+
+  return response.blob()
+}

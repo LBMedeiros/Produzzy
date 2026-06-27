@@ -10,6 +10,7 @@ from app.routers import (
     products,
     qrcode,
     workspaces,
+    stock_movements,
 )
 
 
@@ -35,6 +36,7 @@ app.include_router(audit_logs.router)
 app.include_router(dashboard.router)
 app.include_router(qrcode.router)
 app.include_router(products.router)
+app.include_router(stock_movements.router)
 app.include_router(categories.router)
 
 

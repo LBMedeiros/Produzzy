@@ -1,0 +1,26 @@
+import { request } from '../lib/api'
+
+function withQuery(path, params = {}) {
+  const query = new URLSearchParams()
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, value)
+    }
+  })
+
+  const queryString = query.toString()
+
+  return queryString ? `${path}?${queryString}` : path
+}
+
+export function listWorkspaceStockMovements(workspaceId, options = {}) {
+  const { limit = 20, page = 1 } = options
+
+  return request(
+    withQuery(`/workspaces/${workspaceId}/stock-movements`, {
+      limit,
+      page,
+    }),
+  )
+}

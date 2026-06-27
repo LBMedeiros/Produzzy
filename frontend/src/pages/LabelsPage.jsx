@@ -1,9 +1,297 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
-import { products } from '../data/mockData'
+import { useWorkspace } from '../contexts/WorkspaceContext'
+import { getLabelsSheet, getProductLabel, getProductQrCode } from '../services/labelService'
+import { listProducts } from '../services/productService'
+
+function getFriendlyError(error) {
+  if (error?.status === 400 || error?.status === 422) {
+    return 'Não foi possível gerar a imagem. Verifique se um produto válido foi selecionado.'
+  }
+
+  if (error?.status === 403) {
+    return 'Você não tem permissão para gerar etiquetas neste workspace.'
+  }
+
+  if (error?.status === 0) {
+    return 'Não foi possível conectar ao servidor.'
+  }
+
+  return error?.message ?? 'Não foi possível concluir a ação.'
+}
+
+function sanitizeFileName(value) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function getValidId(value) {
+  const numericId = Number(value)
+
+  return Number.isInteger(numericId) && numericId > 0 ? numericId : null
+}
 
 function LabelsPage() {
+  const { activeWorkspace } = useWorkspace()
+  const workspaceId = activeWorkspace?.id
+  const [products, setProducts] = useState([])
+  const [selectedProductId, setSelectedProductId] = useState('')
+  const [qrBlob, setQrBlob] = useState(null)
+  const [labelBlob, setLabelBlob] = useState(null)
+  const [qrPreviewUrl, setQrPreviewUrl] = useState('')
+  const [labelPreviewUrl, setLabelPreviewUrl] = useState('')
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true)
+  const [isLoadingQr, setIsLoadingQr] = useState(false)
+  const [isLoadingLabel, setIsLoadingLabel] = useState(false)
+  const [isLoadingSheet, setIsLoadingSheet] = useState(false)
+  const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+
+  const selectedProduct = useMemo(() => {
+    const numericProductId = getValidId(selectedProductId)
+
+    if (!numericProductId) {
+      return null
+    }
+
+    return products.find((product) => product.id === numericProductId) ?? null
+  }, [products, selectedProductId])
+
+  const loadProducts = useCallback(async () => {
+    if (!workspaceId) {
+      return
+    }
+
+    setIsLoadingProducts(true)
+    setError('')
+
+    try {
+      const activeProducts = await listProducts(workspaceId, {
+        limit: 100,
+        status: 'active',
+      })
+      setProducts(activeProducts)
+      setSelectedProductId((currentProductId) => {
+        if (
+          currentProductId &&
+          activeProducts.some(
+            (product) => String(product.id) === String(currentProductId),
+          )
+        ) {
+          return currentProductId
+        }
+
+        return activeProducts[0]?.id ? String(activeProducts[0].id) : ''
+      })
+    } catch (loadError) {
+      setError(getFriendlyError(loadError))
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }, [workspaceId])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadProducts()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadProducts])
+
+  useEffect(() => {
+    return () => {
+      if (qrPreviewUrl) {
+        URL.revokeObjectURL(qrPreviewUrl)
+      }
+
+      if (labelPreviewUrl) {
+        URL.revokeObjectURL(labelPreviewUrl)
+      }
+    }
+  }, [labelPreviewUrl, qrPreviewUrl])
+
+  function requireSelectedProduct(product = selectedProduct) {
+    const productId = getValidId(product?.id)
+
+    if (!product || !productId) {
+      setError('Selecione um produto antes de gerar QR Code ou etiqueta.')
+      return false
+    }
+
+    return true
+  }
+
+  function setQrPreview(blob) {
+    if (qrPreviewUrl) {
+      URL.revokeObjectURL(qrPreviewUrl)
+    }
+
+    setQrBlob(blob)
+    setQrPreviewUrl(URL.createObjectURL(blob))
+  }
+
+  function setLabelPreview(blob) {
+    if (labelPreviewUrl) {
+      URL.revokeObjectURL(labelPreviewUrl)
+    }
+
+    setLabelBlob(blob)
+    setLabelPreviewUrl(URL.createObjectURL(blob))
+  }
+
+  function clearPreviews() {
+    if (qrPreviewUrl) {
+      URL.revokeObjectURL(qrPreviewUrl)
+    }
+
+    if (labelPreviewUrl) {
+      URL.revokeObjectURL(labelPreviewUrl)
+    }
+
+    setQrPreviewUrl('')
+    setLabelPreviewUrl('')
+    setQrBlob(null)
+    setLabelBlob(null)
+  }
+
+  async function handleGenerateQrCode(product = selectedProduct) {
+    if (!workspaceId || !requireSelectedProduct(product)) {
+      return null
+    }
+
+    const productId = getValidId(product.id)
+
+    if (!productId) {
+      setError('Selecione um produto antes de gerar QR Code ou etiqueta.')
+      return null
+    }
+
+    if (String(productId) !== String(selectedProductId)) {
+      clearPreviews()
+    }
+    setSelectedProductId(String(productId))
+    setIsLoadingQr(true)
+    setError('')
+    setSuccessMessage('')
+
+    try {
+      const blob = await getProductQrCode(workspaceId, productId)
+      setQrPreview(blob)
+      setSuccessMessage('QR Code gerado com sucesso.')
+
+      return blob
+    } catch (generateError) {
+      setError(getFriendlyError(generateError))
+      return null
+    } finally {
+      setIsLoadingQr(false)
+    }
+  }
+
+  async function handleGenerateLabel(product = selectedProduct) {
+    if (!workspaceId || !requireSelectedProduct(product)) {
+      return null
+    }
+
+    const productId = getValidId(product.id)
+
+    if (!productId) {
+      setError('Selecione um produto antes de gerar QR Code ou etiqueta.')
+      return null
+    }
+
+    if (String(productId) !== String(selectedProductId)) {
+      clearPreviews()
+    }
+    setSelectedProductId(String(productId))
+    setIsLoadingLabel(true)
+    setError('')
+    setSuccessMessage('')
+
+    try {
+      const blob = await getProductLabel(workspaceId, productId)
+      setLabelPreview(blob)
+      setSuccessMessage('Etiqueta gerada com sucesso.')
+
+      return blob
+    } catch (generateError) {
+      setError(getFriendlyError(generateError))
+      return null
+    } finally {
+      setIsLoadingLabel(false)
+    }
+  }
+
+  async function handleDownloadQrCode() {
+    const blob = qrBlob ?? (await handleGenerateQrCode())
+
+    if (blob && selectedProduct) {
+      downloadBlob(
+        blob,
+        `qrcode-${sanitizeFileName(selectedProduct.name)}-${selectedProduct.id}.png`,
+      )
+    }
+  }
+
+  async function handleDownloadLabel() {
+    const blob = labelBlob ?? (await handleGenerateLabel())
+
+    if (blob && selectedProduct) {
+      downloadBlob(
+        blob,
+        `etiqueta-${sanitizeFileName(selectedProduct.name)}-${selectedProduct.id}.png`,
+      )
+    }
+  }
+
+  async function handleDownloadSheet() {
+    const numericWorkspaceId = getValidId(workspaceId)
+
+    if (!numericWorkspaceId) {
+      return
+    }
+
+    setIsLoadingSheet(true)
+    setError('')
+    setSuccessMessage('')
+
+    try {
+      const blob = await getLabelsSheet(numericWorkspaceId)
+      downloadBlob(blob, `etiquetas-workspace-${numericWorkspaceId}.png`)
+      setSuccessMessage('Folha A4 baixada com sucesso.')
+    } catch (downloadError) {
+      setError(getFriendlyError(downloadError))
+    } finally {
+      setIsLoadingSheet(false)
+    }
+  }
+
+  function handleSelectProduct(productId) {
+    const numericProductId = getValidId(productId)
+
+    setSelectedProductId(numericProductId ? String(numericProductId) : '')
+    setError('')
+    setSuccessMessage('')
+    clearPreviews()
+  }
+
   const columns = [
     { key: 'name', label: 'Produto' },
     { key: 'category', label: 'Categoria' },
@@ -11,10 +299,17 @@ function LabelsPage() {
     {
       key: 'actions',
       label: 'Ações',
-      render: () => (
+      render: (product) => (
         <div className="table-actions">
-          <button type="button">QR Code</button>
-          <button type="button">Etiqueta</button>
+          <button type="button" onClick={() => handleSelectProduct(product.id)}>
+            Selecionar
+          </button>
+          <button type="button" onClick={() => handleGenerateQrCode(product)}>
+            QR Code
+          </button>
+          <button type="button" onClick={() => handleGenerateLabel(product)}>
+            Etiqueta
+          </button>
         </div>
       ),
     },
@@ -25,43 +320,120 @@ function LabelsPage() {
       <div className="page-heading">
         <div>
           <h1>Etiquetas e QR Codes</h1>
-          <p>Gere identificação para produtos, caixas e folhas de impressão</p>
+          <p>Gere imagens reais com os produtos ativos do workspace</p>
         </div>
-        <Button icon="+">Folha A4</Button>
+        <Button
+          disabled={isLoadingSheet || !products.length}
+          icon="+"
+          onClick={handleDownloadSheet}
+        >
+          {isLoadingSheet ? 'Baixando...' : 'Baixar folha A4'}
+        </Button>
       </div>
 
+      {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
+      {successMessage ? (
+        <p className="stock-feedback stock-feedback--success">{successMessage}</p>
+      ) : null}
+
       <section className="feature-grid feature-grid--four">
-        <Card title="QR Code individual" eyebrow="Produto">
+        <Card title="QR Code individual" eyebrow="Backend real">
           <p>Acesse o detalhe do produto a partir da etiqueta física.</p>
         </Card>
-        <Card title="Etiqueta individual" eyebrow="Impressão">
+        <Card title="Etiqueta individual" eyebrow="Imagem PNG">
           <p>Gere uma etiqueta com nome, categoria, QR Code e ID.</p>
         </Card>
         <Card title="Folha A4" eyebrow="Lote">
-          <p>Organize múltiplas etiquetas para impressão em lote.</p>
+          <p>Baixe uma folha com todos os produtos ativos do workspace.</p>
         </Card>
-        <Card title="Pronto para impressão" eyebrow="Fila">
-          <p>Acompanhe etiquetas preparadas para produtos e caixas.</p>
+        <Card title="Produto selecionado" eyebrow="Catálogo">
+          <p>{selectedProduct ? selectedProduct.name : 'Selecione um produto.'}</p>
         </Card>
       </section>
 
       <section className="content-grid content-grid--label">
-        <Card title="Prévia da etiqueta" eyebrow="Preview">
-          <div className="printed-label">
-            <small className="printed-label__brand">Produzzy</small>
-            <div>
-              <strong>Camiseta algodão premium</strong>
-              <span>Vestuário</span>
+        <Card title="Prévia real" eyebrow="Preview">
+          <div className="label-preview-stack">
+            <label className="stock-form">
+              Produto
+              <select
+                disabled={isLoadingProducts || !products.length}
+                onChange={(event) => handleSelectProduct(event.target.value)}
+                value={selectedProductId}
+              >
+                {products.length ? null : (
+                  <option value="">Nenhum produto ativo</option>
+                )}
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="label-actions">
+              <Button
+                disabled={isLoadingQr || !selectedProduct}
+                onClick={() => handleGenerateQrCode()}
+                variant="secondary"
+              >
+                {isLoadingQr ? 'Gerando...' : 'Gerar QR Code'}
+              </Button>
+              <Button
+                disabled={isLoadingLabel || !selectedProduct}
+                onClick={() => handleGenerateLabel()}
+                variant="secondary"
+              >
+                {isLoadingLabel ? 'Gerando...' : 'Gerar etiqueta'}
+              </Button>
             </div>
-            <div className="qr-grid qr-grid--large"></div>
-            <small>ID 1024</small>
+
+            <div className="real-preview-grid">
+              <div className="real-preview-card">
+                <span>QR Code</span>
+                {qrPreviewUrl ? (
+                  <img alt="QR Code real do produto" src={qrPreviewUrl} />
+                ) : (
+                  <div className="real-preview-placeholder">Gerar QR Code</div>
+                )}
+                <button
+                  disabled={!selectedProduct || isLoadingQr}
+                  type="button"
+                  onClick={handleDownloadQrCode}
+                >
+                  Baixar QR Code
+                </button>
+              </div>
+              <div className="real-preview-card">
+                <span>Etiqueta</span>
+                {labelPreviewUrl ? (
+                  <img alt="Etiqueta real do produto" src={labelPreviewUrl} />
+                ) : (
+                  <div className="real-preview-placeholder">Gerar etiqueta</div>
+                )}
+                <button
+                  disabled={!selectedProduct || isLoadingLabel}
+                  type="button"
+                  onClick={handleDownloadLabel}
+                >
+                  Baixar etiqueta
+                </button>
+              </div>
+            </div>
           </div>
         </Card>
-        <Card title="Produtos para etiqueta" eyebrow="Catálogo">
-          <DataTable
-            columns={columns}
-            rows={products.filter((product) => product.status !== 'Inativo')}
-          />
+        <Card title="Produtos para etiqueta" eyebrow="Catálogo real">
+          {isLoadingProducts ? (
+            <div className="stock-loading">Carregando produtos...</div>
+          ) : products.length ? (
+            <DataTable columns={columns} rows={products} />
+          ) : (
+            <div className="stock-empty">
+              <h2>Nenhum produto ativo</h2>
+              <p>Cadastre produtos ativos no Estoque para gerar etiquetas.</p>
+            </div>
+          )}
         </Card>
       </section>
     </div>

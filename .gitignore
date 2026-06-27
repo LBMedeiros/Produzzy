@@ -16,3 +16,6 @@ frontend/.env.*.local
 # OS/editor
 .DS_Store
 .vscode/
+
+# Root enviroment
+.env

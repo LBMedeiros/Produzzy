@@ -1088,6 +1088,25 @@ def list_product_stock_movements(
     return paginate_query(query, page, limit).all()
 
 
+def list_workspace_stock_movements(
+    db: Session,
+    workspace_id: int,
+    page: int = 1,
+    limit: int = 20,
+):
+    query = (
+        db.query(models.StockMovement)
+        .options(
+            joinedload(models.StockMovement.product),
+            joinedload(models.StockMovement.user),
+        )
+        .filter(models.StockMovement.workspace_id == workspace_id)
+        .order_by(models.StockMovement.created_at.desc())
+    )
+
+    return paginate_query(query, page, limit).all()
+
+
 def normalize_category_name(name: str):
     return name.strip()
 

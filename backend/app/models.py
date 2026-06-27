@@ -266,7 +266,6 @@ class WorkspaceMember(Base):
 
         return self.user.email
 
-
 class WorkspaceInvite(Base):
     __tablename__ = "workspace_invites"
     __table_args__ = (
@@ -419,3 +418,10 @@ class StockMovement(Base):
             return None
 
         return self.user.email
+
+    @property
+    def product_name(self):
+        if self.product is None:
+            return None
+
+        return self.product.name
