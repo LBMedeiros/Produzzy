@@ -5,12 +5,16 @@ import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import StatCard from '../components/ui/StatCard'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { productionColumns } from '../data/mockData'
+import {
+  getReplenishmentQuantity,
+  getReplenishmentStatus,
+  needsReplenishment,
+} from '../lib/replenishment'
 import {
   getDashboardSummary,
-  listLowStockProducts,
   listRecentActivity,
 } from '../services/dashboardService'
+import { listLowStockProducts } from '../services/productService'
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -24,20 +28,15 @@ function getFriendlyError(error) {
   return error?.message ?? 'Não foi possível carregar o dashboard.'
 }
 
-function getProductStatus(product) {
-  if (product.quantity === 0) {
-    return { label: 'Sem estoque', tone: 'danger' }
-  }
-
-  if (product.quantity <= product.minimum_quantity) {
-    return { label: 'Baixo estoque', tone: 'warning' }
-  }
-
-  return { label: 'Em estoque', tone: 'success' }
-}
-
 function formatNumber(value) {
   return new Intl.NumberFormat('pt-BR').format(value ?? 0)
+}
+
+function formatRequiredUnits(product) {
+  const quantity = getReplenishmentQuantity(product)
+  const unitLabel = quantity === 1 ? 'unidade' : 'unidades'
+
+  return `Precisa repor ${formatNumber(quantity)} ${unitLabel}`
 }
 
 function formatDate(value) {
@@ -106,7 +105,7 @@ function DashboardPage({ onNavigate }) {
     try {
       const [summaryData, lowStockItems] = await Promise.all([
         getDashboardSummary(workspaceId),
-        listLowStockProducts(workspaceId, { limit: 6 }),
+        listLowStockProducts(workspaceId),
       ])
 
       setSummary(summaryData)
@@ -134,6 +133,13 @@ function DashboardPage({ onNavigate }) {
     return () => window.clearTimeout(timeoutId)
   }, [loadDashboard])
 
+  const replenishmentProducts = useMemo(
+    () => lowStockProducts.filter(needsReplenishment),
+    [lowStockProducts],
+  )
+  const attentionProducts = replenishmentProducts.slice(0, 6)
+  const replenishmentPreview = replenishmentProducts.slice(0, 3)
+
   const stats = useMemo(
     () => [
       {
@@ -146,7 +152,7 @@ function DashboardPage({ onNavigate }) {
         label: 'Baixo estoque',
         tone: 'yellow',
         trend: 'Produtos que precisam de atenção',
-        value: formatNumber(summary?.low_stock_products),
+        value: formatNumber(replenishmentProducts.length),
       },
       {
         label: 'Quantidade em estoque',
@@ -161,7 +167,7 @@ function DashboardPage({ onNavigate }) {
         value: formatNumber(summary?.total_stock_movements),
       },
     ],
-    [summary],
+    [replenishmentProducts, summary],
   )
 
   const attentionColumns = [
@@ -177,7 +183,7 @@ function DashboardPage({ onNavigate }) {
       key: 'status',
       label: 'Status',
       render: (product) => {
-        const status = getProductStatus(product)
+        const status = getReplenishmentStatus(product)
 
         return <Badge tone={status.tone}>{status.label}</Badge>
       },
@@ -189,13 +195,6 @@ function DashboardPage({ onNavigate }) {
     { key: 'detail', label: 'Detalhe' },
     { key: 'time', label: 'Quando' },
   ]
-  const activeProduction = productionColumns.flatMap((column) =>
-    column.tasks.map((task) => ({
-      ...task,
-      stage: column.title,
-    })),
-  )
-
   return (
     <div className="page-stack">
       <div className="page-heading">
@@ -222,8 +221,8 @@ function DashboardPage({ onNavigate }) {
 
           <section className="content-grid content-grid--two">
             <Card title="Produtos que precisam de atenção" eyebrow="Estoque real">
-              {lowStockProducts.length ? (
-                <DataTable columns={attentionColumns} rows={lowStockProducts} />
+              {attentionProducts.length ? (
+                <DataTable columns={attentionColumns} rows={attentionProducts} />
               ) : (
                 <div className="stock-empty">
                   <h2>Nenhum produto em baixo estoque</h2>
@@ -248,18 +247,42 @@ function DashboardPage({ onNavigate }) {
           </section>
 
           <section className="feature-grid">
-            <Card className="feature-card" title="Produção em andamento" eyebrow="Mock">
-              <div className="mini-production-list">
-                {activeProduction.slice(0, 3).map((task) => (
-                  <div className="mini-production-item" key={task.id}>
-                    <div>
-                      <strong>{task.product}</strong>
-                      <span>{task.stage}</span>
-                    </div>
-                    <Badge tone={task.statusTone}>{task.status}</Badge>
-                  </div>
-                ))}
-              </div>
+            <Card
+              action={
+                <Button
+                  onClick={() => onNavigate('production')}
+                  size="sm"
+                  variant="secondary"
+                >
+                  Ver reposição
+                </Button>
+              }
+              className="feature-card"
+              title="Necessidades de reposição"
+              eyebrow="Estoque real"
+            >
+              {replenishmentPreview.length ? (
+                <div className="replenishment-preview-list">
+                  {replenishmentPreview.map((product) => {
+                    const status = getReplenishmentStatus(product)
+
+                    return (
+                      <div className="replenishment-preview-item" key={product.id}>
+                        <div>
+                          <strong>{product.name}</strong>
+                          <span>{formatRequiredUnits(product)}</span>
+                        </div>
+                        <Badge tone={status.tone}>{status.label}</Badge>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="replenishment-preview-empty">
+                  <strong>Tudo certo por aqui</strong>
+                  <span>Nenhum produto precisa de reposição no momento.</span>
+                </div>
+              )}
             </Card>
             <Card
               className="feature-card"

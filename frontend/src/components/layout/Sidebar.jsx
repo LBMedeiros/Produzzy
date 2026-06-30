@@ -14,7 +14,7 @@ import {
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
   { id: 'stock', label: 'Estoque', icon: StockIcon },
-  { id: 'production', label: 'Produção', icon: ProductionIcon },
+  { id: 'production', label: 'Reposição', icon: ProductionIcon },
   { id: 'labels', label: 'Etiquetas', icon: LabelsIcon },
   { id: 'settings', label: 'Configurações', icon: SettingsIcon },
 ]
@@ -30,7 +30,7 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
         <BrandIcon />
         <div className="brand__text">
           <strong>Produzzy</strong>
-          <span>Estoque e produção</span>
+          <span>Estoque e reposição</span>
         </div>
       </div>
 

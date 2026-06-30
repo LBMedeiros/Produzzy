@@ -10,6 +10,54 @@ const initialForm = {
   password: '',
 }
 
+const benefits = [
+  {
+    description:
+      'Cadastre produtos, categorias e acompanhe movimentações em tempo real.',
+    icon: 'stock',
+    title: 'Estoque organizado',
+  },
+  {
+    description:
+      'Identifique o que precisa comprar ou produzir antes de faltar.',
+    icon: 'restock',
+    title: 'Reposição inteligente',
+  },
+  {
+    description:
+      'Gere QR Codes, códigos de barras e folhas A4 para identificar produtos.',
+    icon: 'labels',
+    title: 'Etiquetas prontas',
+  },
+]
+
+function BenefitIcon({ type }) {
+  if (type === 'stock') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="m4 7 8-4 8 4-8 4-8-4Z" />
+        <path d="m4 7 8 4 8-4M4 12l8 4 8-4M4 17l8 4 8-4" />
+      </svg>
+    )
+  }
+
+  if (type === 'restock') {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M20 7v5h-5" />
+        <path d="M18.5 16a8 8 0 1 1 .8-8.1L20 12" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M4 5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z" />
+      <path d="M14 3v6h6M8 14h8M8 17h5" />
+    </svg>
+  )
+}
+
 function getFriendlyError(error) {
   if (error?.status === 401) {
     return 'Email ou senha inválidos.'
@@ -78,10 +126,7 @@ function LoginPage() {
         </div>
         <div className="login-panel__copy">
           <h1>{isRegisterMode ? 'Crie sua conta' : 'Entre no Produzzy'}</h1>
-          <p>
-            Use seu email e senha para acessar seus workspaces reais. O estoque
-            e a produção continuam mockados nesta fase.
-          </p>
+          <p>Use seu email e senha para acessar seus workspaces.</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
@@ -163,28 +208,31 @@ function LoginPage() {
         </p>
       </section>
 
-      <section className="login-hero" aria-label="Resumo visual do produto">
-        <div className="login-hero__header">
-          <span>Workspaces conectados</span>
-          <strong>Estoque, produção e etiquetas no mesmo fluxo</strong>
-        </div>
-        <div className="hero-metric hero-metric--wide">
-          <span>Autenticação real</span>
-          <strong>JWT</strong>
-        </div>
-        <div className="hero-metric">
-          <span>Workspaces</span>
-          <strong>Reais</strong>
-        </div>
-        <div className="hero-metric">
-          <span>Dados internos</span>
-          <strong>Mock</strong>
-        </div>
-        <div className="label-preview">
-          <div className="qr-grid"></div>
-          <div>
-            <strong>Camiseta premium</strong>
-            <span>ID 1024</span>
+      <section className="login-hero" aria-labelledby="login-hero-title">
+        <div className="login-hero__content">
+          <div className="login-hero__header">
+            <span>Gestão simples, do cadastro à reposição</span>
+            <h2 id="login-hero-title">
+              Estoque, etiquetas e reposição no mesmo fluxo
+            </h2>
+            <p>
+              Controle produtos, acompanhe o baixo estoque, gere QR Codes e
+              códigos de barras e saiba quando precisa repor.
+            </p>
+          </div>
+
+          <div className="login-benefits">
+            {benefits.map((benefit) => (
+              <article className="login-benefit" key={benefit.title}>
+                <span className="login-benefit__icon">
+                  <BenefitIcon type={benefit.icon} />
+                </span>
+                <div>
+                  <h3>{benefit.title}</h3>
+                  <p>{benefit.description}</p>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>
