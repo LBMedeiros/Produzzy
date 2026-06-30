@@ -200,7 +200,7 @@ function DashboardPage({ onNavigate }) {
       <div className="page-heading">
         <div>
           <h1>Dashboard</h1>
-          <p>Visão geral real do estoque do workspace</p>
+          <p>Acompanhe estoque, movimentações e necessidades de reposição.</p>
         </div>
         <Button onClick={loadDashboard} variant="secondary">
           Atualizar dados
@@ -220,7 +220,7 @@ function DashboardPage({ onNavigate }) {
           </section>
 
           <section className="content-grid content-grid--two">
-            <Card title="Produtos que precisam de atenção" eyebrow="Estoque real">
+            <Card title="Produtos que precisam de atenção" eyebrow="Estoque">
               {attentionProducts.length ? (
                 <DataTable columns={attentionColumns} rows={attentionProducts} />
               ) : (
@@ -230,7 +230,7 @@ function DashboardPage({ onNavigate }) {
                 </div>
               )}
             </Card>
-            <Card title="Atividades recentes" eyebrow="Audit logs">
+            <Card title="Atividades recentes" eyebrow="Histórico">
               {activityError ? (
                 <p className="stock-feedback stock-feedback--error">
                   {activityError}
@@ -259,7 +259,7 @@ function DashboardPage({ onNavigate }) {
               }
               className="feature-card"
               title="Necessidades de reposição"
-              eyebrow="Estoque real"
+              eyebrow="Estoque"
             >
               {replenishmentPreview.length ? (
                 <div className="replenishment-preview-list">
@@ -287,13 +287,13 @@ function DashboardPage({ onNavigate }) {
             <Card
               className="feature-card"
               title="Atalho para etiquetas/QR Code"
-              eyebrow="Visual"
+              eyebrow="Identificação"
             >
               <div className="label-shortcut">
                 <div className="label-shortcut__content">
                   <p>
                     Gere QR Codes, códigos de barras, etiquetas individuais e folhas
-                    A4 para identificar produtos no estoque, produção e expedição.
+                    A4 para identificar produtos no estoque, reposição e expedição.
                   </p>
                   <Button
                     className="label-shortcut__button"

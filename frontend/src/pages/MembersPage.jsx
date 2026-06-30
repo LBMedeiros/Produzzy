@@ -17,7 +17,7 @@ function MembersPage() {
         <Card title="Membros" eyebrow="Workspace">
           <div className="stock-empty">
             <h2>Equipe conectada à API</h2>
-            <p>Consulte os membros reais pelo menu de equipe no topo da aplicação.</p>
+            <p>Consulte os membros pelo menu de equipe no topo da aplicação.</p>
           </div>
         </Card>
         <Card title="Cargos" eyebrow="Permissões">

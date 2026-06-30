@@ -1,8 +1,6 @@
 import Card from '../components/ui/Card'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { categories } from '../data/mockData'
-import { BASE_URL } from '../lib/api'
 import { getWorkspaceRole } from '../lib/formatters'
 
 function SettingsPage() {
@@ -24,10 +22,6 @@ function SettingsPage() {
             <label>
               Nome
               <input value={activeWorkspace?.name ?? ''} readOnly />
-            </label>
-            <label>
-              Identificador
-              <input value={activeWorkspace?.id ?? ''} readOnly />
             </label>
           </div>
         </Card>
@@ -52,11 +46,9 @@ function SettingsPage() {
         </Card>
 
         <Card title="Categorias" eyebrow="Estoque">
-          <div className="category-chips">
-            {categories.slice(1).map((category) => (
-              <span key={category}>{category}</span>
-            ))}
-          </div>
+          <p className="settings-muted">
+            Cadastre e organize as categorias dos seus produtos na página Estoque.
+          </p>
         </Card>
 
         <Card title="Perfil e conta" eyebrow="Usuário">
@@ -74,13 +66,6 @@ function SettingsPage() {
               <input value={user?.email ?? ''} readOnly />
             </label>
           </div>
-        </Card>
-
-        <Card title="Ambiente de desenvolvimento" eyebrow="API">
-          <p className="settings-muted">
-            Esta informação fica discreta durante a fase mockada do frontend.
-          </p>
-          <code className="api-url">{BASE_URL}</code>
         </Card>
       </section>
     </div>

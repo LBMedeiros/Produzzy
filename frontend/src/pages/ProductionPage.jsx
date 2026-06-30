@@ -176,7 +176,7 @@ function ProductionPage() {
           <Card
             className="replenishment-table"
             title="Produtos que precisam de atenção"
-            eyebrow="Estoque real"
+            eyebrow="Estoque"
           >
             {products.length ? (
               <DataTable columns={columns} rows={products} />

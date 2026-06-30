@@ -344,7 +344,7 @@ function LabelsPage() {
       <div className="page-heading">
         <div>
           <h1>Etiquetas e QR Codes</h1>
-          <p>Gere imagens reais com os produtos ativos do workspace</p>
+          <p>Gere etiquetas e códigos para os produtos ativos do workspace</p>
         </div>
         <Button
           disabled={isLoadingSheet || !products.length}

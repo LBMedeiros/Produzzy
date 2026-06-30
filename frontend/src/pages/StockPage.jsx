@@ -1159,7 +1159,7 @@ function StockPage() {
       <div className="page-heading">
         <div>
           <h1>Estoque</h1>
-          <p>Gerencie produtos, categorias e quantidades reais do workspace</p>
+          <p>Gerencie produtos, categorias e quantidades do workspace</p>
         </div>
         <div className="page-heading__actions">
           <select

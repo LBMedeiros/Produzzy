@@ -33,8 +33,8 @@ function CreateWorkspacePage() {
           <span>Olá, {user?.name ?? 'bem-vindo'}</span>
           <h1>Crie seu primeiro estoque</h1>
           <p>
-            Organize produtos, produção e etiquetas em um workspace. Depois disso,
-            você entra no dashboard e continua com as telas mockadas.
+            Organize produtos, estoque, reposição e etiquetas em um workspace.
+            Depois disso, acompanhe sua operação pelo dashboard.
           </p>
         </div>
 

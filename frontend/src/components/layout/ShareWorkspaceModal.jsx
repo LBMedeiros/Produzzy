@@ -22,11 +22,10 @@ function ShareWorkspaceModal({ onClose }) {
           </button>
         </div>
         <p className="workspace-modal__text">
-          Convites reais ficam para a próxima etapa. Por enquanto, este botão apenas
-          reserva o espaço da ação na topbar.
+          O compartilhamento deste workspace ainda não está disponível.
         </p>
         <div className="workspace-form__actions">
-          <Button onClick={onClose}>Entendi</Button>
+          <Button onClick={onClose}>Fechar</Button>
         </div>
       </section>
     </div>
