@@ -44,6 +44,15 @@ export function getProductLabel(workspaceId, productId) {
   )
 }
 
+export function getProductBarcode(workspaceId, productId) {
+  const validWorkspaceId = parseId(workspaceId, 'Workspace')
+  const validProductId = parseId(productId, 'Produto')
+
+  return requestBlob(
+    `/workspaces/${validWorkspaceId}/products/${validProductId}/barcode`,
+  )
+}
+
 export function getLabelsSheet(workspaceId, params = {}) {
   const validWorkspaceId = parseId(workspaceId, 'Workspace')
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
@@ -24,7 +25,7 @@ function CreateWorkspacePage() {
     <main className="workspace-empty-page">
       <section className="workspace-empty-card">
         <div className="login-panel__brand">
-          <div className="brand__mark">PZ</div>
+          <BrandIcon />
           <strong>Produzzy</strong>
         </div>
 

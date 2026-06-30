@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -72,7 +73,7 @@ function LoginPage() {
     <main className="login-page">
       <section className="login-panel">
         <div className="login-panel__brand">
-          <div className="brand__mark">PZ</div>
+          <BrandIcon />
           <strong>Produzzy</strong>
         </div>
         <div className="login-panel__copy">

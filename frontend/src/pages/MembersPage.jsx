@@ -1,25 +1,8 @@
-import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
-import DataTable from '../components/ui/DataTable'
-import { members, roleDescriptions } from '../data/mockData'
+import { roleDescriptions } from '../data/mockData'
 
 function MembersPage() {
-  const columns = [
-    { key: 'name', label: 'Nome' },
-    { key: 'email', label: 'Email' },
-    { key: 'role', label: 'Cargo' },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (member) => (
-        <Badge tone={member.status === 'Ativo' ? 'success' : 'warning'}>
-          {member.status}
-        </Badge>
-      ),
-    },
-  ]
-
   return (
     <div className="page-stack">
       <div className="page-heading">
@@ -32,7 +15,10 @@ function MembersPage() {
 
       <section className="content-grid content-grid--members">
         <Card title="Membros" eyebrow="Workspace">
-          <DataTable columns={columns} rows={members} />
+          <div className="stock-empty">
+            <h2>Equipe conectada à API</h2>
+            <p>Consulte os membros reais pelo menu de equipe no topo da aplicação.</p>
+          </div>
         </Card>
         <Card title="Cargos" eyebrow="Permissões">
           <div className="role-list">

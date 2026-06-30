@@ -159,49 +159,6 @@ export const activities = [
   },
 ]
 
-export const members = [
-  {
-    id: 1,
-    name: 'Lucas Medeiros',
-    email: 'lucas@produzzy.local',
-    role: 'Owner',
-    status: 'Ativo',
-    initials: 'LM',
-  },
-  {
-    id: 2,
-    name: 'Marina Costa',
-    email: 'marina@produzzy.local',
-    role: 'Admin',
-    status: 'Ativo',
-    initials: 'MC',
-  },
-  {
-    id: 3,
-    name: 'Rafael Nunes',
-    email: 'rafael@produzzy.local',
-    role: 'Employee',
-    status: 'Ativo',
-    initials: 'RN',
-  },
-  {
-    id: 4,
-    name: 'Bianca Lima',
-    email: 'bianca@produzzy.local',
-    role: 'Viewer',
-    status: 'Convidada',
-    initials: 'BL',
-  },
-  {
-    id: 5,
-    name: 'Diego Torres',
-    email: 'diego@produzzy.local',
-    role: 'Employee',
-    status: 'Ativo',
-    initials: 'DT',
-  },
-]
-
 export const roleDescriptions = [
   {
     role: 'Owner',

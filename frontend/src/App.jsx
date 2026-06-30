@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import AppLayout from './components/layout/AppLayout'
+import BrandIcon from './components/ui/BrandIcon'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext'
 import CreateWorkspacePage from './pages/CreateWorkspacePage'
@@ -21,7 +22,7 @@ const pageComponents = {
 function LoadingScreen({ message }) {
   return (
     <main className="loading-screen">
-      <div className="brand__mark">PZ</div>
+      <BrandIcon />
       <strong>{message}</strong>
     </main>
   )
@@ -52,7 +53,7 @@ function ProtectedApp() {
 
   return (
     <AppLayout activePage={activePage} onNavigate={setActivePage}>
-      <ActivePage />
+      <ActivePage onNavigate={setActivePage} />
     </AppLayout>
   )
 }

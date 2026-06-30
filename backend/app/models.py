@@ -14,7 +14,15 @@ def utc_now():
 class Category(Base):
     __tablename__ = "categories"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "name", name="uq_categories_workspace_name"),
+        Index(
+            "uq_categories_workspace_name_active",
+            "workspace_id",
+            "name",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+            sqlite_where=text("is_active = 1"),
+        ),
+        Index("ix_categories_workspace_is_active", "workspace_id", "is_active"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -27,6 +35,14 @@ class Category(Base):
 
     name = Column(String(100), nullable=False, index=True)
     description = Column(String(255), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
 
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(
@@ -39,6 +55,10 @@ class Category(Base):
     workspace = relationship(
         "Workspace",
         back_populates="categories",
+    )
+    deleted_by_user = relationship(
+        "User",
+        foreign_keys=[deleted_by_user_id],
     )
 
 
@@ -78,6 +98,12 @@ class Product(Base):
         nullable=True,
         index=True,
     )
+    deleted_by_category_id = Column(
+        Integer,
+        ForeignKey("categories.id"),
+        nullable=True,
+        index=True,
+    )
 
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(
@@ -95,6 +121,10 @@ class Product(Base):
         "User",
         back_populates="deleted_products",
         foreign_keys=[deleted_by_user_id],
+    )
+    deleted_by_category = relationship(
+        "Category",
+        foreign_keys=[deleted_by_category_id],
     )
     stock_movements = relationship(
         "StockMovement",

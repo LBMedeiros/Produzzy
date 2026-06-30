@@ -1,6 +1,7 @@
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { getInitials, getWorkspaceRole } from '../../lib/formatters'
+import BrandIcon from '../ui/BrandIcon'
 import {
   ChevronIcon,
   DashboardIcon,
@@ -26,7 +27,7 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
   return (
     <aside className={`sidebar ${isCollapsed ? 'is-collapsed' : ''}`}>
       <div className="brand">
-        <div className="brand__mark">PZ</div>
+        <BrandIcon />
         <div className="brand__text">
           <strong>Produzzy</strong>
           <span>Estoque e produção</span>

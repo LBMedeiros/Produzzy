@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app import crud, models
 from app.dependencies import get_current_user, get_db
 from app.services.qrcode_service import (
+    generate_product_barcode_image,
     generate_qrcode_image,
     generate_product_label_image,
     generate_products_labels_sheet_image,
@@ -22,8 +23,8 @@ def generate_products_labels_sheet(
     workspace_id: int,
     request: Request,
     label_width_mm: int = Query(default=70, ge=40, le=100),
-    label_height_mm: int = Query(default=90, ge=50, le=140),
-    qr_size_mm: int = Query(default=45, ge=25, le=80),
+    label_height_mm: int = Query(default=42, ge=35, le=140),
+    qr_size_mm: int | None = Query(default=None, ge=18, le=80),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -78,6 +79,32 @@ def generate_products_labels_sheet(
         media_type="image/png",
         headers={
             "Content-Disposition": 'inline; filename="products-labels-sheet-a4.png"'
+        },
+    )
+
+
+@router.get("/{product_id}/barcode")
+def generate_product_barcode(
+    workspace_id: int,
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+    product = crud.get_product_by_id(product_id, db, workspace_id)
+    barcode_image = generate_product_barcode_image(product)
+    filename = f"product-{product.id}-barcode.png"
+
+    return StreamingResponse(
+        barcode_image,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"'
         },
     )
 

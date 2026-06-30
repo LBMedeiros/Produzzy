@@ -31,6 +31,12 @@ class ProductStatus(str, Enum):
     all = "all"
 
 
+class CategoryStatus(str, Enum):
+    active = "active"
+    deleted = "deleted"
+    all = "all"
+
+
 class UserCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(
@@ -155,6 +161,7 @@ class ProductResponse(BaseModel):
     is_active: bool
     deleted_at: Optional[datetime] = None
     deleted_by_user_id: Optional[int] = None
+    deleted_by_category_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -200,10 +207,19 @@ class CategoryResponse(BaseModel):
     workspace_id: Optional[int] = None
     name: str
     description: Optional[str] = None
+    is_active: bool
+    deleted_at: Optional[datetime] = None
+    deleted_by_user_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CategoryRestoreResponse(BaseModel):
+    category: CategoryResponse
+    restored_products_count: int
+    skipped_products_count: int
 
 
 class DashboardSummary(BaseModel):

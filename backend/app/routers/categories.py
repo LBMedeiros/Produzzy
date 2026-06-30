@@ -45,6 +45,10 @@ def list_categories(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
     search: Optional[str] = None,
+    category_status: schemas.CategoryStatus = Query(
+        default=schemas.CategoryStatus.active,
+        alias="status",
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
 ):
@@ -59,6 +63,7 @@ def list_categories(
         db=db,
         workspace_id=workspace_id,
         search=search,
+        category_status=category_status,
         page=page,
         limit=limit,
     )
@@ -68,6 +73,7 @@ def list_categories(
 def get_category(
     workspace_id: int,
     category_id: int,
+    include_deleted: bool = Query(default=False),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -78,7 +84,12 @@ def get_category(
         crud.READ_ROLES,
     )
 
-    return crud.get_category_by_id(category_id, db, workspace_id)
+    return crud.get_category_by_id(
+        category_id,
+        db,
+        workspace_id,
+        include_deleted=include_deleted,
+    )
 
 
 @router.patch("/{category_id}", response_model=schemas.CategoryResponse)
@@ -105,7 +116,7 @@ def update_category(
     )
 
 
-@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{category_id}", response_model=schemas.CategoryResponse)
 def delete_category(
     workspace_id: int,
     category_id: int,
@@ -118,11 +129,34 @@ def delete_category(
         db,
         crud.CATEGORY_WRITE_ROLES,
     )
-    crud.delete_category(
+    return crud.delete_category(
         category_id,
         db,
         workspace_id,
         user_id=current_user.id,
     )
 
-    return None
+
+@router.post(
+    "/{category_id}/restore",
+    response_model=schemas.CategoryRestoreResponse,
+)
+def restore_category(
+    workspace_id: int,
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.CATEGORY_WRITE_ROLES,
+    )
+
+    return crud.restore_category(
+        category_id,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )

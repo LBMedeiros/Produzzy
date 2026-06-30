@@ -48,6 +48,12 @@ function getValidId(value) {
   return Number.isInteger(numericId) && numericId > 0 ? numericId : null
 }
 
+function formatProductCode(productId) {
+  const numericProductId = getValidId(productId)
+
+  return numericProductId ? String(numericProductId).padStart(9, '0') : '—'
+}
+
 function LabelsPage() {
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
@@ -359,13 +365,18 @@ function LabelsPage() {
           <p>Acesse o detalhe do produto a partir da etiqueta física.</p>
         </Card>
         <Card title="Etiqueta individual" eyebrow="Imagem PNG">
-          <p>Gere uma etiqueta com nome, categoria, QR Code e ID.</p>
+          <p>Combine a marca, o QR Code e o código de barras do produto.</p>
         </Card>
         <Card title="Folha A4" eyebrow="Lote">
           <p>Baixe uma folha com todos os produtos ativos do workspace.</p>
         </Card>
         <Card title="Produto selecionado" eyebrow="Catálogo">
           <p>{selectedProduct ? selectedProduct.name : 'Selecione um produto.'}</p>
+          {selectedProduct ? (
+            <small className="product-code">
+              Código: {formatProductCode(selectedProduct.id)}
+            </small>
+          ) : null}
         </Card>
       </section>
 
@@ -408,8 +419,10 @@ function LabelsPage() {
             </div>
 
             <div className="real-preview-grid">
-              <div className="real-preview-card">
-                <span>QR Code</span>
+              <div className="real-preview-card real-preview-card--qr">
+                <h3>
+                  QR Code - {selectedProduct?.name ?? 'Selecione um produto'}
+                </h3>
                 {qrPreviewUrl ? (
                   <img alt="QR Code real do produto" src={qrPreviewUrl} />
                 ) : (
@@ -423,8 +436,10 @@ function LabelsPage() {
                   Baixar QR Code
                 </button>
               </div>
-              <div className="real-preview-card">
-                <span>Etiqueta</span>
+              <div className="real-preview-card real-preview-card--label">
+                <h3>
+                  Etiqueta - {selectedProduct?.name ?? 'Selecione um produto'}
+                </h3>
                 {labelPreviewUrl ? (
                   <img alt="Etiqueta real do produto" src={labelPreviewUrl} />
                 ) : (
@@ -437,6 +452,11 @@ function LabelsPage() {
                 >
                   Baixar etiqueta
                 </button>
+                {selectedProduct ? (
+                  <small className="real-preview-card__code">
+                    Código: {formatProductCode(selectedProduct.id)}
+                  </small>
+                ) : null}
               </div>
             </div>
           </div>

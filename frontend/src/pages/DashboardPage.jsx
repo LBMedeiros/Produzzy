@@ -84,7 +84,7 @@ function formatAuditLog(log) {
   }
 }
 
-function DashboardPage() {
+function DashboardPage({ onNavigate }) {
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
   const [summary, setSummary] = useState(null)
@@ -266,13 +266,39 @@ function DashboardPage() {
               title="Atalho para etiquetas/QR Code"
               eyebrow="Visual"
             >
-              <p>
-                Gere etiquetas individuais ou folhas A4 para identificar produtos na
-                expedição, estoque e produção.
-              </p>
-              <div className="feature-card__visual">
-                <div className="qr-grid"></div>
-                <span>Etiqueta pronta para impressão</span>
+              <div className="label-shortcut">
+                <div className="label-shortcut__content">
+                  <p>
+                    Gere QR Codes, códigos de barras, etiquetas individuais e folhas
+                    A4 para identificar produtos no estoque, produção e expedição.
+                  </p>
+                  <Button
+                    className="label-shortcut__button"
+                    onClick={() => onNavigate('labels')}
+                  >
+                    Gerar etiquetas
+                  </Button>
+                </div>
+
+                <div
+                  className="label-shortcut__preview"
+                  role="img"
+                  aria-label="Exemplo decorativo de etiqueta Produzzy"
+                >
+                  <div className="label-shortcut__brand">
+                    <img
+                      aria-hidden="true"
+                      alt=""
+                      src="/brand/produzzy-icon.png"
+                    />
+                    <strong>Produzzy</strong>
+                  </div>
+                  <span className="label-shortcut__product">Produto</span>
+                  <div className="label-shortcut__codes">
+                    <div className="label-shortcut__qr" aria-hidden="true"></div>
+                    <div className="label-shortcut__barcode" aria-hidden="true"></div>
+                  </div>
+                </div>
               </div>
             </Card>
           </section>

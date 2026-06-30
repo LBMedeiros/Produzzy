@@ -302,6 +302,7 @@ Dashboard:
 QR Codes and labels:
 
 - `GET /workspaces/{workspace_id}/products/{product_id}/qrcode`
+- `GET /workspaces/{workspace_id}/products/{product_id}/barcode`
 - `GET /workspaces/{workspace_id}/products/{product_id}/label`
 - `GET /workspaces/{workspace_id}/products/labels-sheet`
 
@@ -388,7 +389,7 @@ Optional filters are available for `action`, `entity_type`, and `user_id`. Audit
 
 ## QR Code and Label Features
 
-Each product can expose a QR Code pointing to its workspace-scoped product detail endpoint. The API can also generate a printable individual product label and an A4 label sheet for the workspace catalog. Images are returned as PNG responses.
+Each product can expose a branded QR Code pointing to its workspace-scoped product detail endpoint and a Code128 barcode based on its zero-padded numeric ID. The API can also generate a printable individual product label and an A4 label sheet for the workspace catalog. Images are returned as PNG responses.
 
 ## Testing
 

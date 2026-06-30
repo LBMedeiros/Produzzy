@@ -15,6 +15,7 @@ PRODUCT_WRITE_ROLES = {"owner", "admin"}
 CATEGORY_WRITE_ROLES = {"owner", "admin"}
 STOCK_WRITE_ROLES = {"owner", "admin", "employee"}
 MEMBER_MANAGE_ROLES = {"owner"}
+MEMBER_ROLE_UPDATE_ROLES = {"owner", "admin"}
 INVITE_MANAGE_ROLES = {"owner", "admin"}
 AUDIT_LOG_READ_ROLES = {"owner", "admin"}
 ACTIVE_PRODUCT_NAME_EXISTS = (
@@ -22,6 +23,9 @@ ACTIVE_PRODUCT_NAME_EXISTS = (
 )
 ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS = (
     "Another active product with this name already exists in this workspace."
+)
+ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS = (
+    "Another active category with this name already exists in this workspace."
 )
 
 
@@ -129,6 +133,13 @@ def normalize_product_status(product_status):
         return product_status.value
 
     return str(product_status)
+
+
+def normalize_category_status(category_status):
+    if hasattr(category_status, "value"):
+        return category_status.value
+
+    return str(category_status)
 
 
 def is_expired(expires_at: datetime):
@@ -359,23 +370,38 @@ def update_workspace_member(
     current_user: models.User,
     db: Session,
 ):
-    require_workspace_role(
+    current_member = require_workspace_role(
         workspace_id,
         current_user,
         db,
-        MEMBER_MANAGE_ROLES,
+        MEMBER_ROLE_UPDATE_ROLES,
     )
+    workspace = get_workspace_by_id(workspace_id, db)
     member = get_member_by_id(workspace_id, member_id, db)
     new_role = normalize_role(member_data.role)
 
     if (
-        member.role == schemas.WorkspaceRole.owner.value
-        and new_role != schemas.WorkspaceRole.owner.value
-        and count_workspace_owners(workspace_id, db) <= 1
+        member.user_id == workspace.owner_id
+        or member.role == schemas.WorkspaceRole.owner.value
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível remover o último owner do workspace.",
+            detail="Não é possível alterar o cargo de um owner.",
+        )
+
+    if new_role == schemas.WorkspaceRole.owner.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não é permitido atribuir o cargo owner por este endpoint.",
+        )
+
+    if (
+        current_member.role == schemas.WorkspaceRole.admin.value
+        and current_member.id == member.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin não pode alterar o próprio cargo.",
         )
 
     old_role = member.role
@@ -909,6 +935,7 @@ def delete_product(
     product.is_active = False
     product.deleted_at = aware_utc_now()
     product.deleted_by_user_id = deleted_by_user_id
+    product.deleted_by_category_id = None
     create_audit_log(
         db=db,
         workspace_id=workspace_id,
@@ -944,6 +971,20 @@ def restore_product(
             detail="Product is already active.",
         )
 
+    if product.deleted_by_category_id is not None:
+        deleted_category = get_category_by_id(
+            product.deleted_by_category_id,
+            db,
+            workspace_id,
+            include_deleted=True,
+        )
+
+        if not deleted_category.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Restore the category before restoring this product.",
+            )
+
     existing_product = get_product_by_name(
         product.name,
         workspace_id,
@@ -960,6 +1001,7 @@ def restore_product(
     product.is_active = True
     product.deleted_at = None
     product.deleted_by_user_id = None
+    product.deleted_by_category_id = None
     create_audit_log(
         db=db,
         workspace_id=workspace_id,
@@ -1115,6 +1157,7 @@ def get_category_by_id(
     category_id: int,
     db: Session,
     workspace_id: int | None = None,
+    include_deleted: bool = False,
 ):
     query = db.query(models.Category).filter(models.Category.id == category_id)
 
@@ -1122,6 +1165,9 @@ def get_category_by_id(
         query = query.filter(models.Category.workspace_id.is_(None))
     else:
         query = query.filter(models.Category.workspace_id == workspace_id)
+
+    if not include_deleted:
+        query = query.filter(models.Category.is_active.is_(True))
 
     category = query.first()
 
@@ -1134,15 +1180,24 @@ def get_category_by_id(
     return category
 
 
-def get_category_by_name(name: str, db: Session, workspace_id: int):
+def get_category_by_name(
+    name: str,
+    db: Session,
+    workspace_id: int,
+    only_active: bool = False,
+):
     normalized_name = normalize_category_name(name)
 
-    return (
+    query = (
         db.query(models.Category)
         .filter(models.Category.workspace_id == workspace_id)
         .filter(models.Category.name == normalized_name)
-        .first()
     )
+
+    if only_active:
+        query = query.filter(models.Category.is_active.is_(True))
+
+    return query.first()
 
 
 def create_category(
@@ -1153,7 +1208,12 @@ def create_category(
 ):
     name = normalize_category_name(category_data.name)
 
-    existing_category = get_category_by_name(name, db, workspace_id)
+    existing_category = get_category_by_name(
+        name,
+        db,
+        workspace_id,
+        only_active=True,
+    )
 
     if existing_category:
         raise HTTPException(
@@ -1200,15 +1260,30 @@ def list_categories(
     db: Session,
     workspace_id: int,
     search: str | None = None,
+    category_status: schemas.CategoryStatus | str = schemas.CategoryStatus.active,
     page: int = 1,
     limit: int = 20,
 ):
     query = db.query(models.Category).filter(
         models.Category.workspace_id == workspace_id
     )
+    status_value = normalize_category_status(category_status)
+
+    if status_value == schemas.CategoryStatus.active.value:
+        query = query.filter(models.Category.is_active.is_(True))
+    elif status_value == schemas.CategoryStatus.deleted.value:
+        query = query.filter(models.Category.is_active.is_(False))
+    elif status_value != schemas.CategoryStatus.all.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid category status.",
+        )
 
     if search:
-        query = query.filter(models.Category.name.ilike(f"%{search}%"))
+        query = query.filter(
+            models.Category.name.ilike(f"%{search}%")
+            | models.Category.description.ilike(f"%{search}%")
+        )
 
     query = query.order_by(models.Category.name.asc())
 
@@ -1229,7 +1304,12 @@ def update_category(
     if "name" in update_data:
         new_name = normalize_category_name(update_data["name"])
 
-        existing_category = get_category_by_name(new_name, db, workspace_id)
+        existing_category = get_category_by_name(
+            new_name,
+            db,
+            workspace_id,
+            only_active=True,
+        )
 
         if existing_category and existing_category.id != category.id:
             raise HTTPException(
@@ -1278,21 +1358,47 @@ def delete_category(
     workspace_id: int,
     user_id: int | None = None,
 ):
-    category = get_category_by_id(category_id, db, workspace_id)
-    active_products_count = (
+    category = get_category_by_id(
+        category_id,
+        db,
+        workspace_id,
+        include_deleted=True,
+    )
+
+    if not category.is_active:
+        return category
+
+    deleted_at = aware_utc_now()
+    active_products = (
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
         .filter(models.Product.category == category.name)
         .filter(models.Product.is_active.is_(True))
-        .count()
+        .all()
     )
 
-    if active_products_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete category while active products use it.",
+    for product in active_products:
+        product.is_active = False
+        product.deleted_at = deleted_at
+        product.deleted_by_user_id = user_id
+        product.deleted_by_category_id = category.id
+        create_audit_log(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            action="product.deleted",
+            entity_type="product",
+            entity_id=product.id,
+            metadata={
+                "name": product.name,
+                "category_name": category.name,
+                "deleted_by_category_id": category.id,
+            },
         )
 
+    category.is_active = False
+    category.deleted_at = deleted_at
+    category.deleted_by_user_id = user_id
     create_audit_log(
         db=db,
         workspace_id=workspace_id,
@@ -1300,12 +1406,129 @@ def delete_category(
         action="category.deleted",
         entity_type="category",
         entity_id=category.id,
-        metadata={"name": category.name},
+        metadata={
+            "category_name": category.name,
+            "linked_products_count": len(active_products),
+        },
     )
-    db.delete(category)
     db.commit()
+    db.refresh(category)
 
-    return None
+    return category
+
+
+def restore_category(
+    category_id: int,
+    db: Session,
+    workspace_id: int,
+    user_id: int | None = None,
+):
+    category = get_category_by_id(
+        category_id,
+        db,
+        workspace_id,
+        include_deleted=True,
+    )
+
+    if category.is_active:
+        return {
+            "category": category,
+            "restored_products_count": 0,
+            "skipped_products_count": 0,
+        }
+
+    existing_category = get_category_by_name(
+        category.name,
+        db,
+        workspace_id,
+        only_active=True,
+    )
+
+    if existing_category and existing_category.id != category.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS,
+        )
+
+    products_to_restore = (
+        db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.deleted_by_category_id == category.id)
+        .filter(models.Product.is_active.is_(False))
+        .order_by(models.Product.id.asc())
+        .all()
+    )
+    active_product_names = {
+        name
+        for (name,) in (
+            db.query(models.Product.name)
+            .filter(models.Product.workspace_id == workspace_id)
+            .filter(models.Product.is_active.is_(True))
+            .all()
+        )
+    }
+    restored_products_count = 0
+    skipped_products_count = 0
+
+    category.is_active = True
+    category.deleted_at = None
+    category.deleted_by_user_id = None
+
+    for product in products_to_restore:
+        if product.name in active_product_names:
+            skipped_products_count += 1
+            continue
+
+        product.is_active = True
+        product.deleted_at = None
+        product.deleted_by_user_id = None
+        product.deleted_by_category_id = None
+        active_product_names.add(product.name)
+        restored_products_count += 1
+        create_audit_log(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            action="product.restored",
+            entity_type="product",
+            entity_id=product.id,
+            metadata={
+                "name": product.name,
+                "category_name": category.name,
+                "deleted_by_category_id": category.id,
+            },
+        )
+
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="category.restored",
+        entity_type="category",
+        entity_id=category.id,
+        metadata={
+            "category_name": category.name,
+            "restored_products_count": restored_products_count,
+            "skipped_products_count": skipped_products_count,
+        },
+    )
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS,
+        )
+
+    db.refresh(category)
+
+    return {
+        "category": category,
+        "restored_products_count": restored_products_count,
+        "skipped_products_count": skipped_products_count,
+    }
 
 
 def get_dashboard_summary(db: Session, workspace_id: int):
@@ -1319,6 +1542,7 @@ def get_dashboard_summary(db: Session, workspace_id: int):
     total_categories = (
         db.query(models.Category)
         .filter(models.Category.workspace_id == workspace_id)
+        .filter(models.Category.is_active.is_(True))
         .count()
     )
 

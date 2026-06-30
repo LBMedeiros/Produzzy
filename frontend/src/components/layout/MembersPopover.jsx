@@ -1,28 +1,91 @@
 import Badge from '../ui/Badge'
 
-function MembersPopover({ members }) {
+const ROLE_OPTIONS = [
+  { label: 'Admin', value: 'admin' },
+  { label: 'Employee', value: 'employee' },
+  { label: 'Viewer', value: 'viewer' },
+]
+
+const ROLE_LABELS = {
+  admin: 'Admin',
+  employee: 'Employee',
+  owner: 'Owner',
+  viewer: 'Viewer',
+}
+
+function formatRole(role) {
+  return ROLE_LABELS[role] ?? role
+}
+
+function MembersPopover({
+  canManageRoles,
+  currentUserId,
+  error,
+  feedback,
+  isLoading,
+  members,
+  onRoleChange,
+  ownerUserId,
+  savingMemberId,
+}) {
   return (
     <div className="members-popover" role="dialog" aria-label="Membros do workspace">
       <div className="members-popover__header">
         <strong>Equipe do workspace</strong>
         <span>{members.length} membros</span>
       </div>
+      {error ? (
+        <p className="members-popover__feedback members-popover__feedback--error">
+          {error}
+        </p>
+      ) : null}
+      {feedback ? (
+        <p className="members-popover__feedback members-popover__feedback--success">
+          {feedback}
+        </p>
+      ) : null}
       <div className="members-popover__list">
+        {isLoading ? (
+          <p className="members-popover__empty">Carregando equipe...</p>
+        ) : null}
         {members.map((member) => (
           <div className="member-row" key={member.id}>
             <span className="member-avatar">{member.initials}</span>
-            <div>
+            <div className="member-row__identity">
               <strong>{member.name}</strong>
               <small>{member.email}</small>
             </div>
             <div className="member-row__meta">
-              <span>{member.role}</span>
+              {canManageRoles &&
+              !member.isInvite &&
+              member.role !== 'owner' &&
+              member.user_id !== ownerUserId &&
+              member.user_id !== currentUserId ? (
+                <select
+                  aria-label={`Cargo de ${member.name}`}
+                  className="member-row__role-select"
+                  disabled={savingMemberId !== null}
+                  onChange={(event) => onRoleChange(member.id, event.target.value)}
+                  value={member.role}
+                >
+                  {ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="member-row__role">{formatRole(member.role)}</span>
+              )}
               <Badge tone={member.status === 'Ativo' ? 'success' : 'warning'}>
-                {member.status}
+                {savingMemberId === member.id ? 'Salvando...' : member.status}
               </Badge>
             </div>
           </div>
         ))}
+        {!isLoading && !members.length && !error ? (
+          <p className="members-popover__empty">Nenhum membro encontrado.</p>
+        ) : null}
       </div>
     </div>
   )

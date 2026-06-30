@@ -14,3 +14,18 @@ export function createWorkspace(data) {
 export function getWorkspace(id) {
   return request(`/workspaces/${id}`)
 }
+
+export function listWorkspaceMembers(workspaceId) {
+  return request(`/workspaces/${workspaceId}/members?limit=100`)
+}
+
+export function listWorkspaceInvites(workspaceId) {
+  return request(`/workspaces/${workspaceId}/invites?limit=100`)
+}
+
+export function updateWorkspaceMember(workspaceId, memberId, data) {
+  return request(`/workspaces/${workspaceId}/members/${memberId}`, {
+    body: data,
+    method: 'PATCH',
+  })
+}
