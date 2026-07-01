@@ -60,6 +60,12 @@ const auditActionLabels = {
   'product.deleted': 'Produto enviado para lixeira',
   'product.restored': 'Produto restaurado',
   'product.updated': 'Produto atualizado',
+  'replenishment.assignee_added': 'Responsável adicionado à reposição',
+  'replenishment.assignee_removed': 'Responsável removido da reposição',
+  'replenishment.canceled': 'Necessidade de reposição cancelada',
+  'replenishment.completed': 'Necessidade de reposição concluída',
+  'replenishment.created': 'Necessidade de reposição criada',
+  'replenishment.updated': 'Necessidade de reposição atualizada',
   'stock.movement_created': 'Estoque movimentado',
   'workspace.created': 'Workspace criado',
   'workspace.updated': 'Workspace atualizado',
@@ -70,6 +76,7 @@ function formatAuditLog(log) {
   const metadata = log.metadata ?? {}
   const detail =
     metadata.name ??
+    metadata.product_name ??
     metadata.product_id ??
     metadata.category_id ??
     metadata.movement_type ??

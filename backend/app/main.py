@@ -9,6 +9,7 @@ from app.routers import (
     dashboard,
     products,
     qrcode,
+    replenishment,
     workspaces,
     stock_movements,
 )
@@ -38,6 +39,7 @@ app.include_router(qrcode.router)
 app.include_router(products.router)
 app.include_router(stock_movements.router)
 app.include_router(categories.router)
+app.include_router(replenishment.router)
 
 
 @app.get("/")

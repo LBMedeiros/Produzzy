@@ -32,6 +32,12 @@ function ProtectedApp() {
   const { isAuthenticated, loading: authLoading } = useAuth()
   const { activeWorkspace, loading: workspaceLoading } = useWorkspace()
   const [activePage, setActivePage] = useState('dashboard')
+  const [navigationIntent, setNavigationIntent] = useState(null)
+
+  function handleNavigate(page, intent = null) {
+    setNavigationIntent(intent)
+    setActivePage(page)
+  }
 
   if (authLoading) {
     return <LoadingScreen message="Carregando sessão..." />
@@ -52,8 +58,12 @@ function ProtectedApp() {
   const ActivePage = pageComponents[activePage] ?? DashboardPage
 
   return (
-    <AppLayout activePage={activePage} onNavigate={setActivePage}>
-      <ActivePage onNavigate={setActivePage} />
+    <AppLayout activePage={activePage} onNavigate={handleNavigate}>
+      <ActivePage
+        navigationIntent={navigationIntent}
+        onNavigate={handleNavigate}
+        onNavigationIntentHandled={() => setNavigationIntent(null)}
+      />
     </AppLayout>
   )
 }

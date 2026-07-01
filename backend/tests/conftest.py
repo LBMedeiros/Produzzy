@@ -58,7 +58,9 @@ def clean_database():
         db.execute(
             text(
                 "TRUNCATE TABLE "
-                "audit_logs, stock_movements, workspace_invites, "
+                "audit_logs, replenishment_assignees, "
+                "replenishment_requests, stock_movements, "
+                "workspace_invites, "
                 "workspace_members, products, categories, workspaces, users "
                 "RESTART IDENTITY CASCADE"
             )

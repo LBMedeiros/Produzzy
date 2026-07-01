@@ -1,6 +1,17 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+)
 from sqlalchemy import UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
@@ -131,6 +142,10 @@ class Product(Base):
         back_populates="product",
         cascade="all, delete-orphan",
     )
+    replenishment_requests = relationship(
+        "ReplenishmentRequest",
+        back_populates="product",
+    )
 
 
 class User(Base):
@@ -184,6 +199,26 @@ class User(Base):
         back_populates="accepted_by_user",
         foreign_keys="WorkspaceInvite.accepted_by_user_id",
     )
+    created_replenishment_requests = relationship(
+        "ReplenishmentRequest",
+        back_populates="created_by_user",
+        foreign_keys="ReplenishmentRequest.created_by_user_id",
+    )
+    assigned_replenishment_requests = relationship(
+        "ReplenishmentRequest",
+        back_populates="assigned_to_user",
+        foreign_keys="ReplenishmentRequest.assigned_to_user_id",
+    )
+    replenishment_assignments = relationship(
+        "ReplenishmentAssignee",
+        back_populates="user",
+        foreign_keys="ReplenishmentAssignee.user_id",
+    )
+    created_replenishment_assignments = relationship(
+        "ReplenishmentAssignee",
+        back_populates="assigned_by_user",
+        foreign_keys="ReplenishmentAssignee.assigned_by_user_id",
+    )
 
 
 class Workspace(Base):
@@ -236,6 +271,10 @@ class Workspace(Base):
     )
     stock_movements = relationship(
         "StockMovement",
+        back_populates="workspace",
+    )
+    replenishment_requests = relationship(
+        "ReplenishmentRequest",
         back_populates="workspace",
     )
 
@@ -455,3 +494,184 @@ class StockMovement(Base):
             return None
 
         return self.product.name
+
+
+class ReplenishmentRequest(Base):
+    __tablename__ = "replenishment_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('purchase', 'production')",
+            name="ck_replenishment_requests_type",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'in_progress', 'completed', 'canceled')",
+            name="ck_replenishment_requests_status",
+        ),
+        CheckConstraint(
+            "quantity_needed > 0",
+            name="ck_replenishment_requests_quantity_needed_positive",
+        ),
+        Index(
+            "ix_replenishment_requests_workspace_status",
+            "workspace_id",
+            "status",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id"),
+        nullable=False,
+        index=True,
+    )
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id"),
+        nullable=False,
+        index=True,
+    )
+    created_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    assigned_to_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+    type = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False, default="open", index=True)
+    quantity_needed = Column(Integer, nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+    )
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    workspace = relationship(
+        "Workspace",
+        back_populates="replenishment_requests",
+    )
+    product = relationship(
+        "Product",
+        back_populates="replenishment_requests",
+    )
+    created_by_user = relationship(
+        "User",
+        back_populates="created_replenishment_requests",
+        foreign_keys=[created_by_user_id],
+    )
+    assigned_to_user = relationship(
+        "User",
+        back_populates="assigned_replenishment_requests",
+        foreign_keys=[assigned_to_user_id],
+    )
+    assignees = relationship(
+        "ReplenishmentAssignee",
+        back_populates="replenishment",
+        cascade="all, delete-orphan",
+        order_by="ReplenishmentAssignee.created_at.asc()",
+    )
+
+    @property
+    def product_name(self):
+        return self.product.name if self.product else None
+
+    @property
+    def product_category(self):
+        return self.product.category if self.product else None
+
+    @property
+    def current_quantity(self):
+        return self.product.quantity if self.product else None
+
+    @property
+    def minimum_quantity(self):
+        return self.product.minimum_quantity if self.product else None
+
+    @property
+    def created_by_name(self):
+        return self.created_by_user.name if self.created_by_user else None
+
+    @property
+    def assigned_to_name(self):
+        return self.assigned_to_user.name if self.assigned_to_user else None
+
+
+class ReplenishmentAssignee(Base):
+    __tablename__ = "replenishment_assignees"
+    __table_args__ = (
+        UniqueConstraint(
+            "replenishment_id",
+            "user_id",
+            name="uq_replenishment_assignees_request_user",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    replenishment_id = Column(
+        Integer,
+        ForeignKey("replenishment_requests.id"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    assigned_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    replenishment = relationship(
+        "ReplenishmentRequest",
+        back_populates="assignees",
+    )
+    user = relationship(
+        "User",
+        back_populates="replenishment_assignments",
+        foreign_keys=[user_id],
+    )
+    assigned_by_user = relationship(
+        "User",
+        back_populates="created_replenishment_assignments",
+        foreign_keys=[assigned_by_user_id],
+    )
+
+    @property
+    def name(self):
+        return self.user.name if self.user else None
+
+    @property
+    def email(self):
+        return self.user.email if self.user else None
+
+    @property
+    def role(self):
+        if not self.replenishment or not self.replenishment.workspace:
+            return None
+
+        membership = next(
+            (
+                member
+                for member in self.replenishment.workspace.members
+                if member.user_id == self.user_id
+            ),
+            None,
+        )
+
+        return membership.role if membership else None

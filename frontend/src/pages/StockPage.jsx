@@ -23,6 +23,7 @@ import {
   updateProduct,
 } from '../services/productService'
 import { listWorkspaceStockMovements } from '../services/stockMovementService'
+import { listReplenishments } from '../services/replenishmentService'
 
 const STOCK_FILTERS = [
   { id: 'active', label: 'Ativos' },
@@ -156,7 +157,7 @@ function normalizeProductForm(product, categories) {
   }
 }
 
-function StockPage() {
+function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
 
@@ -170,6 +171,7 @@ function StockPage() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [actionProductId, setActionProductId] = useState(null)
+  const [readyReplenishments, setReadyReplenishments] = useState([])
 
   const [productModal, setProductModal] = useState(null)
   const [productForm, setProductForm] = useState(emptyProductForm)
@@ -278,8 +280,15 @@ function StockPage() {
     setError('')
 
     try {
-      const categoryItems = await listCategories(workspaceId)
+      const [categoryItems, readyItems] = await Promise.all([
+        listCategories(workspaceId),
+        listReplenishments(workspaceId, {
+          limit: 5,
+          status: 'completed',
+        }),
+      ])
       setCategories(categoryItems)
+      setReadyReplenishments(readyItems)
 
       if (activeFilter === 'history') {
         setProducts([])
@@ -302,6 +311,7 @@ function StockPage() {
       setProducts(nextProducts)
     } catch (loadError) {
       setError(getFriendlyError(loadError))
+      setReadyReplenishments([])
     } finally {
       setIsLoading(false)
     }
@@ -472,6 +482,37 @@ function StockPage() {
     return () => window.clearTimeout(timeoutId)
   }, [loadStockData])
 
+  useEffect(() => {
+    if (
+      navigationIntent?.type !== 'replenishment-entry' ||
+      navigationIntent.workspaceId !== workspaceId ||
+      !navigationIntent.request
+    ) {
+      return
+    }
+
+    const replenishment = navigationIntent.request
+    const timeoutId = window.setTimeout(() => {
+      setMovementProduct({
+        category: replenishment.product_category,
+        id: replenishment.product_id,
+        name: replenishment.product_name,
+        replenishmentRequestId: replenishment.id,
+      })
+      setMovementForm({
+        movementType: 'entrada',
+        quantity: String(replenishment.quantity_needed),
+        reason: `Entrada da reposição · ${
+          replenishment.type === 'purchase' ? 'Compra' : 'Produção'
+        }`,
+      })
+      setMovementError('')
+      onNavigationIntentHandled?.()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [navigationIntent, onNavigationIntentHandled, workspaceId])
+
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase()
 
@@ -585,10 +626,34 @@ function StockPage() {
     setProductModal({ mode: 'edit', product })
   }
 
-  function openMovementModal(product) {
+  function openMovementModal(product, options = {}) {
+    const replenishment = options.replenishment
+
     setMovementProduct(product)
-    setMovementForm(emptyMovementForm)
+    setMovementForm(
+      replenishment
+        ? {
+            movementType: 'entrada',
+            quantity: String(replenishment.quantity_needed),
+            reason: `Entrada da reposição · ${
+              replenishment.type === 'purchase' ? 'Compra' : 'Produção'
+            }`,
+          }
+        : emptyMovementForm,
+    )
     setMovementError('')
+  }
+
+  function openReplenishmentEntry(replenishment) {
+    openMovementModal(
+      {
+        category: replenishment.product_category,
+        id: replenishment.product_id,
+        name: replenishment.product_name,
+        replenishmentRequestId: replenishment.id,
+      },
+      { replenishment },
+    )
   }
 
   function closeDetail() {
@@ -1180,6 +1245,46 @@ function StockPage() {
         </div>
       </div>
 
+      <Card
+        action={
+          readyReplenishments.length ? (
+            <Badge tone="success">{readyReplenishments.length} prontas</Badge>
+          ) : null
+        }
+        className="stock-ready-replenishments"
+        title="Reposições prontas para estocar"
+        eyebrow="Entrada pendente"
+      >
+        {readyReplenishments.length ? (
+          <div className="stock-ready-replenishments__list">
+            {readyReplenishments.map((replenishment) => (
+              <div
+                className="stock-ready-replenishment"
+                key={replenishment.id}
+              >
+                <div>
+                  <strong>{replenishment.product_name}</strong>
+                  <span>
+                    {replenishment.type === 'purchase' ? 'Compra' : 'Produção'} ·{' '}
+                    {replenishment.quantity_needed} un. previstas
+                  </span>
+                </div>
+                <Button
+                  onClick={() => openReplenishmentEntry(replenishment)}
+                  size="sm"
+                >
+                  Registrar entrada
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="stock-ready-replenishments__empty">
+            Nenhuma reposição aguardando entrada no estoque.
+          </p>
+        )}
+      </Card>
+
       <Card className="stock-panel">
         <div className="stock-toolbar">
           <label className="stock-search">
@@ -1615,6 +1720,12 @@ function StockPage() {
             </div>
 
             <form className="stock-form" onSubmit={handleMoveStock}>
+              {movementProduct.replenishmentRequestId ? (
+                <p className="stock-form__hint">
+                  A quantidade veio como previsão da reposição. Confirme os dados
+                  abaixo para registrar a entrada real no estoque.
+                </p>
+              ) : null}
               <label>
                 Tipo
                 <select

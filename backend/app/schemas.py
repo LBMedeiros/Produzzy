@@ -37,6 +37,26 @@ class CategoryStatus(str, Enum):
     all = "all"
 
 
+class ReplenishmentType(str, Enum):
+    purchase = "purchase"
+    production = "production"
+
+
+class ReplenishmentStatus(str, Enum):
+    open = "open"
+    in_progress = "in_progress"
+    completed = "completed"
+    canceled = "canceled"
+
+
+class ReplenishmentStatusFilter(str, Enum):
+    open = "open"
+    in_progress = "in_progress"
+    completed = "completed"
+    canceled = "canceled"
+    all = "all"
+
+
 class UserCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(
@@ -188,6 +208,58 @@ class StockMovementResponse(BaseModel):
     user_name: Optional[str] = None
     user_email: Optional[str] = None
     created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReplenishmentRequestCreate(BaseModel):
+    product_id: int
+    type: ReplenishmentType
+    quantity_needed: int = Field(gt=0)
+    notes: Optional[str] = None
+    assigned_to_user_id: Optional[int] = None
+
+
+class ReplenishmentRequestUpdate(BaseModel):
+    type: Optional[ReplenishmentType] = None
+    status: Optional[ReplenishmentStatus] = None
+    quantity_needed: Optional[int] = Field(default=None, gt=0)
+    notes: Optional[str] = None
+    assigned_to_user_id: Optional[int] = None
+
+
+class ReplenishmentAssigneeResponse(BaseModel):
+    id: int = Field(validation_alias="user_id")
+    name: str
+    email: str
+    role: Optional[str] = None
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+    )
+
+
+class ReplenishmentRequestResponse(BaseModel):
+    id: int
+    workspace_id: int
+    product_id: int
+    created_by_user_id: int
+    assigned_to_user_id: Optional[int] = None
+    type: str
+    status: str
+    quantity_needed: int
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime] = None
+    product_name: Optional[str] = None
+    product_category: Optional[str] = None
+    current_quantity: Optional[int] = None
+    minimum_quantity: Optional[int] = None
+    created_by_name: Optional[str] = None
+    assigned_to_name: Optional[str] = None
+    assignees: list[ReplenishmentAssigneeResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
