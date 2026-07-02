@@ -31,6 +31,9 @@ ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS = (
 ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS = (
     "Another active category with this name already exists in this workspace."
 )
+ACTIVE_REPLENISHMENT_EXISTS = (
+    "Já existe uma necessidade ativa para este produto."
+)
 
 
 def normalize_email(email: str):
@@ -1050,6 +1053,36 @@ def create_stock_movement(
             detail="Cannot move stock for an inactive product.",
         )
 
+    replenishment_request = None
+
+    if movement_data.replenishment_request_id is not None:
+        replenishment_request = get_replenishment_request_by_id(
+            workspace_id,
+            movement_data.replenishment_request_id,
+            db,
+        )
+
+        if replenishment_request.product_id != product.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A necessidade de reposição não pertence a este produto.",
+            )
+
+        if movement_data.movement_type != schemas.StockMovementType.entrada:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uma reposição só pode ser vinculada a uma entrada.",
+            )
+
+        if (
+            replenishment_request.status
+            != schemas.ReplenishmentStatus.completed.value
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A necessidade não está pronta para estocar.",
+            )
+
     quantity_before = product.quantity
 
     if movement_data.movement_type == schemas.StockMovementType.entrada:
@@ -1103,6 +1136,20 @@ def create_stock_movement(
             "quantity_after": movement.quantity_after,
         },
     )
+
+    if replenishment_request is not None:
+        replenishment_request.status = schemas.ReplenishmentStatus.stocked.value
+        replenishment_request.updated_at = aware_utc_now()
+        create_audit_log(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            action="replenishment.stocked",
+            entity_type="replenishment_request",
+            entity_id=replenishment_request.id,
+            metadata=replenishment_metadata(replenishment_request),
+        )
+
     db.commit()
     db.refresh(movement)
 
@@ -1226,6 +1273,28 @@ def create_replenishment_request(
         request_data.assigned_to_user_id,
         db,
     )
+
+    active_request = (
+        db.query(models.ReplenishmentRequest.id)
+        .filter(models.ReplenishmentRequest.workspace_id == workspace_id)
+        .filter(models.ReplenishmentRequest.product_id == product.id)
+        .filter(
+            models.ReplenishmentRequest.status.in_(
+                [
+                    schemas.ReplenishmentStatus.open.value,
+                    schemas.ReplenishmentStatus.in_progress.value,
+                    schemas.ReplenishmentStatus.completed.value,
+                ]
+            )
+        )
+        .first()
+    )
+
+    if active_request is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ACTIVE_REPLENISHMENT_EXISTS,
+        )
 
     replenishment_request = models.ReplenishmentRequest(
         workspace_id=workspace_id,
@@ -1402,6 +1471,18 @@ def update_replenishment_request(
 
     old_status = replenishment_request.status
 
+    if (
+        update_data.get("status") == schemas.ReplenishmentStatus.stocked
+        and old_status != schemas.ReplenishmentStatus.completed.value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A necessidade precisa estar pronta para estocar antes de ser "
+                "marcada como estocada."
+            ),
+        )
+
     for field, value in update_data.items():
         if hasattr(value, "value"):
             value = value.value
@@ -1416,7 +1497,10 @@ def update_replenishment_request(
     elif (
         old_status == schemas.ReplenishmentStatus.completed.value
         and replenishment_request.status
-        != schemas.ReplenishmentStatus.completed.value
+        not in {
+            schemas.ReplenishmentStatus.completed.value,
+            schemas.ReplenishmentStatus.stocked.value,
+        }
     ):
         replenishment_request.completed_at = None
 
@@ -1428,6 +1512,12 @@ def update_replenishment_request(
         == schemas.ReplenishmentStatus.completed.value
     ):
         audit_action = "replenishment.completed"
+    elif (
+        old_status != replenishment_request.status
+        and replenishment_request.status
+        == schemas.ReplenishmentStatus.stocked.value
+    ):
+        audit_action = "replenishment.stocked"
     elif (
         old_status != replenishment_request.status
         and replenishment_request.status
@@ -1458,6 +1548,7 @@ def update_replenishment_request(
 def ensure_replenishment_accepts_assignees(replenishment_request):
     if replenishment_request.status in {
         schemas.ReplenishmentStatus.completed.value,
+        schemas.ReplenishmentStatus.stocked.value,
         schemas.ReplenishmentStatus.canceled.value,
     }:
         raise HTTPException(

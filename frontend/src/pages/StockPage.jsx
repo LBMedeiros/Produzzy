@@ -3,6 +3,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
+import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import {
   createCategory,
@@ -23,7 +24,10 @@ import {
   updateProduct,
 } from '../services/productService'
 import { listWorkspaceStockMovements } from '../services/stockMovementService'
-import { listReplenishments } from '../services/replenishmentService'
+import {
+  createReplenishment,
+  listReplenishments,
+} from '../services/replenishmentService'
 
 const STOCK_FILTERS = [
   { id: 'active', label: 'Ativos' },
@@ -139,6 +143,19 @@ function formatProductsRemovedWithCategory(count) {
     : `${count} produtos removidos junto com a categoria`
 }
 
+function uniqueReplenishmentsByProduct(items) {
+  const seenProductIds = new Set()
+
+  return items.filter((item) => {
+    if (seenProductIds.has(item.product_id)) {
+      return false
+    }
+
+    seenProductIds.add(item.product_id)
+    return true
+  })
+}
+
 function normalizeProductForm(product, categories) {
   const firstCategory = categories[0]?.name ?? ''
 
@@ -172,6 +189,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   const [successMessage, setSuccessMessage] = useState('')
   const [actionProductId, setActionProductId] = useState(null)
   const [readyReplenishments, setReadyReplenishments] = useState([])
+  const [replenishmentProduct, setReplenishmentProduct] = useState(null)
+  const [replenishmentError, setReplenishmentError] = useState('')
+  const [isSavingReplenishment, setIsSavingReplenishment] = useState(false)
 
   const [productModal, setProductModal] = useState(null)
   const [productForm, setProductForm] = useState(emptyProductForm)
@@ -283,12 +303,12 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       const [categoryItems, readyItems] = await Promise.all([
         listCategories(workspaceId),
         listReplenishments(workspaceId, {
-          limit: 5,
+          limit: 100,
           status: 'completed',
         }),
       ])
       setCategories(categoryItems)
-      setReadyReplenishments(readyItems)
+      setReadyReplenishments(uniqueReplenishmentsByProduct(readyItems))
 
       if (activeFilter === 'history') {
         setProducts([])
@@ -642,6 +662,43 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
         : emptyMovementForm,
     )
     setMovementError('')
+  }
+
+  function openReplenishmentModal(product) {
+    setReplenishmentProduct(product)
+    setReplenishmentError('')
+    setSuccessMessage('')
+  }
+
+  function closeReplenishmentModal() {
+    if (!isSavingReplenishment) {
+      setReplenishmentProduct(null)
+      setReplenishmentError('')
+    }
+  }
+
+  async function handleCreateReplenishment(requestData) {
+    if (!workspaceId || !replenishmentProduct) {
+      return
+    }
+
+    setIsSavingReplenishment(true)
+    setReplenishmentError('')
+    setSuccessMessage('')
+
+    try {
+      await createReplenishment(workspaceId, {
+        product_id: replenishmentProduct.id,
+        ...requestData,
+      })
+      setReplenishmentProduct(null)
+      setSuccessMessage('Necessidade de reposição criada com sucesso.')
+      await loadStockData()
+    } catch (createError) {
+      setReplenishmentError(getFriendlyError(createError))
+    } finally {
+      setIsSavingReplenishment(false)
+    }
   }
 
   function openReplenishmentEntry(replenishment) {
@@ -1017,16 +1074,23 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
     try {
       const movedProductId = movementProduct.id
+      const replenishmentRequestId =
+        movementProduct.replenishmentRequestId ?? null
 
       await createStockMovement(workspaceId, movedProductId, {
         movement_type: movementForm.movementType,
         quantity: Number(movementForm.quantity),
         reason: movementForm.reason.trim() || null,
+        replenishment_request_id: replenishmentRequestId,
       })
 
       setMovementProduct(null)
       setMovementForm(emptyMovementForm)
-      setSuccessMessage('Movimentação registrada com sucesso.')
+      setSuccessMessage(
+        replenishmentRequestId
+          ? 'Entrada registrada e reposição marcada como estocada.'
+          : 'Movimentação registrada com sucesso.',
+      )
       await loadStockData()
 
       if (isDetailOpen && detailProduct?.id === movedProductId) {
@@ -1177,8 +1241,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       label: 'Ações',
       render: (product) =>
         activeFilter === 'deleted' ? (
-          <div className="table-actions">
+          <div className="table-actions table-actions--compact">
             <button
+              className="table-action table-action--view"
               type="button"
               onClick={() =>
                 loadProductDetail(product, {
@@ -1189,6 +1254,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               Ver
             </button>
             <button
+              className="table-action table-action--restore"
               disabled={actionProductId === product.id}
               type="button"
               onClick={() => handleRestoreProduct(product)}
@@ -1198,16 +1264,36 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           </div>
         ) : (
           <div className="table-actions">
-            <button type="button" onClick={() => loadProductDetail(product)}>
+            <button
+              className="table-action table-action--view"
+              type="button"
+              onClick={() => loadProductDetail(product)}
+            >
               Ver
             </button>
-            <button type="button" onClick={() => openMovementModal(product)}>
+            <button
+              className="table-action table-action--movement"
+              type="button"
+              onClick={() => openMovementModal(product)}
+            >
               Movimentar
             </button>
-            <button type="button" onClick={() => openEditProduct(product)}>
+            <button
+              className="table-action table-action--edit"
+              type="button"
+              onClick={() => openEditProduct(product)}
+            >
               Editar
             </button>
             <button
+              className="table-action table-action--replenish"
+              type="button"
+              onClick={() => openReplenishmentModal(product)}
+            >
+              Repor
+            </button>
+            <button
+              className="table-action table-action--delete"
               disabled={actionProductId === product.id}
               type="button"
               onClick={() => handleDeleteProduct(product)}
@@ -1248,7 +1334,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       <Card
         action={
           readyReplenishments.length ? (
-            <Badge tone="success">{readyReplenishments.length} prontas</Badge>
+            <Badge tone="neutral">{readyReplenishments.length} prontas</Badge>
           ) : null
         }
         className="stock-ready-replenishments"
@@ -1270,6 +1356,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                   </span>
                 </div>
                 <Button
+                  className="stock-ready-replenishment__action"
                   onClick={() => openReplenishmentEntry(replenishment)}
                   size="sm"
                 >
@@ -1280,7 +1367,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           </div>
         ) : (
           <p className="stock-ready-replenishments__empty">
-            Nenhuma reposição aguardando entrada no estoque.
+            Nenhuma reposição aguardando entrada em estoque.
           </p>
         )}
       </Card>
@@ -1701,6 +1788,16 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
         </div>
       ) : null}
 
+      {replenishmentProduct ? (
+        <ReplenishmentCreationModal
+          error={replenishmentError}
+          isSaving={isSavingReplenishment}
+          onClose={closeReplenishmentModal}
+          onSubmit={handleCreateReplenishment}
+          product={replenishmentProduct}
+        />
+      ) : null}
+
       {movementProduct ? (
         <div className="modal-backdrop" role="presentation">
           <section className="workspace-modal stock-modal" role="dialog" aria-modal="true">
@@ -1729,6 +1826,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               <label>
                 Tipo
                 <select
+                  disabled={Boolean(
+                    movementProduct.replenishmentRequestId,
+                  )}
                   onChange={(event) =>
                     updateMovementField('movementType', event.target.value)
                   }
@@ -1763,7 +1863,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
               <div className="workspace-form__actions">
                 <Button disabled={isMovingStock} type="submit">
-                  {isMovingStock ? 'Movimentando...' : 'Registrar'}
+                  {isMovingStock
+                    ? 'Registrando...'
+                    : movementProduct.replenishmentRequestId
+                      ? 'Registrar entrada'
+                      : 'Registrar movimentação'}
                 </Button>
                 <Button
                   disabled={isMovingStock}

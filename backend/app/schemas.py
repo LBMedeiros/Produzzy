@@ -46,6 +46,7 @@ class ReplenishmentStatus(str, Enum):
     open = "open"
     in_progress = "in_progress"
     completed = "completed"
+    stocked = "stocked"
     canceled = "canceled"
 
 
@@ -53,6 +54,7 @@ class ReplenishmentStatusFilter(str, Enum):
     open = "open"
     in_progress = "in_progress"
     completed = "completed"
+    stocked = "stocked"
     canceled = "canceled"
     all = "all"
 
@@ -192,6 +194,7 @@ class StockMovementCreate(BaseModel):
     movement_type: StockMovementType
     quantity: int = Field(gt=0)
     reason: Optional[str] = Field(default=None, max_length=255)
+    replenishment_request_id: Optional[int] = Field(default=None, gt=0)
 
 
 class StockMovementResponse(BaseModel):

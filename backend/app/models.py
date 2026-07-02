@@ -504,7 +504,10 @@ class ReplenishmentRequest(Base):
             name="ck_replenishment_requests_type",
         ),
         CheckConstraint(
-            "status IN ('open', 'in_progress', 'completed', 'canceled')",
+            (
+                "status IN "
+                "('open', 'in_progress', 'completed', 'stocked', 'canceled')"
+            ),
             name="ck_replenishment_requests_status",
         ),
         CheckConstraint(

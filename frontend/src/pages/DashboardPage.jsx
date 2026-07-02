@@ -65,6 +65,7 @@ const auditActionLabels = {
   'replenishment.canceled': 'Necessidade de reposição cancelada',
   'replenishment.completed': 'Necessidade de reposição concluída',
   'replenishment.created': 'Necessidade de reposição criada',
+  'replenishment.stocked': 'Entrada da reposição registrada',
   'replenishment.updated': 'Necessidade de reposição atualizada',
   'stock.movement_created': 'Estoque movimentado',
   'workspace.created': 'Workspace criado',

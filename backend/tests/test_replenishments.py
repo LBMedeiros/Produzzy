@@ -44,30 +44,36 @@ def test_create_purchase_and_production_replenishments(
 ):
     owner = user_factory(name="Replenishment Owner")
     workspace = workspace_factory(owner["headers"], name="Replenishments")
-    product = create_product(client, workspace, owner)
+    purchase_product = create_product(client, workspace, owner)
+    production_product = create_product(
+        client,
+        workspace,
+        owner,
+        name="Produto para produção",
+    )
 
     purchase = create_replenishment(
         client,
         workspace,
         owner,
-        product,
+        purchase_product,
         request_type="purchase",
     )
     production = create_replenishment(
         client,
         workspace,
         owner,
-        product,
+        production_product,
         request_type="production",
         quantity=5,
     )
 
     assert purchase["type"] == "purchase"
     assert purchase["status"] == "open"
-    assert purchase["product_name"] == product["name"]
-    assert purchase["product_category"] == product["category"]
-    assert purchase["current_quantity"] == product["quantity"]
-    assert purchase["minimum_quantity"] == product["minimum_quantity"]
+    assert purchase["product_name"] == purchase_product["name"]
+    assert purchase["product_category"] == purchase_product["category"]
+    assert purchase["current_quantity"] == purchase_product["quantity"]
+    assert purchase["minimum_quantity"] == purchase_product["minimum_quantity"]
     assert purchase["created_by_name"] == owner["user"]["name"]
     assert purchase["completed_at"] is None
     assert production["type"] == "production"
@@ -125,13 +131,19 @@ def test_list_filter_and_update_replenishments(
 ):
     owner = user_factory(name="Flow Owner")
     workspace = workspace_factory(owner["headers"], name="Flow Workspace")
-    product = create_product(client, workspace, owner)
-    open_request = create_replenishment(client, workspace, owner, product)
+    open_product = create_product(client, workspace, owner)
+    completed_product = create_product(
+        client,
+        workspace,
+        owner,
+        name="Produto concluído",
+    )
+    open_request = create_replenishment(client, workspace, owner, open_product)
     completed_request = create_replenishment(
         client,
         workspace,
         owner,
-        product,
+        completed_product,
         request_type="production",
     )
 
@@ -160,10 +172,10 @@ def test_list_filter_and_update_replenishments(
     assert completed_response.json()["completed_at"] is not None
 
     product_after_completion = client.get(
-        f"/workspaces/{workspace['id']}/products/{product['id']}",
+        f"/workspaces/{workspace['id']}/products/{completed_product['id']}",
         headers=owner["headers"],
     ).json()
-    assert product_after_completion["quantity"] == product["quantity"]
+    assert product_after_completion["quantity"] == completed_product["quantity"]
 
     default_list_response = client.get(
         f"/workspaces/{workspace['id']}/replenishments",
@@ -233,6 +245,12 @@ def test_replenishment_permissions(
     owner = user_factory(name="Permission Owner")
     workspace = workspace_factory(owner["headers"], name="Permission Workspace")
     product = create_product(client, workspace, owner)
+    employee_product = create_product(
+        client,
+        workspace,
+        owner,
+        name="Produto do employee",
+    )
     request_item = create_replenishment(client, workspace, owner, product)
     viewer = workspace_member_factory(
         owner["headers"],
@@ -285,7 +303,7 @@ def test_replenishment_permissions(
     employee_create_response = client.post(
         f"/workspaces/{workspace['id']}/replenishments",
         json={
-            "product_id": product["id"],
+            "product_id": employee_product["id"],
             "type": "production",
             "quantity_needed": 4,
         },
@@ -329,6 +347,141 @@ def test_replenishment_permissions(
         headers=outsider["headers"],
     )
     assert outsider_create_response.status_code == 403
+
+
+def test_replenishment_blocks_active_duplicates_and_allows_terminal_history(
+    client,
+    user_factory,
+    workspace_factory,
+):
+    owner = user_factory(name="Lifecycle Owner")
+    workspace = workspace_factory(owner["headers"], name="Lifecycle Workspace")
+    product = create_product(client, workspace, owner)
+
+    first_request = create_replenishment(client, workspace, owner, product)
+    duplicate_response = client.post(
+        f"/workspaces/{workspace['id']}/replenishments",
+        json={
+            "product_id": product["id"],
+            "type": "production",
+            "quantity_needed": 4,
+        },
+        headers=owner["headers"],
+    )
+    assert duplicate_response.status_code == 409
+    assert duplicate_response.json()["detail"] == (
+        "Já existe uma necessidade ativa para este produto."
+    )
+
+    canceled_response = client.patch(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{first_request['id']}"
+        ),
+        json={"status": "canceled"},
+        headers=owner["headers"],
+    )
+    assert canceled_response.status_code == 200
+
+    second_request = create_replenishment(client, workspace, owner, product)
+    completed_response = client.patch(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{second_request['id']}"
+        ),
+        json={"status": "completed"},
+        headers=owner["headers"],
+    )
+    assert completed_response.status_code == 200
+
+    stocked_response = client.patch(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{second_request['id']}"
+        ),
+        json={"status": "stocked"},
+        headers=owner["headers"],
+    )
+    assert stocked_response.status_code == 200
+    assert stocked_response.json()["status"] == "stocked"
+    assert stocked_response.json()["completed_at"] is not None
+
+    third_request = create_replenishment(client, workspace, owner, product)
+    assert third_request["status"] == "open"
+
+    completed_list = client.get(
+        f"/workspaces/{workspace['id']}/replenishments?status=completed",
+        headers=owner["headers"],
+    )
+    stocked_list = client.get(
+        f"/workspaces/{workspace['id']}/replenishments?status=stocked",
+        headers=owner["headers"],
+    )
+    assert completed_list.status_code == 200
+    assert completed_list.json() == []
+    assert stocked_list.status_code == 200
+    assert [item["id"] for item in stocked_list.json()] == [
+        second_request["id"]
+    ]
+
+
+def test_stock_entry_marks_completed_replenishment_as_stocked(
+    client,
+    user_factory,
+    workspace_factory,
+):
+    owner = user_factory(name="Stock Entry Owner")
+    workspace = workspace_factory(owner["headers"], name="Stock Entry Workspace")
+    product = create_product(client, workspace, owner)
+    request_item = create_replenishment(client, workspace, owner, product)
+
+    completed_response = client.patch(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{request_item['id']}"
+        ),
+        json={"status": "completed"},
+        headers=owner["headers"],
+    )
+    assert completed_response.status_code == 200
+
+    movement_response = client.post(
+        f"/workspaces/{workspace['id']}/products/{product['id']}/stock",
+        json={
+            "movement_type": "entrada",
+            "quantity": 7,
+            "reason": "Entrada real da reposição",
+            "replenishment_request_id": request_item["id"],
+        },
+        headers=owner["headers"],
+    )
+    assert movement_response.status_code == 201, movement_response.text
+    assert movement_response.json()["quantity_before"] == product["quantity"]
+    assert movement_response.json()["quantity_after"] == product["quantity"] + 7
+
+    stocked_detail = client.get(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{request_item['id']}"
+        ),
+        headers=owner["headers"],
+    )
+    assert stocked_detail.status_code == 200
+    assert stocked_detail.json()["status"] == "stocked"
+
+    completed_list = client.get(
+        f"/workspaces/{workspace['id']}/replenishments?status=completed",
+        headers=owner["headers"],
+    )
+    assert completed_list.json() == []
+
+    audit_response = client.get(
+        f"/workspaces/{workspace['id']}/audit-logs?limit=100",
+        headers=owner["headers"],
+    )
+    assert "replenishment.stocked" in {
+        item["action"] for item in audit_response.json()
+    }
 
 
 def test_employee_can_assume_and_leave_replenishment(

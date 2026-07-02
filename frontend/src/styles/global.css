@@ -236,8 +236,11 @@ a {
   position: sticky;
   top: 0;
   display: flex;
+  height: 100vh;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 0;
+  align-self: start;
+  overflow-y: auto;
   padding: 22px 16px;
   background: var(--navy);
   color: #e2e8f0;
@@ -1155,17 +1158,25 @@ a {
 }
 
 .table-actions {
-  display: flex;
-  min-width: 260px;
+  display: inline-flex;
+  min-width: 350px;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #f8fafc;
+  padding: 4px;
+}
+
+.table-actions--compact {
+  min-width: 0;
 }
 
 .table-actions button {
   min-height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
   color: #334155;
   padding: 0 9px;
   font-size: 12px;
@@ -1173,12 +1184,34 @@ a {
 }
 
 .table-actions button:hover {
-  border-color: rgba(37, 99, 235, 0.28);
+  border-color: #bfdbfe;
+  background: #ffffff;
   color: var(--blue);
 }
 
 .table-actions button:disabled {
   color: var(--muted);
+}
+
+.table-actions .table-action--movement,
+.table-actions .table-action--restore {
+  background: var(--blue-soft);
+  color: #1d4ed8;
+}
+
+.table-actions .table-action--replenish {
+  background: var(--warning-soft);
+  color: #92400e;
+}
+
+.table-actions .table-action--delete {
+  color: #b91c1c;
+}
+
+.table-actions .table-action--delete:hover {
+  border-color: #fecaca;
+  background: var(--danger-soft);
+  color: #991b1b;
 }
 
 .table-empty {
@@ -1995,9 +2028,12 @@ a {
 
 .replenishment-status-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 16px;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 8px;
 }
 
 .replenishment-status-tabs button {
@@ -2037,6 +2073,10 @@ a {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  align-items: stretch;
+  border-radius: 10px;
+  background: #f1f5f9;
+  padding: 14px;
 }
 
 .replenishment-request-card {
@@ -2047,15 +2087,31 @@ a {
   border-radius: 10px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   padding: 18px;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+}
+
+.replenishment-request-card--suggestion {
+  border-color: rgba(245, 158, 11, 0.34);
+  border-style: dashed;
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
 }
 
 .replenishment-request-card__header,
 .replenishment-request-card__assignees,
 .replenishment-request-card__actions {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.replenishment-request-card__header > div:first-child {
+  min-width: 0;
+}
+
+.replenishment-request-card__header > .badge,
+.replenishment-request-card__badges {
+  flex: 0 0 auto;
 }
 
 .replenishment-request-card__header span,
@@ -2068,6 +2124,7 @@ a {
 }
 
 .replenishment-request-card__header h3 {
+  overflow-wrap: anywhere;
   margin: 3px 0 0;
   color: var(--text);
   font-size: 17px;
@@ -2081,10 +2138,19 @@ a {
   gap: 8px;
 }
 
+.replenishment-request-card__badges {
+  align-items: flex-start;
+  max-width: 58%;
+}
+
 .replenishment-request-card__details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.replenishment-request-card__details--stock {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .replenishment-request-card__details > div {
@@ -2117,7 +2183,9 @@ a {
 }
 
 .replenishment-request-card__actions {
+  align-self: end;
   justify-content: flex-start;
+  margin-top: auto;
   border-top: 1px solid var(--border);
   padding-top: 14px;
 }
@@ -2139,9 +2207,15 @@ a {
   font-weight: 750;
 }
 
-.replenishment-canceled-note {
+.replenishment-canceled-note,
+.replenishment-stocked-note {
   color: var(--muted);
   font-size: 13px;
+}
+
+.replenishment-stocked-note {
+  color: #166534;
+  font-weight: 750;
 }
 
 .replenishment-assignees {
@@ -2297,8 +2371,13 @@ a {
 }
 
 .stock-ready-replenishments {
-  border-color: rgba(22, 163, 74, 0.2);
-  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  border-color: rgba(37, 99, 235, 0.18);
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+}
+
+.stock-ready-replenishments .card__header h2,
+.stock-ready-replenishments .eyebrow {
+  color: #1d4ed8;
 }
 
 .stock-ready-replenishments__list {
@@ -2313,10 +2392,11 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border: 1px solid rgba(22, 163, 74, 0.18);
-  border-radius: 8px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 10px;
   background: #ffffff;
-  padding: 12px;
+  padding: 14px;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.06);
 }
 
 .stock-ready-replenishment > div {
@@ -2338,8 +2418,19 @@ a {
 
 .stock-ready-replenishment span,
 .stock-ready-replenishments__empty {
-  color: var(--muted);
+  color: #334155;
   font-size: 12px;
+}
+
+.stock-ready-replenishment__action.button {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.2);
+}
+
+.stock-ready-replenishment__action.button:hover {
+  background: #1d4ed8;
 }
 
 .replenishment-empty__symbol {
@@ -2735,7 +2826,9 @@ a {
 
   .sidebar {
     position: static;
+    height: auto;
     min-height: auto;
+    overflow: visible;
     padding: 16px;
     align-items: stretch;
   }
@@ -2866,14 +2959,9 @@ a {
     width: 100%;
   }
 
-  .replenishment-request-card__header,
   .replenishment-request-card__assignees {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .replenishment-request-card__badges {
-    justify-content: flex-start;
   }
 
   .replenishment-request-card__details {
