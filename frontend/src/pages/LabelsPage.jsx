@@ -3,7 +3,12 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { getLabelsSheet, getProductLabel, getProductQrCode } from '../services/labelService'
+import {
+  getLabelsSheet,
+  getProductLabel,
+  getProductQrCode,
+  getQrCodesSheet,
+} from '../services/labelService'
 import { listProducts } from '../services/productService'
 
 function getFriendlyError(error) {
@@ -66,7 +71,8 @@ function LabelsPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [isLoadingQr, setIsLoadingQr] = useState(false)
   const [isLoadingLabel, setIsLoadingLabel] = useState(false)
-  const [isLoadingSheet, setIsLoadingSheet] = useState(false)
+  const [isLoadingLabelsSheet, setIsLoadingLabelsSheet] = useState(false)
+  const [isLoadingQrCodesSheet, setIsLoadingQrCodesSheet] = useState(false)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const qrPreviewUrlRef = useRef('')
@@ -285,25 +291,47 @@ function LabelsPage() {
     }
   }
 
-  async function handleDownloadSheet() {
+  async function handleDownloadLabelsSheet() {
     const numericWorkspaceId = getValidId(workspaceId)
 
     if (!numericWorkspaceId) {
       return
     }
 
-    setIsLoadingSheet(true)
+    setIsLoadingLabelsSheet(true)
     setError('')
     setSuccessMessage('')
 
     try {
       const blob = await getLabelsSheet(numericWorkspaceId)
       downloadBlob(blob, `etiquetas-workspace-${numericWorkspaceId}.png`)
-      setSuccessMessage('Folha A4 baixada com sucesso.')
+      setSuccessMessage('Etiquetas para impressão baixadas com sucesso.')
     } catch (downloadError) {
       setError(getFriendlyError(downloadError))
     } finally {
-      setIsLoadingSheet(false)
+      setIsLoadingLabelsSheet(false)
+    }
+  }
+
+  async function handleDownloadQrCodesSheet() {
+    const numericWorkspaceId = getValidId(workspaceId)
+
+    if (!numericWorkspaceId) {
+      return
+    }
+
+    setIsLoadingQrCodesSheet(true)
+    setError('')
+    setSuccessMessage('')
+
+    try {
+      const blob = await getQrCodesSheet(numericWorkspaceId)
+      downloadBlob(blob, `qrcodes-workspace-${numericWorkspaceId}.png`)
+      setSuccessMessage('QR Codes para impressão baixados com sucesso.')
+    } catch (downloadError) {
+      setError(getFriendlyError(downloadError))
+    } finally {
+      setIsLoadingQrCodesSheet(false)
     }
   }
 
@@ -346,13 +374,6 @@ function LabelsPage() {
           <h1>Etiquetas e QR Codes</h1>
           <p>Gere etiquetas e códigos para os produtos ativos do workspace</p>
         </div>
-        <Button
-          disabled={isLoadingSheet || !products.length}
-          icon="+"
-          onClick={handleDownloadSheet}
-        >
-          {isLoadingSheet ? 'Baixando...' : 'Baixar folha A4'}
-        </Button>
       </div>
 
       {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
@@ -367,8 +388,8 @@ function LabelsPage() {
         <Card title="Etiqueta individual" eyebrow="Imagem PNG">
           <p>Combine a marca, o QR Code e o código de barras do produto.</p>
         </Card>
-        <Card title="Folha A4" eyebrow="Lote">
-          <p>Baixe uma folha com todos os produtos ativos do workspace.</p>
+        <Card title="Impressão em lote" eyebrow="Para impressão">
+          <p>Organize vários itens em uma folha para economizar papel.</p>
         </Card>
         <Card title="Produto selecionado" eyebrow="Catálogo">
           <p>{selectedProduct ? selectedProduct.name : 'Selecione um produto.'}</p>
@@ -379,6 +400,46 @@ function LabelsPage() {
           ) : null}
         </Card>
       </section>
+
+      <Card title="Impressão em lote" eyebrow="Folhas para impressão">
+        <p className="batch-printing__intro">
+          Escolha entre QR Codes identificados ou etiquetas completas para os
+          produtos ativos do workspace.
+        </p>
+        <div className="batch-printing">
+          <article className="batch-printing__option">
+            <div>
+              <h3>QR Codes para impressão</h3>
+              <p>
+                Gere uma folha com QR Codes identificados pelo nome do produto.
+              </p>
+            </div>
+            <Button
+              disabled={isLoadingQrCodesSheet || !products.length}
+              onClick={handleDownloadQrCodesSheet}
+              variant="secondary"
+            >
+              {isLoadingQrCodesSheet ? 'Baixando...' : 'Baixar QR Codes'}
+            </Button>
+          </article>
+          <article className="batch-printing__option">
+            <div>
+              <h3>Etiquetas para impressão</h3>
+              <p>
+                Gere uma folha com etiquetas completas, QR Code e código de
+                barras.
+              </p>
+            </div>
+            <Button
+              disabled={isLoadingLabelsSheet || !products.length}
+              onClick={handleDownloadLabelsSheet}
+              variant="secondary"
+            >
+              {isLoadingLabelsSheet ? 'Baixando...' : 'Baixar etiquetas'}
+            </Button>
+          </article>
+        </div>
+      </Card>
 
       <section className="content-grid content-grid--label">
         <Card title="Prévia real" eyebrow="Preview">

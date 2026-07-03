@@ -60,3 +60,11 @@ export function getLabelsSheet(workspaceId, params = {}) {
     withQuery(`/workspaces/${validWorkspaceId}/products/labels-sheet`, params),
   )
 }
+
+export function getQrCodesSheet(workspaceId) {
+  const validWorkspaceId = parseId(workspaceId, 'Workspace')
+
+  return requestBlob(
+    `/workspaces/${validWorkspaceId}/products/qrcodes-sheet`,
+  )
+}

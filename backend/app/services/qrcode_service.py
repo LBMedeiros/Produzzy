@@ -120,6 +120,129 @@ def generate_qrcode_image(data: str) -> BytesIO:
     return image_to_png_buffer(generate_qrcode_pil(data))
 
 
+def wrap_text_without_truncation(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font,
+    max_width: int,
+) -> list[str]:
+    words = str(text).strip().split()
+
+    if not words:
+        return [""]
+
+    lines: list[str] = []
+    current_line = ""
+
+    for word in words:
+        candidate = f"{current_line} {word}".strip()
+
+        if text_size(draw, candidate, font)[0] <= max_width:
+            current_line = candidate
+            continue
+
+        if current_line:
+            lines.append(current_line)
+            current_line = ""
+
+        if text_size(draw, word, font)[0] <= max_width:
+            current_line = word
+            continue
+
+        word_part = ""
+
+        for character in word:
+            candidate_part = f"{word_part}{character}"
+
+            if word_part and text_size(draw, candidate_part, font)[0] > max_width:
+                lines.append(word_part)
+                word_part = character
+            else:
+                word_part = candidate_part
+
+        current_line = word_part
+
+    if current_line:
+        lines.append(current_line)
+
+    return lines or [""]
+
+
+def fit_wrapped_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_width: int,
+    initial_size: int,
+    min_size: int,
+    max_lines: int,
+):
+    font_size = initial_size
+
+    while True:
+        font = load_font(font_size, bold=True)
+        lines = wrap_text_without_truncation(draw, text, font, max_width)
+
+        if len(lines) <= max_lines or font_size <= min_size:
+            return font, lines
+
+        font_size -= 2
+
+
+def generate_product_qrcode_pil(
+    data: str,
+    product_name: str,
+) -> Image.Image:
+    qr_image = generate_qrcode_pil(data)
+    horizontal_padding = max(40, qr_image.width // 12)
+    top_padding = max(30, qr_image.width // 16)
+    bottom_padding = horizontal_padding
+    text_gap = max(20, qr_image.width // 24)
+    canvas_width = qr_image.width + (horizontal_padding * 2)
+    measurement_image = Image.new("RGB", (canvas_width, 1), "white")
+    measurement_draw = ImageDraw.Draw(measurement_image)
+    name_font, name_lines = fit_wrapped_text(
+        measurement_draw,
+        product_name,
+        max_width=canvas_width - (horizontal_padding * 2),
+        initial_size=max(28, qr_image.width // 14),
+        min_size=18,
+        max_lines=3,
+    )
+    name_line_height = max(
+        text_size(measurement_draw, "Ag", name_font)[1],
+        getattr(name_font, "size", 18),
+    )
+    text_height = len(name_lines) * name_line_height
+    qr_top = top_padding + text_height + text_gap
+    canvas_height = qr_top + qr_image.height + bottom_padding
+    canvas = Image.new("RGB", (canvas_width, canvas_height), "white")
+    draw = ImageDraw.Draw(canvas)
+
+    for index, line in enumerate(name_lines):
+        draw_centered_text(
+            draw,
+            line,
+            top_padding + (index * name_line_height),
+            canvas_width,
+            name_font,
+        )
+
+    canvas.paste(qr_image, (horizontal_padding, qr_top))
+    return canvas
+
+
+def generate_product_qrcode_image(
+    data: str,
+    product_name: str,
+) -> BytesIO:
+    return image_to_png_buffer(
+        generate_product_qrcode_pil(
+            data=data,
+            product_name=product_name,
+        )
+    )
+
+
 def get_product_barcode_value(product) -> str:
     product_id = getattr(product, "id", product)
 
@@ -522,5 +645,125 @@ def generate_products_labels_sheet_image(
             dpi=dpi,
         )
         sheet_image.paste(label_image, (x, y))
+
+    return image_to_png_buffer(sheet_image, dpi=dpi)
+
+
+def generate_print_qrcode_card_pil(
+    data: str,
+    product_name: str,
+    product_id: int,
+    width: int,
+    height: int,
+) -> Image.Image:
+    card = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(card)
+    border_width = max(2, width // 240)
+    padding = max(18, width // 22)
+    draw.rounded_rectangle(
+        (
+            border_width,
+            border_width,
+            width - border_width - 1,
+            height - border_width - 1,
+        ),
+        radius=max(8, width // 28),
+        fill="white",
+        outline=BORDER_COLOR,
+        width=border_width,
+    )
+
+    name_font, name_lines = fit_wrapped_text(
+        draw,
+        product_name,
+        max_width=width - (padding * 2),
+        initial_size=max(24, width // 18),
+        min_size=max(14, width // 34),
+        max_lines=3,
+    )
+    name_line_height = max(
+        text_size(draw, "Ag", name_font)[1],
+        getattr(name_font, "size", 16),
+    )
+    name_top = padding
+
+    for index, line in enumerate(name_lines):
+        draw_centered_text(
+            draw,
+            line,
+            name_top + (index * name_line_height),
+            width,
+            name_font,
+        )
+
+    code_font = load_font(max(14, width // 34), bold=True)
+    barcode_value = get_product_barcode_value(product_id)
+    code_height = text_size(draw, barcode_value, code_font)[1]
+    code_bottom = height - padding
+    code_top = code_bottom - code_height
+    qr_top = name_top + (len(name_lines) * name_line_height) + max(12, padding // 2)
+    qr_bottom = code_top - max(12, padding // 2)
+    qr_size = min(
+        width - (padding * 2),
+        max(1, qr_bottom - qr_top),
+    )
+    qr_image = resize_qrcode(generate_qrcode_pil(data), qr_size)
+    paste_centered(
+        card,
+        qr_image,
+        width // 2,
+        qr_top + (qr_size // 2),
+    )
+    draw_centered_text(
+        draw,
+        barcode_value,
+        code_top,
+        width,
+        code_font,
+        fill=MUTED_COLOR,
+    )
+    return card
+
+
+def generate_products_qrcodes_sheet_image(
+    qrcodes_data: list[dict],
+    dpi: int = 300,
+) -> BytesIO:
+    sheet_width_px = mm_to_px(210, dpi)
+    sheet_height_px = mm_to_px(297, dpi)
+    margin_px = mm_to_px(8, dpi)
+    gap_px = mm_to_px(3, dpi)
+    card_width_px = mm_to_px(46, dpi)
+    card_height_px = mm_to_px(64, dpi)
+    columns = max(
+        1,
+        (sheet_width_px - (margin_px * 2) + gap_px)
+        // (card_width_px + gap_px),
+    )
+    rows = max(
+        1,
+        (sheet_height_px - (margin_px * 2) + gap_px)
+        // (card_height_px + gap_px),
+    )
+    max_qrcodes_per_page = columns * rows
+    sheet_image = Image.new(
+        "RGB",
+        (sheet_width_px, sheet_height_px),
+        "white",
+    )
+
+    for index, qrcode_data in enumerate(qrcodes_data[:max_qrcodes_per_page]):
+        row = index // columns
+        column = index % columns
+        x = margin_px + column * (card_width_px + gap_px)
+        y = margin_px + row * (card_height_px + gap_px)
+        card = generate_print_qrcode_card_pil(
+            data=qrcode_data["data"],
+            product_name=qrcode_data["product_name"],
+            product_id=qrcode_data["product_id"],
+            width=card_width_px,
+            height=card_height_px,
+        )
+        sheet_image.paste(card, (x, y))
 
     return image_to_png_buffer(sheet_image, dpi=dpi)

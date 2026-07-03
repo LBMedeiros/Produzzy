@@ -6,9 +6,10 @@ from app import crud, models
 from app.dependencies import get_current_user, get_db
 from app.services.qrcode_service import (
     generate_product_barcode_image,
-    generate_qrcode_image,
     generate_product_label_image,
+    generate_product_qrcode_image,
     generate_products_labels_sheet_image,
+    generate_products_qrcodes_sheet_image,
 )
 
 
@@ -83,6 +84,61 @@ def generate_products_labels_sheet(
     )
 
 
+@router.get("/qrcodes-sheet")
+def generate_products_qrcodes_sheet(
+    workspace_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+    products = crud.list_products(
+        db=db,
+        workspace_id=workspace_id,
+        page=1,
+        limit=100,
+    )
+
+    if not products:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhum produto cadastrado para gerar QR Codes.",
+        )
+
+    qrcodes_data = []
+
+    for product in products:
+        product_url = str(
+            request.url_for(
+                "get_workspace_product",
+                workspace_id=workspace_id,
+                product_id=product.id,
+            )
+        )
+        qrcodes_data.append(
+            {
+                "data": product_url,
+                "product_name": product.name,
+                "product_id": product.id,
+            }
+        )
+
+    sheet_image = generate_products_qrcodes_sheet_image(qrcodes_data)
+
+    return StreamingResponse(
+        sheet_image,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": 'inline; filename="products-qrcodes-print.png"'
+        },
+    )
+
+
 @router.get("/{product_id}/barcode")
 def generate_product_barcode(
     workspace_id: int,
@@ -133,7 +189,10 @@ def generate_product_qrcode(
         )
     )
 
-    qr_image = generate_qrcode_image(product_url)
+    qr_image = generate_product_qrcode_image(
+        data=product_url,
+        product_name=product.name,
+    )
 
     filename = f"product-{product.id}-qrcode.png"
 

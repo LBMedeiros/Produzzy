@@ -25,7 +25,7 @@ const benefits = [
   },
   {
     description:
-      'Gere QR Codes, códigos de barras e folhas A4 para identificar produtos.',
+      'Gere QR Codes, códigos de barras e etiquetas prontas para impressão.',
     icon: 'labels',
     title: 'Etiquetas prontas',
   },

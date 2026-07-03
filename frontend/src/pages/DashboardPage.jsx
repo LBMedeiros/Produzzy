@@ -300,8 +300,8 @@ function DashboardPage({ onNavigate }) {
               <div className="label-shortcut">
                 <div className="label-shortcut__content">
                   <p>
-                    Gere QR Codes, códigos de barras, etiquetas individuais e folhas
-                    A4 para identificar produtos no estoque, reposição e expedição.
+                    Gere QR Codes, códigos de barras e etiquetas prontas para
+                    impressão e identificação dos produtos.
                   </p>
                   <Button
                     className="label-shortcut__button"
