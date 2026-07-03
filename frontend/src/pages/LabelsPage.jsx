@@ -382,10 +382,10 @@ function LabelsPage() {
       ) : null}
 
       <section className="feature-grid feature-grid--four">
-        <Card title="QR Code individual" eyebrow="Backend real">
+        <Card title="QR Code individual" eyebrow="Identificação">
           <p>Acesse o detalhe do produto a partir da etiqueta física.</p>
         </Card>
-        <Card title="Etiqueta individual" eyebrow="Imagem PNG">
+        <Card title="Etiqueta individual" eyebrow="Arquivo para impressão">
           <p>Combine a marca, o QR Code e o código de barras do produto.</p>
         </Card>
         <Card title="Impressão em lote" eyebrow="Para impressão">
@@ -442,7 +442,7 @@ function LabelsPage() {
       </Card>
 
       <section className="content-grid content-grid--label">
-        <Card title="Prévia real" eyebrow="Preview">
+        <Card title="Prévia do arquivo" eyebrow="Visualização">
           <div className="label-preview-stack">
             <label className="stock-form">
               Produto
@@ -522,7 +522,7 @@ function LabelsPage() {
             </div>
           </div>
         </Card>
-        <Card title="Produtos para etiqueta" eyebrow="Catálogo real">
+        <Card title="Produtos para etiqueta" eyebrow="Produtos ativos">
           {isLoadingProducts ? (
             <div className="stock-loading">Carregando produtos...</div>
           ) : products.length ? (

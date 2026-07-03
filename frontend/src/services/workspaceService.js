@@ -15,6 +15,13 @@ export function getWorkspace(id) {
   return request(`/workspaces/${id}`)
 }
 
+export function updateWorkspace(workspaceId, data) {
+  return request(`/workspaces/${workspaceId}`, {
+    body: data,
+    method: 'PATCH',
+  })
+}
+
 export function listWorkspaceMembers(workspaceId) {
   return request(`/workspaces/${workspaceId}/members?limit=100`)
 }

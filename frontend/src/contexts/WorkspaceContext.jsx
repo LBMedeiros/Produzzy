@@ -12,6 +12,7 @@ import {
   createWorkspace as createWorkspaceRequest,
   getWorkspace as getWorkspaceRequest,
   listWorkspaces,
+  updateWorkspace as updateWorkspaceRequest,
 } from '../services/workspaceService'
 
 const WorkspaceContext = createContext(null)
@@ -116,6 +117,50 @@ export function WorkspaceProvider({ children }) {
 
   const getWorkspace = useCallback((id) => getWorkspaceRequest(id), [])
 
+  const updateWorkspace = useCallback(async (workspaceId, name) => {
+    const numericWorkspaceId = Number(workspaceId)
+    const workspaceName = name.trim()
+
+    if (!Number.isInteger(numericWorkspaceId) || numericWorkspaceId <= 0) {
+      throw new Error('Workspace inválido.')
+    }
+
+    if (!workspaceName) {
+      throw new Error('Informe um nome para o workspace.')
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      const updatedWorkspace = await updateWorkspaceRequest(
+        numericWorkspaceId,
+        { name: workspaceName },
+      )
+
+      setWorkspaces((currentWorkspaces) =>
+        currentWorkspaces.map((workspace) =>
+          workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace,
+        ),
+      )
+      setActiveWorkspace((currentWorkspace) => {
+        if (currentWorkspace?.id !== updatedWorkspace.id) {
+          return currentWorkspace
+        }
+
+        persistActiveWorkspace(updatedWorkspace)
+        return updatedWorkspace
+      })
+
+      return updatedWorkspace
+    } catch (updateError) {
+      setError(normalizeError(updateError))
+      throw updateError
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (!isAuthenticated) {
       return undefined
@@ -137,6 +182,7 @@ export function WorkspaceProvider({ children }) {
       loadWorkspaces,
       loading,
       selectWorkspace,
+      updateWorkspace,
       workspaces,
     }),
     [
@@ -147,6 +193,7 @@ export function WorkspaceProvider({ children }) {
       loadWorkspaces,
       loading,
       selectWorkspace,
+      updateWorkspace,
       workspaces,
     ],
   )

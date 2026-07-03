@@ -153,7 +153,7 @@ export const activities = [
   },
   {
     id: 3,
-    title: 'Folha A4 gerada para Camiseta premium',
+    title: 'Etiquetas para impressão geradas para Camiseta premium',
     detail: '12 etiquetas prontas para impressão.',
     time: 'ontem',
   },
