@@ -38,6 +38,13 @@ body {
   background: var(--bg);
 }
 
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 button,
 input,
 select {
@@ -222,6 +229,8 @@ a {
 }
 
 .app-shell {
+  width: 100%;
+  max-width: 100%;
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr);
   min-height: 100vh;
@@ -453,6 +462,8 @@ a {
 }
 
 .app-shell__main {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -466,6 +477,10 @@ a {
   background: rgba(248, 250, 252, 0.92);
   padding: 0 24px;
   backdrop-filter: blur(14px);
+}
+
+.topbar > * {
+  min-width: 0;
 }
 
 .workspace-switcher {
@@ -546,6 +561,7 @@ a {
 
 .topbar__actions {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 10px;
   margin-left: auto;
@@ -802,6 +818,8 @@ a {
 }
 
 .page-content {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   overflow-x: clip;
   padding: 28px;
@@ -809,6 +827,9 @@ a {
 
 .page-stack {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   gap: 22px;
 }
 
@@ -1113,7 +1134,10 @@ a {
 
 .table-wrap {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 .data-table {
@@ -2334,17 +2358,20 @@ a {
 }
 
 .replenishment-status-tabs {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
+  max-width: 100%;
   gap: 8px;
   margin-bottom: 16px;
   border-radius: 10px;
   background: #f8fafc;
+  overflow-x: auto;
   padding: 8px;
+  overscroll-behavior-inline: contain;
 }
 
 .replenishment-status-tabs button {
   display: flex;
+  flex: 1 0 120px;
   min-height: 44px;
   align-items: center;
   justify-content: space-between;
@@ -2356,6 +2383,10 @@ a {
   padding: 0 12px;
   font-size: 12px;
   font-weight: 800;
+}
+
+.replenishment-status-tabs button span {
+  white-space: nowrap;
 }
 
 .replenishment-status-tabs button:hover,
@@ -2495,6 +2526,11 @@ a {
   margin-top: auto;
   border-top: 1px solid var(--border);
   padding-top: 14px;
+}
+
+.replenishment-request-card--suggestion
+  .replenishment-request-card__actions {
+  justify-content: flex-end;
 }
 
 .replenishment-ready-action {
@@ -3148,6 +3184,106 @@ a {
   }
 }
 
+@media (min-width: 861px) and (max-width: 1279px) {
+  .app-shell {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+
+  .app-shell.is-sidebar-collapsed {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .topbar {
+    gap: 10px;
+    padding-inline: 14px;
+  }
+
+  .workspace-switcher {
+    min-width: 0;
+    flex: 1 1 220px;
+    max-width: 340px;
+  }
+
+  .workspace-switcher select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .search-field,
+  .topbar__share {
+    display: none;
+  }
+
+  .topbar__actions {
+    flex: 0 1 auto;
+    gap: 8px;
+  }
+
+  .topbar__create {
+    width: 42px;
+    min-width: 42px;
+    padding-inline: 0;
+  }
+
+  .topbar__create > span:last-child {
+    display: none;
+  }
+
+  .member-avatars {
+    padding-inline: 8px;
+  }
+
+  .topbar__user {
+    max-width: 150px;
+  }
+
+  .topbar__user strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-content {
+    padding: 20px;
+  }
+
+  .page-stack {
+    gap: 18px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .replenishment-status-tabs {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .replenishment-status-tabs button {
+    flex-basis: 116px;
+    min-height: 40px;
+    gap: 6px;
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+
+  .replenishment-request-grid {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .replenishment-request-card {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .replenishment-request-card__actions {
+    padding-top: 12px;
+  }
+}
+
 @media (max-width: 1180px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3208,15 +3344,18 @@ a {
 
 @media (max-width: 860px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .app-shell.is-sidebar-collapsed {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
     position: static;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     height: auto;
     min-height: auto;
     overflow: visible;
@@ -3243,6 +3382,8 @@ a {
   }
 
   .sidebar__nav {
+    max-width: 100%;
+    min-width: 0;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     overflow-x: auto;
   }
@@ -3263,14 +3404,22 @@ a {
 
   .topbar {
     position: static;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     flex-wrap: wrap;
     min-height: auto;
+    gap: 12px;
     padding: 16px;
   }
 
-  .workspace-switcher,
-  .search-field {
+  .workspace-switcher {
     min-width: 100%;
+  }
+
+  .search-field,
+  .topbar__share {
+    display: none;
   }
 
   .workspace-switcher {
@@ -3283,7 +3432,19 @@ a {
 
   .topbar__actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .topbar__create {
+    width: 42px;
+    min-width: 42px;
+    padding-inline: 0;
+  }
+
+  .topbar__create > span:last-child {
+    display: none;
   }
 
   .stock-toolbar {
@@ -3310,9 +3471,6 @@ a {
     flex-direction: column;
   }
 
-  .replenishment-status-tabs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 560px) {
@@ -3325,19 +3483,27 @@ a {
   }
 
   .topbar__actions {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
   .topbar__members,
   .topbar__user-wrap,
   .member-avatars,
   .topbar__user {
-    width: 100%;
+    width: auto;
   }
 
   .topbar__user {
+    min-width: 0;
+    max-width: 160px;
     justify-content: center;
+  }
+
+  .topbar__user strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .member-avatars {
@@ -3396,10 +3562,6 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .replenishment-status-tabs {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .replenishment-ready-action,
   .stock-ready-replenishment {
     align-items: stretch;
@@ -3421,11 +3583,30 @@ a {
   }
 
   .sidebar__nav {
-    grid-template-columns: 1fr 1fr;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   .sidebar__item {
     min-width: 0;
+    min-height: 44px;
+    justify-content: center;
+    gap: 8px;
+    padding-inline: 0;
+  }
+
+  .sidebar .sidebar__item strong,
+  .sidebar.is-collapsed .sidebar__item strong {
+    display: none;
+  }
+
+  .sidebar__item span {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
   }
 
   .modal-backdrop {
