@@ -75,10 +75,6 @@ function getFriendlyError(error) {
     return 'Você não tem permissão para realizar esta ação.'
   }
 
-  if (error?.message === 'Restore the category before restoring this product.') {
-    return 'Restaure a categoria antes de restaurar este produto.'
-  }
-
   if (error?.status === 0) {
     return 'Não foi possível conectar ao servidor.'
   }
@@ -1599,7 +1595,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                       <p>
                         {stockMovements.length
                           ? `Mostrando ${stockMovements.length} movimentações`
-                          : 'Entradas, saídas e ajustes registrados no backend.'}
+                          : 'Entradas, saídas e ajustes registrados no workspace.'}
                       </p>
                     </div>
                     <button
@@ -1765,8 +1761,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
               {categories.length ? null : (
                 <p className="stock-form__hint">
-                  O backend atual espera uma categoria em texto. Crie uma categoria
-                  antes de salvar produtos.
+                  Crie uma categoria antes de salvar produtos.
                 </p>
               )}
               {productFormError ? <p className="form-error">{productFormError}</p> : null}

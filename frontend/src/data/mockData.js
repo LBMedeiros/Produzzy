@@ -3,7 +3,7 @@ export const workspace = {
   plan: 'Workspace principal',
   user: {
     name: 'Lucas Medeiros',
-    role: 'Admin',
+    role: 'Dono',
     initials: 'LM',
   },
 }
@@ -161,19 +161,19 @@ export const activities = [
 
 export const roleDescriptions = [
   {
-    role: 'Owner',
-    description: 'Controle total do workspace, membros, convites e produtos.',
+    role: 'Dono',
+    description: 'Controle total do workspace, membros, produtos e configurações.',
   },
   {
     role: 'Admin',
-    description: 'Gerencia produtos, estoque, categorias e convites operacionais.',
+    description: 'Gerencia produtos, estoque, categorias e operação da equipe.',
   },
   {
-    role: 'Employee',
+    role: 'Funcionário',
     description: 'Consulta dados e registra movimentações de estoque.',
   },
   {
-    role: 'Viewer',
+    role: 'Visualizador',
     description: 'Acompanha indicadores e dados sem alterar informações.',
   },
 ]

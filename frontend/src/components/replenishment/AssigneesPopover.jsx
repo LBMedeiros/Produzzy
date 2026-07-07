@@ -1,12 +1,5 @@
 import Badge from '../ui/Badge'
-import { getInitials } from '../../lib/formatters'
-
-const roleLabels = {
-  admin: 'Admin',
-  employee: 'Colaborador',
-  owner: 'Owner',
-  viewer: 'Visualizador',
-}
+import { formatWorkspaceRole, getInitials } from '../../lib/formatters'
 
 function AssigneesPopover({ assignees }) {
   return (
@@ -30,7 +23,7 @@ function AssigneesPopover({ assignees }) {
               <small>{assignee.email}</small>
             </div>
             <Badge tone="neutral">
-              {roleLabels[assignee.role] ?? assignee.role ?? 'Membro'}
+              {formatWorkspaceRole(assignee.role)}
             </Badge>
           </div>
         ))}

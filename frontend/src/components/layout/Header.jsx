@@ -3,11 +3,14 @@ import Button from '../ui/Button'
 import CreateWorkspaceModal from './CreateWorkspaceModal'
 import MemberAvatars from './MemberAvatars'
 import MembersPopover from './MembersPopover'
-import ShareWorkspaceModal from './ShareWorkspaceModal'
 import UserMenu from './UserMenu'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import { getFirstName, getInitials } from '../../lib/formatters'
+import {
+  getFirstName,
+  getInitials,
+  getWorkspaceRoleValue,
+} from '../../lib/formatters'
 import {
   listWorkspaceInvites,
   listWorkspaceMembers,
@@ -50,7 +53,7 @@ function getMembersError(error) {
 
 function getRoleUpdateError(error) {
   if (error?.status === 403) {
-    return 'Apenas Owner ou Admin podem alterar cargos de outros membros.'
+    return 'Apenas Dono ou Admin podem alterar cargos de outros membros.'
   }
 
   return error?.message ?? 'Não foi possível atualizar o cargo.'
@@ -59,7 +62,6 @@ function getRoleUpdateError(error) {
 function Header() {
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false)
   const [isMembersOpen, setIsMembersOpen] = useState(false)
-  const [isShareOpen, setIsShareOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [workspaceMembers, setWorkspaceMembers] = useState([])
   const [isMembersLoading, setIsMembersLoading] = useState(false)
@@ -73,9 +75,10 @@ function Header() {
   const { activeWorkspace, selectWorkspace, workspaces } = useWorkspace()
   const workspaceId = activeWorkspace?.id
   const activeWorkspaceIdRef = useRef(workspaceId)
+  const workspaceRole = getWorkspaceRoleValue(user, activeWorkspace)
   const currentMemberRole = workspaceMembers.find(
     (member) => member.user_id === user?.id,
-  )?.role
+  )?.role ?? workspaceRole
   const canManageRoles =
     activeWorkspace?.owner_id === user?.id ||
     currentMemberRole === 'owner' ||
@@ -199,7 +202,7 @@ function Header() {
   async function handleMemberRoleChange(memberId, role) {
     if (!canManageRoles) {
       setMembersError(
-        'Apenas Owner ou Admin podem alterar cargos de outros membros.',
+        'Apenas Dono ou Admin podem alterar cargos de outros membros.',
       )
       return
     }
@@ -276,10 +279,6 @@ function Header() {
           <span className="select-chevron" aria-hidden="true"></span>
         </div>
 
-        <label className="search-field">
-          <input type="search" placeholder="Buscar produtos, categorias ou membros" />
-        </label>
-
         <div className="topbar__actions">
           <Button
             className="topbar__create"
@@ -287,13 +286,6 @@ function Header() {
             onClick={() => setIsCreateWorkspaceOpen(true)}
           >
             Criar workspace
-          </Button>
-          <Button
-            className="topbar__share"
-            onClick={() => setIsShareOpen(true)}
-            variant="secondary"
-          >
-            Compartilhar
           </Button>
 
           <div className="topbar__members" ref={membersContainerRef}>
@@ -352,7 +344,6 @@ function Header() {
       {isCreateWorkspaceOpen ? (
         <CreateWorkspaceModal onClose={() => setIsCreateWorkspaceOpen(false)} />
       ) : null}
-      {isShareOpen ? <ShareWorkspaceModal onClose={() => setIsShareOpen(false)} /> : null}
     </>
   )
 }

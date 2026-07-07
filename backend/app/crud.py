@@ -100,6 +100,48 @@ def normalize_role(role):
     return str(role)
 
 
+def attach_current_user_role(
+    workspace: models.Workspace,
+    current_user: models.User,
+    db: Session,
+):
+    membership = (
+        db.query(models.WorkspaceMember)
+        .filter(models.WorkspaceMember.workspace_id == workspace.id)
+        .filter(models.WorkspaceMember.user_id == current_user.id)
+        .first()
+    )
+    workspace.current_user_role = membership.role if membership else None
+
+    return workspace
+
+
+def attach_current_user_roles(
+    workspaces: list[models.Workspace],
+    current_user: models.User,
+    db: Session,
+):
+    workspace_ids = [workspace.id for workspace in workspaces]
+
+    if not workspace_ids:
+        return workspaces
+
+    memberships = (
+        db.query(models.WorkspaceMember)
+        .filter(models.WorkspaceMember.workspace_id.in_(workspace_ids))
+        .filter(models.WorkspaceMember.user_id == current_user.id)
+        .all()
+    )
+    roles_by_workspace_id = {
+        membership.workspace_id: membership.role for membership in memberships
+    }
+
+    for workspace in workspaces:
+        workspace.current_user_role = roles_by_workspace_id.get(workspace.id)
+
+    return workspaces
+
+
 def paginate_query(query, page: int = 1, limit: int = 20):
     page = max(page, 1)
     limit = min(max(limit, 1), 100)
@@ -237,7 +279,9 @@ def list_user_workspaces(
         .order_by(models.Workspace.name.asc())
     )
 
-    return paginate_query(query, page, limit).all()
+    workspaces = paginate_query(query, page, limit).all()
+
+    return attach_current_user_roles(workspaces, current_user, db)
 
 
 def create_workspace(
@@ -272,7 +316,7 @@ def create_workspace(
     db.commit()
     db.refresh(workspace)
 
-    return workspace
+    return attach_current_user_role(workspace, current_user, db)
 
 
 def get_workspace_for_user(
@@ -282,7 +326,9 @@ def get_workspace_for_user(
 ):
     require_workspace_member(workspace_id, current_user, db)
 
-    return get_workspace_by_id(workspace_id, db)
+    workspace = get_workspace_by_id(workspace_id, db)
+
+    return attach_current_user_role(workspace, current_user, db)
 
 
 def update_workspace(
@@ -313,7 +359,7 @@ def update_workspace(
     db.commit()
     db.refresh(workspace)
 
-    return workspace
+    return attach_current_user_role(workspace, current_user, db)
 
 
 def list_workspace_members(

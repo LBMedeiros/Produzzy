@@ -110,6 +110,7 @@ class WorkspaceResponse(BaseModel):
     id: int
     name: str
     owner_id: int
+    current_user_role: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

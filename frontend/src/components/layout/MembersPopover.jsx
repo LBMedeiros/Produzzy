@@ -1,20 +1,14 @@
 import Badge from '../ui/Badge'
+import { formatWorkspaceRole } from '../../lib/formatters'
 
 const ROLE_OPTIONS = [
   { label: 'Admin', value: 'admin' },
-  { label: 'Employee', value: 'employee' },
-  { label: 'Viewer', value: 'viewer' },
+  { label: 'Funcionário', value: 'employee' },
+  { label: 'Visualizador', value: 'viewer' },
 ]
 
-const ROLE_LABELS = {
-  admin: 'Admin',
-  employee: 'Employee',
-  owner: 'Owner',
-  viewer: 'Viewer',
-}
-
-function formatRole(role) {
-  return ROLE_LABELS[role] ?? role
+function formatMembersCount(count) {
+  return `${count} ${count === 1 ? 'membro' : 'membros'}`
 }
 
 function MembersPopover({
@@ -32,7 +26,7 @@ function MembersPopover({
     <div className="members-popover" role="dialog" aria-label="Membros do workspace">
       <div className="members-popover__header">
         <strong>Equipe do workspace</strong>
-        <span>{members.length} membros</span>
+        <span>{formatMembersCount(members.length)}</span>
       </div>
       {error ? (
         <p className="members-popover__feedback members-popover__feedback--error">
@@ -75,7 +69,9 @@ function MembersPopover({
                   ))}
                 </select>
               ) : (
-                <span className="member-row__role">{formatRole(member.role)}</span>
+                <span className="member-row__role">
+                  {formatWorkspaceRole(member.role)}
+                </span>
               )}
               <Badge tone={member.status === 'Ativo' ? 'success' : 'warning'}>
                 {savingMemberId === member.id ? 'Salvando...' : member.status}

@@ -84,7 +84,7 @@ function formatAuditLog(log) {
     log.entity_type
 
   return {
-    detail: `Referência: ${detail}`,
+    detail: `Item relacionado: ${detail}`,
     id: log.id,
     time: formatDate(log.created_at),
     title,

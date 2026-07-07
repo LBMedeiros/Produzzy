@@ -2,6 +2,18 @@ export const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
 
 const TOKEN_STORAGE_KEY = 'produzzy_access_token'
 const unauthorizedHandlers = new Set()
+const USER_FACING_ERROR_MESSAGES = {
+  'An active product with this name already exists in this workspace.':
+    'Já existe um produto ativo com esse nome neste workspace.',
+  'Another active category with this name already exists in this workspace.':
+    'Já existe uma categoria ativa com esse nome neste workspace.',
+  'Another active product with this name already exists in this workspace.':
+    'Já existe outro produto ativo com esse nome neste workspace.',
+  'Cannot move stock for an inactive product.':
+    'Não é possível movimentar estoque de um produto inativo.',
+  'Restore the category before restoring this product.':
+    'Restaure a categoria antes de restaurar este produto.',
+}
 
 export class ApiError extends Error {
   constructor(message, { status = 0, data = null } = {}) {
@@ -53,23 +65,29 @@ async function readResponse(response) {
 }
 
 function getErrorMessage(data, fallback) {
+  function normalizeMessage(message) {
+    return USER_FACING_ERROR_MESSAGES[message] ?? message
+  }
+
   if (typeof data === 'string' && data.trim()) {
-    return data
+    return normalizeMessage(data)
   }
 
   if (Array.isArray(data?.detail)) {
-    return data.detail
+    const message = data.detail
       .map((item) => item?.msg)
       .filter(Boolean)
       .join(' ')
+
+    return normalizeMessage(message)
   }
 
   if (typeof data?.detail === 'string') {
-    return data.detail
+    return normalizeMessage(data.detail)
   }
 
   if (typeof data?.message === 'string') {
-    return data.message
+    return normalizeMessage(data.message)
   }
 
   return fallback

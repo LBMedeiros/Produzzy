@@ -3,20 +3,13 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
+import { formatWorkspaceRole, getWorkspaceRoleValue } from '../lib/formatters'
 import { listWorkspaceMembers } from '../services/workspaceService'
-
-const roleLabels = {
-  admin: 'Admin',
-  employee: 'Employee',
-  member: 'Membro',
-  owner: 'Owner',
-  viewer: 'Viewer',
-}
 
 const permissionsByRole = {
   owner: [
     'Gerenciar o workspace e suas configurações',
-    'Gerenciar membros e convites',
+    'Gerenciar membros do workspace',
     'Gerenciar produtos e categorias',
     'Movimentar o estoque',
     'Criar e acompanhar reposições',
@@ -60,7 +53,7 @@ function formatDate(value) {
 
 function getWorkspaceUpdateError(error) {
   if (error?.status === 403) {
-    return 'Apenas o Owner pode alterar o nome do workspace.'
+    return 'Apenas o Dono pode alterar o nome do workspace.'
   }
 
   if (error?.status === 0) {
@@ -161,7 +154,7 @@ function WorkspaceSettingsSection({
 
       {!canEditWorkspace && !isResolvingRole ? (
         <p className="settings-section__hint">
-          Apenas o Owner pode alterar o nome deste workspace.
+          Apenas o Dono pode alterar o nome deste workspace.
         </p>
       ) : null}
       {workspaceError ? (
@@ -203,10 +196,7 @@ function SettingsPage() {
     role: '',
     workspaceId: null,
   })
-  const knownRole =
-    activeWorkspace?.owner_id === user?.id
-      ? 'owner'
-      : activeWorkspace?.current_user_role ?? activeWorkspace?.role ?? ''
+  const knownRole = getWorkspaceRoleValue(user, activeWorkspace)
   const resolvedRoleForWorkspace =
     resolvedRole.workspaceId === activeWorkspace?.id ? resolvedRole.role : ''
   const workspaceRole = knownRole || resolvedRoleForWorkspace
@@ -253,7 +243,7 @@ function SettingsPage() {
 
   const roleLabel = isResolvingRole
     ? 'Verificando...'
-    : roleLabels[workspaceRole] ?? 'Membro'
+    : formatWorkspaceRole(workspaceRole)
   const permissions = useMemo(
     () => permissionsByRole[workspaceRole] ?? permissionsByRole.member,
     [workspaceRole],
@@ -341,14 +331,14 @@ function SettingsPage() {
           eyebrow="Experiência"
         >
           <p className="settings-section__description">
-            Padrões atuais da interface. Novas opções serão disponibilizadas
-            gradualmente.
+            Padrões atuais da interface. Novas opções serão liberadas com
+            confirmação antes de qualquer mudança no workspace.
           </p>
           <div className="settings-preferences">
             <div className="settings-preference">
               <div>
                 <strong>Tema da interface</strong>
-                <span>Tema escuro planejado para uma versão futura.</span>
+                <span>O tema escuro será liberado em uma versão futura.</span>
               </div>
               <span className="settings-preference__value">Claro</span>
             </div>
@@ -382,7 +372,8 @@ function SettingsPage() {
             <div>
               <h3>Excluir workspace</h3>
               <p>
-                A exclusão de workspace ainda não está disponível nesta versão.
+                Exclusão de workspace estará disponível em uma versão futura
+                com confirmação de segurança.
               </p>
             </div>
             <Button disabled variant="secondary">

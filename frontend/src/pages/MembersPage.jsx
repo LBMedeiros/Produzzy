@@ -1,6 +1,23 @@
-import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
-import { roleDescriptions } from '../data/mockData'
+
+const roleDescriptions = [
+  {
+    description: 'Controle total do workspace, membros, produtos e configurações.',
+    role: 'Dono',
+  },
+  {
+    description: 'Gerencia produtos, estoque, categorias e operação da equipe.',
+    role: 'Admin',
+  },
+  {
+    description: 'Consulta dados e registra movimentações de estoque permitidas.',
+    role: 'Funcionário',
+  },
+  {
+    description: 'Acompanha indicadores e dados sem alterar informações.',
+    role: 'Visualizador',
+  },
+]
 
 function MembersPage() {
   return (
@@ -10,13 +27,12 @@ function MembersPage() {
           <h1>Equipe</h1>
           <p>Membros do workspace e permissões operacionais</p>
         </div>
-        <Button icon="+">Convidar membro</Button>
       </div>
 
       <section className="content-grid content-grid--members">
         <Card title="Membros" eyebrow="Workspace">
           <div className="stock-empty">
-            <h2>Equipe conectada à API</h2>
+            <h2>Equipe do workspace</h2>
             <p>Consulte os membros pelo menu de equipe no topo da aplicação.</p>
           </div>
         </Card>
