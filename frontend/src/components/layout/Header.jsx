@@ -3,6 +3,7 @@ import Button from '../ui/Button'
 import CreateWorkspaceModal from './CreateWorkspaceModal'
 import MemberAvatars from './MemberAvatars'
 import MembersPopover from './MembersPopover'
+import ShareWorkspaceModal from './ShareWorkspaceModal'
 import UserMenu from './UserMenu'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
@@ -62,6 +63,7 @@ function getRoleUpdateError(error) {
 function Header() {
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false)
   const [isMembersOpen, setIsMembersOpen] = useState(false)
+  const [isShareOpen, setIsShareOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [workspaceMembers, setWorkspaceMembers] = useState([])
   const [isMembersLoading, setIsMembersLoading] = useState(false)
@@ -279,6 +281,18 @@ function Header() {
           <span className="select-chevron" aria-hidden="true"></span>
         </div>
 
+        <label
+          className="search-field search-field--disabled"
+          title="Busca global estará disponível em breve."
+        >
+          <input
+            aria-label="Busca global em breve"
+            disabled
+            placeholder="Busca global em breve"
+            type="search"
+          />
+        </label>
+
         <div className="topbar__actions">
           <Button
             className="topbar__create"
@@ -287,6 +301,20 @@ function Header() {
           >
             Criar workspace
           </Button>
+
+          {canManageRoles ? (
+            <Button
+              className="topbar__share"
+              onClick={() => {
+                setIsShareOpen(true)
+                setIsMembersOpen(false)
+                setIsUserMenuOpen(false)
+              }}
+              variant="secondary"
+            >
+              Compartilhar
+            </Button>
+          ) : null}
 
           <div className="topbar__members" ref={membersContainerRef}>
             <MemberAvatars
@@ -344,6 +372,7 @@ function Header() {
       {isCreateWorkspaceOpen ? (
         <CreateWorkspaceModal onClose={() => setIsCreateWorkspaceOpen(false)} />
       ) : null}
+      {isShareOpen ? <ShareWorkspaceModal onClose={() => setIsShareOpen(false)} /> : null}
     </>
   )
 }

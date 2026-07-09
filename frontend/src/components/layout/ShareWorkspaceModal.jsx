@@ -9,8 +9,8 @@ function ShareWorkspaceModal({ onClose }) {
       <section className="workspace-modal" role="dialog" aria-modal="true">
         <div className="workspace-modal__header">
           <div>
-            <span>Compartilhamento</span>
-            <h2>{activeWorkspace?.name ?? 'Workspace'}</h2>
+            <span>Recurso futuro</span>
+            <h2>Compartilhar workspace</h2>
           </div>
           <button
             aria-label="Fechar modal"
@@ -22,10 +22,19 @@ function ShareWorkspaceModal({ onClose }) {
           </button>
         </div>
         <p className="workspace-modal__text">
-          O compartilhamento deste workspace ainda não está disponível.
+          Em breve você poderá convidar membros para colaborar neste workspace.
         </p>
+        <p className="workspace-modal__text">
+          Convites por email e permissões de acesso serão adicionados em uma
+          próxima etapa.
+        </p>
+        {activeWorkspace?.name ? (
+          <p className="workspace-modal__text">
+            Workspace atual: {activeWorkspace.name}
+          </p>
+        ) : null}
         <div className="workspace-form__actions">
-          <Button onClick={onClose}>Fechar</Button>
+          <Button onClick={onClose}>Entendi</Button>
         </div>
       </section>
     </div>

@@ -549,6 +549,10 @@ a {
   min-height: 42px;
 }
 
+.search-field--disabled {
+  background: #f8fafc;
+}
+
 .search-field input,
 .settings-list input,
 .settings-list select,
@@ -559,6 +563,10 @@ a {
   color: var(--text);
   background: transparent;
   outline: none;
+}
+
+.search-field input:disabled {
+  cursor: not-allowed;
 }
 
 .search-field input::placeholder,
