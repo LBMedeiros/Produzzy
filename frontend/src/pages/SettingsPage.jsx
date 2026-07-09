@@ -372,12 +372,13 @@ function SettingsPage() {
             <div>
               <h3>Excluir workspace</h3>
               <p>
-                Exclusão de workspace estará disponível em uma versão futura
-                com confirmação de segurança.
+                A exclusão de workspace ainda não está disponível. Nenhuma
+                informação será apagada por enquanto; quando esse recurso for
+                liberado, haverá confirmação de segurança antes de qualquer ação.
               </p>
             </div>
             <Button disabled variant="secondary">
-              Excluir workspace
+              Exclusão em breve
             </Button>
           </div>
         </Card>
