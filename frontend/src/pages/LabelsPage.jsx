@@ -389,7 +389,7 @@ function LabelsPage() {
           <p>Combine a marca, o QR Code e o código de barras do produto.</p>
         </Card>
         <Card title="Impressão em lote" eyebrow="Para impressão">
-          <p>Organize vários itens em uma folha para economizar papel.</p>
+          <p>Organize vários itens em um arquivo pronto para impressão.</p>
         </Card>
         <Card title="Produto selecionado" eyebrow="Catálogo">
           <p>{selectedProduct ? selectedProduct.name : 'Selecione um produto.'}</p>
@@ -401,7 +401,7 @@ function LabelsPage() {
         </Card>
       </section>
 
-      <Card title="Impressão em lote" eyebrow="Folhas para impressão">
+      <Card title="Impressão em lote" eyebrow="Para impressão">
         <p className="batch-printing__intro">
           Escolha entre QR Codes identificados ou etiquetas completas para os
           produtos ativos do workspace.
@@ -411,7 +411,7 @@ function LabelsPage() {
             <div>
               <h3>QR Codes para impressão</h3>
               <p>
-                Gere uma folha com QR Codes identificados pelo nome do produto.
+                Gere um arquivo com QR Codes identificados pelo nome do produto.
               </p>
             </div>
             <Button
@@ -426,7 +426,7 @@ function LabelsPage() {
             <div>
               <h3>Etiquetas para impressão</h3>
               <p>
-                Gere uma folha com etiquetas completas, QR Code e código de
+                Gere um arquivo com etiquetas completas, QR Code e código de
                 barras.
               </p>
             </div>

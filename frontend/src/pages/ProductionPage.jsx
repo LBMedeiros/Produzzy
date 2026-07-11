@@ -28,7 +28,7 @@ const requestStatus = {
   canceled: { label: 'Cancelada', tone: 'danger' },
   completed: { label: 'Pronto para estocar', tone: 'success' },
   in_progress: { label: 'Em andamento', tone: 'warning' },
-  open: { label: 'Necessário repor', tone: 'neutral' },
+  open: { label: 'Necessário repor', tone: 'replenishment-open' },
   stocked: { label: 'Estocado', tone: 'success' },
 }
 
@@ -326,12 +326,14 @@ function ProductionPage({ onNavigate }) {
                       className="replenishment-request-card replenishment-request-card--suggestion"
                       key={`product-${product.id}`}
                     >
-                      <div className="replenishment-request-card__header">
+                      <div className="replenishment-request-card__header replenishment-request-card__header--open">
                         <div>
                           <span>{product.category}</span>
                           <h3>{product.name}</h3>
                         </div>
-                        <Badge tone="warning">Necessário repor</Badge>
+                        <Badge tone="replenishment-open">
+                          Necessário repor
+                        </Badge>
                       </div>
 
                       <div className="replenishment-request-card__details replenishment-request-card__details--stock">
@@ -375,18 +377,33 @@ function ProductionPage({ onNavigate }) {
                     className="replenishment-request-card"
                     key={requestItem.id}
                   >
-                    <div className="replenishment-request-card__header">
-                      <div>
-                        <span>{requestItem.product_category}</span>
-                        <h3>{requestItem.product_name}</h3>
+                    {requestItem.status === 'open' ? (
+                      <div className="replenishment-request-card__header replenishment-request-card__header--open">
+                        <div>
+                          <span>{requestItem.product_category}</span>
+                          <h3>{requestItem.product_name}</h3>
+                        </div>
+                        <div className="replenishment-request-card__badges replenishment-request-card__badges--open">
+                          <Badge tone="neutral">
+                            {requestTypeLabels[requestItem.type]}
+                          </Badge>
+                          <Badge tone={status.tone}>{status.label}</Badge>
+                        </div>
                       </div>
-                      <div className="replenishment-request-card__badges">
-                        <Badge tone="neutral">
-                          {requestTypeLabels[requestItem.type]}
-                        </Badge>
-                        <Badge tone={status.tone}>{status.label}</Badge>
+                    ) : (
+                      <div className="replenishment-request-card__header">
+                        <div>
+                          <span>{requestItem.product_category}</span>
+                          <h3>{requestItem.product_name}</h3>
+                        </div>
+                        <div className="replenishment-request-card__badges">
+                          <Badge tone="neutral">
+                            {requestTypeLabels[requestItem.type]}
+                          </Badge>
+                          <Badge tone={status.tone}>{status.label}</Badge>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="replenishment-request-card__details">
                       <div>
