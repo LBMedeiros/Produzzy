@@ -252,6 +252,7 @@ a {
   color: #92400e;
 }
 
+
 .replenishment-request-card__header .badge--replenishment-open {
   align-self: center;
   color: #92400e;
@@ -2633,7 +2634,7 @@ a {
 .replenishment-request-card__header span,
 .replenishment-request-card__details span,
 .replenishment-request-card__assignees > div > span {
-  display: block;
+  display: flex;
   color: var(--muted);
   font-size: 12px;
   font-weight: 750;
