@@ -1001,10 +1001,6 @@ a {
   grid-template-columns: 320px minmax(0, 1fr);
 }
 
-.content-grid--members {
-  grid-template-columns: minmax(0, 1fr) 360px;
-}
-
 .feature-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1025,7 +1021,6 @@ a {
 
 .label-preview,
 .audit-list,
-.role-list,
 .settings-list,
 .security-note {
   display: grid;
@@ -1145,7 +1140,6 @@ a {
 }
 
 .audit-list span,
-.role-list__item,
 .security-note {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2148,16 +2142,6 @@ a {
   width: 138px;
   height: 138px;
   border-width: 10px;
-}
-
-.role-list__item strong {
-  color: var(--text);
-}
-
-.role-list__item p {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 14px;
 }
 
 .settings-grid {
@@ -3503,7 +3487,6 @@ a {
 
   .content-grid--two,
   .content-grid--label,
-  .content-grid--members,
   .feature-grid,
   .feature-grid--three,
   .feature-grid--four,
