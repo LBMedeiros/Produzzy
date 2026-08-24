@@ -128,24 +128,30 @@ function ProductionPage({
       return undefined
     }
 
-    setRequestFilter(navigationIntent.status ?? 'open')
-
+    let scrollTimeoutId
     const timeoutId = window.setTimeout(() => {
-      const target = document.getElementById(
-        `replenishment-request-${navigationIntent.requestId}`,
-      )
-      const prefersReducedMotion = window.matchMedia(
-        '(prefers-reduced-motion: reduce)',
-      ).matches
+      setRequestFilter(navigationIntent.status ?? 'open')
 
-      target?.scrollIntoView({
-        block: 'center',
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-      })
-      onNavigationIntentHandled?.()
+      scrollTimeoutId = window.setTimeout(() => {
+        const target = document.getElementById(
+          `replenishment-request-${navigationIntent.requestId}`,
+        )
+        const prefersReducedMotion = window.matchMedia(
+          '(prefers-reduced-motion: reduce)',
+        ).matches
+
+        target?.scrollIntoView({
+          block: 'center',
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        })
+        onNavigationIntentHandled?.()
+      }, 0)
     }, 0)
 
-    return () => window.clearTimeout(timeoutId)
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.clearTimeout(scrollTimeoutId)
+    }
   }, [navigationIntent, onNavigationIntentHandled, workspaceId])
 
   const displayRequests = useMemo(() => {

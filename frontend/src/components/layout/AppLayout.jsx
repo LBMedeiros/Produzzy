@@ -55,8 +55,8 @@ function AppLayout({ children, activePage, onNavigate }) {
     }
   }, [isSidebarDrawerOpen])
 
-  function handleNavigate(page) {
-    onNavigate(page)
+  function handleNavigate(page, intent = null) {
+    onNavigate(page, intent)
 
     if (isIntermediateViewport) {
       setIsSidebarCollapsed(true)

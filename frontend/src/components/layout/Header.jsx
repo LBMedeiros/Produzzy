@@ -305,6 +305,10 @@ function Header({ onNavigate }) {
       }, []),
     [flatSearchResults],
   )
+  const boundedActiveSearchIndex = flatSearchResults.length
+    ? Math.min(activeSearchIndex, flatSearchResults.length - 1)
+    : 0
+  const activeSearchResult = flatSearchResults[boundedActiveSearchIndex]
 
   const loadMembers = useCallback(async () => {
     if (!workspaceId) {
@@ -364,30 +368,35 @@ function Header({ onNavigate }) {
   }, [loadMembers])
 
   useEffect(() => {
-    setSearchTerm('')
-    setSearchResults(EMPTY_SEARCH_RESULTS)
-    setSearchError('')
-    setIsSearchLoading(false)
-    closeSearchPanel()
-    closeWorkspaceMenu()
+    const timeoutId = window.setTimeout(() => {
+      setSearchTerm('')
+      setSearchResults(EMPTY_SEARCH_RESULTS)
+      setSearchError('')
+      setIsSearchLoading(false)
+      closeSearchPanel()
+      closeWorkspaceMenu()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [closeSearchPanel, closeWorkspaceMenu, workspaceId])
 
   useEffect(() => {
     const requestId = searchRequestIdRef.current + 1
     searchRequestIdRef.current = requestId
-    setActiveSearchIndex(0)
-
-    if (!workspaceId || !canSearch) {
-      setSearchResults(EMPTY_SEARCH_RESULTS)
-      setSearchError('')
-      setIsSearchLoading(false)
-      return undefined
-    }
-
-    setIsSearchLoading(true)
-    setSearchError('')
 
     const timeoutId = window.setTimeout(async () => {
+      setActiveSearchIndex(0)
+
+      if (!workspaceId || !canSearch) {
+        setSearchResults(EMPTY_SEARCH_RESULTS)
+        setSearchError('')
+        setIsSearchLoading(false)
+        return
+      }
+
+      setIsSearchLoading(true)
+      setSearchError('')
+
       try {
         const data = await searchWorkspace(workspaceId, searchQuery)
 
@@ -407,16 +416,10 @@ function Header({ onNavigate }) {
           setIsSearchLoading(false)
         }
       }
-    }, GLOBAL_SEARCH_DEBOUNCE_MS)
+    }, canSearch ? GLOBAL_SEARCH_DEBOUNCE_MS : 0)
 
     return () => window.clearTimeout(timeoutId)
   }, [canSearch, searchQuery, workspaceId])
-
-  useEffect(() => {
-    if (activeSearchIndex > flatSearchResults.length - 1) {
-      setActiveSearchIndex(0)
-    }
-  }, [activeSearchIndex, flatSearchResults.length])
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -771,7 +774,7 @@ function Header({ onNavigate }) {
 
     if (event.key === 'Enter' && isSearchOpen) {
       event.preventDefault()
-      handleSearchResultSelect(flatSearchResults[activeSearchIndex])
+      handleSearchResultSelect(activeSearchResult)
     }
   }
 
@@ -846,8 +849,8 @@ function Header({ onNavigate }) {
         >
           <input
             aria-activedescendant={
-              isSearchOpen && flatSearchResults[activeSearchIndex]
-                ? flatSearchResults[activeSearchIndex].id
+              isSearchOpen && activeSearchResult
+                ? activeSearchResult.id
                 : undefined
             }
             aria-controls="global-search-results"
@@ -895,11 +898,9 @@ function Header({ onNavigate }) {
                       <span>{group.name}</span>
                       {group.items.map((item) => (
                         <button
-                          aria-selected={
-                            flatSearchResults[activeSearchIndex]?.id === item.id
-                          }
+                          aria-selected={activeSearchResult?.id === item.id}
                           className={
-                            flatSearchResults[activeSearchIndex]?.id === item.id
+                            activeSearchResult?.id === item.id
                               ? 'is-active'
                               : ''
                           }
@@ -908,13 +909,15 @@ function Header({ onNavigate }) {
                           role="option"
                           type="button"
                           onClick={() => handleSearchResultSelect(item)}
-                          onMouseEnter={() =>
-                            setActiveSearchIndex(
-                              flatSearchResults.findIndex(
-                                (result) => result.id === item.id,
-                              ),
+                          onMouseEnter={() => {
+                            const nextIndex = flatSearchResults.findIndex(
+                              (result) => result.id === item.id,
                             )
-                          }
+
+                            if (nextIndex >= 0) {
+                              setActiveSearchIndex(nextIndex)
+                            }
+                          }}
                         >
                           <strong>{item.label}</strong>
                           <small>{item.description}</small>
