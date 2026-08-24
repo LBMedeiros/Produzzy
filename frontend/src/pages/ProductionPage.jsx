@@ -10,7 +10,7 @@ import {
   getReplenishmentQuantity,
   needsReplenishment,
 } from '../lib/replenishment'
-import { listLowStockProducts } from '../services/productService'
+import { listProducts } from '../services/productService'
 import {
   assignReplenishmentToMe,
   createReplenishment,
@@ -69,7 +69,11 @@ function formatDate(value) {
   }).format(new Date(value))
 }
 
-function ProductionPage({ onNavigate }) {
+function ProductionPage({
+  navigationIntent,
+  onNavigate,
+  onNavigationIntentHandled,
+}) {
   const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
@@ -93,11 +97,11 @@ function ProductionPage({ onNavigate }) {
     setError('')
 
     try {
-      const [lowStockItems, requestItems] = await Promise.all([
-        listLowStockProducts(workspaceId),
+      const [activeProducts, requestItems] = await Promise.all([
+        listProducts(workspaceId, { limit: 100, status: 'active' }),
         listReplenishments(workspaceId, { limit: 100, status: 'all' }),
       ])
-      setProducts(lowStockItems.filter(needsReplenishment))
+      setProducts(activeProducts.filter(needsReplenishment))
       setRequests(requestItems)
     } catch (loadError) {
       setProducts([])
@@ -115,6 +119,34 @@ function ProductionPage({ onNavigate }) {
 
     return () => window.clearTimeout(timeoutId)
   }, [loadReplenishment])
+
+  useEffect(() => {
+    if (
+      navigationIntent?.type !== 'replenishment-focus' ||
+      navigationIntent.workspaceId !== workspaceId
+    ) {
+      return undefined
+    }
+
+    setRequestFilter(navigationIntent.status ?? 'open')
+
+    const timeoutId = window.setTimeout(() => {
+      const target = document.getElementById(
+        `replenishment-request-${navigationIntent.requestId}`,
+      )
+      const prefersReducedMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches
+
+      target?.scrollIntoView({
+        block: 'center',
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      })
+      onNavigationIntentHandled?.()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [navigationIntent, onNavigationIntentHandled, workspaceId])
 
   const displayRequests = useMemo(() => {
     const seenActiveProductIds = new Set()
@@ -318,14 +350,15 @@ function ProductionPage({ onNavigate }) {
             ))}
           </div>
 
-          {visibleItemCount ? (
-            <div className="replenishment-request-grid">
-              {requestFilter === 'open'
-                ? lowStockProductsWithoutActiveRequest.map((product) => (
-                    <article
-                      className="replenishment-request-card replenishment-request-card--suggestion"
-                      key={`product-${product.id}`}
-                    >
+          <div className="replenishment-status-content" key={requestFilter}>
+            {visibleItemCount ? (
+              <div className="replenishment-request-grid">
+                {requestFilter === 'open'
+                  ? lowStockProductsWithoutActiveRequest.map((product) => (
+                      <article
+                        className="replenishment-request-card replenishment-request-card--suggestion"
+                        key={`product-${product.id}`}
+                      >
                       <div className="replenishment-request-card__header replenishment-request-card__header--open">
                         <div>
                           <span>{product.category}</span>
@@ -360,23 +393,24 @@ function ProductionPage({ onNavigate }) {
                           Repor
                         </Button>
                       </div>
-                    </article>
-                  ))
-                : null}
-              {filteredRequests.map((requestItem) => {
-                const status =
-                  requestStatus[requestItem.status] ?? requestStatus.open
-                const assignees = requestItem.assignees ?? []
-                const isCurrentUserAssigned = assignees.some(
-                  (assignee) => assignee.id === user?.id,
-                )
-                const isUpdating = updatingRequestId === requestItem.id
+                      </article>
+                    ))
+                  : null}
+                {filteredRequests.map((requestItem) => {
+                  const status =
+                    requestStatus[requestItem.status] ?? requestStatus.open
+                  const assignees = requestItem.assignees ?? []
+                  const isCurrentUserAssigned = assignees.some(
+                    (assignee) => assignee.id === user?.id,
+                  )
+                  const isUpdating = updatingRequestId === requestItem.id
 
-                return (
-                  <article
-                    className="replenishment-request-card"
-                    key={requestItem.id}
-                  >
+                  return (
+                    <article
+                      className="replenishment-request-card"
+                      id={`replenishment-request-${requestItem.id}`}
+                      key={requestItem.id}
+                    >
                     {requestItem.status === 'open' ? (
                       <div className="replenishment-request-card__header replenishment-request-card__header--open">
                         <div>
@@ -523,18 +557,19 @@ function ProductionPage({ onNavigate }) {
                         </p>
                       ) : null}
                     </div>
-                  </article>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="stock-empty">
-              <h2>Nenhuma necessidade neste status.</h2>
-              <p>
-                Use as etapas acima para acompanhar o quadro de reposição.
-              </p>
-            </div>
-          )}
+                    </article>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="stock-empty">
+                <h2>Nenhuma necessidade neste status.</h2>
+                <p>
+                  Use as etapas acima para acompanhar o quadro de reposição.
+                </p>
+              </div>
+            )}
+          </div>
         </Card>
       )}
 

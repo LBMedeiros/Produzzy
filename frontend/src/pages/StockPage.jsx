@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import ActionMenu from '../components/ui/ActionMenu'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
+import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
+import { getWorkspaceRoleValue } from '../lib/formatters'
 import {
   createCategory,
   deleteCategory,
@@ -69,6 +72,8 @@ const MOVEMENT_TONES = {
 
 const MOVEMENTS_PAGE_LIMIT = 20
 const WORKSPACE_MOVEMENTS_PAGE_LIMIT = 20
+const PRODUCT_WRITE_ROLES = new Set(['owner', 'admin'])
+const STOCK_WRITE_ROLES = new Set(['owner', 'admin', 'employee'])
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -91,7 +96,7 @@ function getProductStatus(product) {
     return { label: 'Sem estoque', tone: 'danger' }
   }
 
-  if (product.quantity <= product.minimum_quantity) {
+  if (product.quantity < product.minimum_quantity) {
     return { label: 'Baixo estoque', tone: 'warning' }
   }
 
@@ -109,6 +114,80 @@ function formatDate(value) {
     minute: '2-digit',
     month: '2-digit',
   }).format(new Date(value))
+}
+
+function formatCompactDateTime(value) {
+  if (!value) {
+    return 'Sem data'
+  }
+
+  const date = new Date(value)
+  const today = new Date()
+  const isToday = date.toDateString() === today.toDateString()
+  const time = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+
+  if (isToday) {
+    return `Hoje, ${time}`
+  }
+
+  const day = new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(date)
+
+  return `${day}, ${time}`
+}
+
+function getMovementActorName(movement) {
+  return (
+    movement?.user_name ??
+    movement?.user_email ??
+    (movement?.source === 'system' ? 'Sistema' : 'Usuário não registrado')
+  )
+}
+
+function formatMovementQuantity(movement) {
+  if (!movement) {
+    return '0'
+  }
+
+  if (movement.movement_type === 'entrada') {
+    return `+${movement.quantity}`
+  }
+
+  if (movement.movement_type === 'saida') {
+    return `-${movement.quantity}`
+  }
+
+  const difference = movement.quantity_after - movement.quantity_before
+
+  if (difference > 0) {
+    return `+${difference}`
+  }
+
+  return String(difference)
+}
+
+function formatMovementSummary(movement) {
+  const movementLabel =
+    MOVEMENT_LABELS[movement.movement_type] ?? movement.movement_type
+
+  return `${movementLabel} de ${movement.quantity} · ${formatCompactDateTime(
+    movement.created_at,
+  )}`
+}
+
+function indexLatestMovementsByProduct(movements) {
+  return movements.reduce((latestMovements, movement) => {
+    if (!latestMovements[movement.product_id]) {
+      latestMovements[movement.product_id] = movement
+    }
+
+    return latestMovements
+  }, {})
 }
 
 function formatLinkedProducts(count) {
@@ -171,8 +250,12 @@ function normalizeProductForm(product, categories) {
 }
 
 function StockPage({ navigationIntent, onNavigationIntentHandled }) {
+  const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
+  const currentRole = getWorkspaceRoleValue(user, activeWorkspace)
+  const canWriteProduct = PRODUCT_WRITE_ROLES.has(currentRole)
+  const canMoveStock = STOCK_WRITE_ROLES.has(currentRole)
 
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
@@ -184,6 +267,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [actionProductId, setActionProductId] = useState(null)
+  const [latestMovementsByProductId, setLatestMovementsByProductId] = useState({})
   const [readyReplenishments, setReadyReplenishments] = useState([])
   const [replenishmentProduct, setReplenishmentProduct] = useState(null)
   const [replenishmentError, setReplenishmentError] = useState('')
@@ -308,6 +392,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
       if (activeFilter === 'history') {
         setProducts([])
+        setLatestMovementsByProductId({})
         await loadWorkspaceHistory({ page: 1 })
         return
       }
@@ -318,16 +403,28 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           : listProducts(workspaceId, {
               status: activeFilter === 'deleted' ? 'deleted' : 'active',
             })
-      const productItems = await productRequest
+      const [productItems, recentMovementItems] = await Promise.all([
+        productRequest,
+        listWorkspaceStockMovements(workspaceId, {
+          limit: 100,
+          page: 1,
+        }),
+      ])
       const nextProducts =
-        activeFilter === 'empty'
-          ? productItems.filter((product) => product.quantity === 0)
-          : productItems
+        activeFilter === 'low-stock'
+          ? productItems.filter((product) => product.quantity > 0)
+          : activeFilter === 'empty'
+            ? productItems.filter((product) => product.quantity === 0)
+            : productItems
 
       setProducts(nextProducts)
+      setLatestMovementsByProductId(
+        indexLatestMovementsByProduct(recentMovementItems),
+      )
     } catch (loadError) {
       setError(getFriendlyError(loadError))
       setReadyReplenishments([])
+      setLatestMovementsByProductId({})
     } finally {
       setIsLoading(false)
     }
@@ -528,6 +625,33 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
     return () => window.clearTimeout(timeoutId)
   }, [navigationIntent, onNavigationIntentHandled, workspaceId])
+
+  useEffect(() => {
+    if (
+      navigationIntent?.type !== 'product-detail' ||
+      navigationIntent.workspaceId !== workspaceId ||
+      !navigationIntent.productId
+    ) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setActiveFilter('active')
+      setCategoryFilter('all')
+      setSearchTerm('')
+      await loadProductDetail(navigationIntent.productId, {
+        includeDeleted: false,
+      })
+      onNavigationIntentHandled?.()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    loadProductDetail,
+    navigationIntent,
+    onNavigationIntentHandled,
+    workspaceId,
+  ])
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase()
@@ -1159,39 +1283,235 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     }
   }
 
+  function shouldShowReplenishmentAction(product) {
+    return Boolean(
+      canMoveStock &&
+        product.is_active &&
+        product.quantity < product.minimum_quantity,
+    )
+  }
+
+  function handleSecondaryProductAction(product, action) {
+    if (action === 'movement') {
+      openMovementModal(product)
+    }
+
+    if (action === 'replenish') {
+      openReplenishmentModal(product)
+    }
+
+    if (action === 'edit') {
+      openEditProduct(product)
+    }
+
+    if (action === 'history') {
+      loadProductDetail(product)
+    }
+
+    if (action === 'delete') {
+      handleDeleteProduct(product)
+    }
+
+    if (action === 'restore') {
+      handleRestoreProduct(product)
+    }
+  }
+
+  function renderProductName(product, options = {}) {
+    return (
+      <button
+        className="product-cell product-cell--button"
+        type="button"
+        onClick={() => loadProductDetail(product, options)}
+      >
+        <strong>{product.name}</strong>
+        <span>ID {product.id}</span>
+      </button>
+    )
+  }
+
+  function renderCompactProductName(product, options = {}) {
+    return (
+      <button
+        className="product-cell product-cell--button product-cell--compact"
+        type="button"
+        onClick={() => loadProductDetail(product, options)}
+      >
+        <strong>{product.name}</strong>
+        <span>{product.category} · ID {product.id}</span>
+      </button>
+    )
+  }
+
+  function renderLatestMovement(product) {
+    const movement = latestMovementsByProductId[product.id]
+
+    if (!movement) {
+      return <span className="last-movement-cell__empty">Sem movimentação</span>
+    }
+
+    return (
+      <div className="last-movement-cell">
+        <strong>{getMovementActorName(movement)}</strong>
+        <span>{formatMovementSummary(movement)}</span>
+      </div>
+    )
+  }
+
+  function getActiveProductActionItems(product) {
+    return [
+      canMoveStock
+        ? {
+            id: 'movement',
+            label: 'Movimentar estoque',
+            onClick: () => handleSecondaryProductAction(product, 'movement'),
+          }
+        : null,
+      shouldShowReplenishmentAction(product)
+        ? {
+            id: 'replenish',
+            label: 'Repor estoque',
+            onClick: () => handleSecondaryProductAction(product, 'replenish'),
+          }
+        : null,
+      canWriteProduct
+        ? {
+            id: 'edit',
+            label: 'Editar produto',
+            onClick: () => handleSecondaryProductAction(product, 'edit'),
+          }
+        : null,
+      {
+        id: 'history',
+        label: 'Ver histórico',
+        onClick: () => handleSecondaryProductAction(product, 'history'),
+      },
+      canWriteProduct
+        ? {
+            destructive: true,
+            disabled: actionProductId === product.id,
+            id: 'delete',
+            label: 'Remover produto',
+            onClick: () => handleSecondaryProductAction(product, 'delete'),
+            separatorBefore: true,
+          }
+        : null,
+    ]
+  }
+
+  function renderActiveProductActions(product) {
+    return (
+      <div className="stock-product-actions">
+        <ActionMenu
+          items={getActiveProductActionItems(product)}
+          label={`Ações de ${product.name}`}
+        />
+      </div>
+    )
+  }
+
+  function renderDeletedProductActions(product) {
+    return (
+      <div className="stock-product-actions">
+        <ActionMenu
+          items={[
+            {
+              id: 'history',
+              label: 'Ver histórico',
+              onClick: () => handleSecondaryProductAction(product, 'history'),
+            },
+            canWriteProduct
+              ? {
+                  disabled: actionProductId === product.id,
+                  id: 'restore',
+                  label: 'Restaurar produto',
+                  onClick: () => handleSecondaryProductAction(product, 'restore'),
+                }
+              : null,
+          ]}
+          label={`Ações de ${product.name}`}
+        />
+      </div>
+    )
+  }
+
+  function renderProductCard(product) {
+    const status = getProductStatus(product)
+
+    return (
+      <article className="stock-product-card" key={product.id}>
+        <div className="stock-product-card__header">
+          <div>
+            {renderProductName(product, {
+              includeDeleted: activeFilter === 'deleted',
+            })}
+            <span>{product.category}</span>
+          </div>
+          <Badge tone={status.tone}>{status.label}</Badge>
+        </div>
+
+        <div className="stock-product-card__metrics">
+          <div>
+            <span>Quantidade atual</span>
+            <strong>{product.quantity}</strong>
+          </div>
+          <div>
+            <span>Mínimo</span>
+            <strong>{product.minimum_quantity}</strong>
+          </div>
+        </div>
+
+        <div className="stock-product-card__movement">
+          <span>Último movimento</span>
+          {renderLatestMovement(product)}
+        </div>
+
+        <div className="stock-product-card__actions">
+          {activeFilter === 'deleted'
+            ? renderDeletedProductActions(product)
+            : renderActiveProductActions(product)}
+        </div>
+      </article>
+    )
+  }
+
   const historyColumns = [
-    {
-      key: 'created_at',
-      label: 'Data',
-      render: (movement) => formatDate(movement.created_at),
-    },
     {
       key: 'product_name',
       label: 'Produto',
       render: (movement) => (
         <div className="product-cell">
           <strong>{movement.product_name ?? `Produto #${movement.product_id}`}</strong>
-          <span>ID {movement.product_id}</span>
+          <span>{formatCompactDateTime(movement.created_at)}</span>
         </div>
       ),
     },
     {
       key: 'movement_type',
-      label: 'Tipo',
+      label: 'Movimento',
       render: (movement) => (
-        <Badge tone={MOVEMENT_TONES[movement.movement_type] ?? 'neutral'}>
-          {MOVEMENT_LABELS[movement.movement_type] ?? movement.movement_type}
-        </Badge>
+        <div className="movement-summary-cell">
+          <Badge tone={MOVEMENT_TONES[movement.movement_type] ?? 'neutral'}>
+            {MOVEMENT_LABELS[movement.movement_type] ?? movement.movement_type}
+          </Badge>
+          <strong>{formatMovementQuantity(movement)} unidades</strong>
+          <span>
+            {movement.quantity_before} → {movement.quantity_after}
+          </span>
+        </div>
       ),
     },
-    { key: 'quantity', label: 'Quantidade' },
-    { key: 'quantity_before', label: 'Antes' },
-    { key: 'quantity_after', label: 'Depois' },
     {
       key: 'user',
-      label: 'Usuário',
-      render: (movement) =>
-        movement.user_name ?? movement.user_email ?? 'Usuário não informado',
+      label: 'Realizado por',
+      render: (movement) => (
+        <div className="movement-user-cell">
+          <strong>{getMovementActorName(movement)}</strong>
+          {movement.user_email && movement.user_name ? (
+            <span>{movement.user_email}</span>
+          ) : null}
+        </div>
+      ),
     },
     {
       key: 'reason',
@@ -1200,16 +1520,61 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     },
   ]
 
+  const compactColumns = [
+    {
+      key: 'name',
+      label: 'Produto',
+      render: (product) =>
+        renderCompactProductName(product, {
+          includeDeleted: activeFilter === 'deleted',
+        }),
+    },
+    {
+      key: 'stock',
+      label: 'Estoque',
+      render: (product) => (
+        <div className="stock-compact-quantity">
+          <strong>
+            {product.quantity} / {product.minimum_quantity}
+          </strong>
+          <span>Atual / mínimo</span>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (product) => {
+        const status = getProductStatus(product)
+
+        return <Badge tone={status.tone}>{status.label}</Badge>
+      },
+    },
+    {
+      key: 'updated_at',
+      label: 'Último movimento',
+      render: renderLatestMovement,
+    },
+    {
+      key: 'actions',
+      label: 'Ações',
+      render: (product) =>
+        activeFilter === 'deleted' ? (
+          renderDeletedProductActions(product)
+        ) : (
+          renderActiveProductActions(product)
+        ),
+    },
+  ]
+
   const columns = [
     {
       key: 'name',
       label: 'Produto',
-      render: (product) => (
-        <div className="product-cell">
-          <strong>{product.name}</strong>
-          <span>ID {product.id}</span>
-        </div>
-      ),
+      render: (product) =>
+        renderProductName(product, {
+          includeDeleted: activeFilter === 'deleted',
+        }),
     },
     { key: 'category', label: 'Categoria' },
     { key: 'quantity', label: 'Quantidade' },
@@ -1229,74 +1594,17 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     },
     {
       key: 'updated_at',
-      label: 'Última atualização',
-      render: (product) => formatDate(product.updated_at),
+      label: 'Último movimento',
+      render: renderLatestMovement,
     },
     {
       key: 'actions',
       label: 'Ações',
       render: (product) =>
         activeFilter === 'deleted' ? (
-          <div className="table-actions table-actions--compact">
-            <button
-              className="table-action table-action--view"
-              type="button"
-              onClick={() =>
-                loadProductDetail(product, {
-                  includeDeleted: true,
-                })
-              }
-            >
-              Ver
-            </button>
-            <button
-              className="table-action table-action--restore"
-              disabled={actionProductId === product.id}
-              type="button"
-              onClick={() => handleRestoreProduct(product)}
-            >
-              Restaurar
-            </button>
-          </div>
+          renderDeletedProductActions(product)
         ) : (
-          <div className="table-actions">
-            <button
-              className="table-action table-action--view"
-              type="button"
-              onClick={() => loadProductDetail(product)}
-            >
-              Ver
-            </button>
-            <button
-              className="table-action table-action--movement"
-              type="button"
-              onClick={() => openMovementModal(product)}
-            >
-              Movimentar
-            </button>
-            <button
-              className="table-action table-action--edit"
-              type="button"
-              onClick={() => openEditProduct(product)}
-            >
-              Editar
-            </button>
-            <button
-              className="table-action table-action--replenish"
-              type="button"
-              onClick={() => openReplenishmentModal(product)}
-            >
-              Repor
-            </button>
-            <button
-              className="table-action table-action--delete"
-              disabled={actionProductId === product.id}
-              type="button"
-              onClick={() => handleDeleteProduct(product)}
-            >
-              Remover
-            </button>
-          </div>
+          renderActiveProductActions(product)
         ),
     },
   ]
@@ -1456,7 +1764,17 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             )}
           </>
         ) : filteredProducts.length ? (
-          <DataTable columns={columns} rows={filteredProducts} />
+          <>
+            <div className="stock-product-table stock-product-table--full">
+              <DataTable columns={columns} rows={filteredProducts} />
+            </div>
+            <div className="stock-product-table stock-product-table--compact">
+              <DataTable columns={compactColumns} rows={filteredProducts} />
+            </div>
+            <div className="stock-product-cards">
+              {filteredProducts.map((product) => renderProductCard(product))}
+            </div>
+          </>
         ) : (
           <div className="stock-empty">
             <h2>Nenhum produto encontrado</h2>
@@ -1557,33 +1875,52 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                   <div className="workspace-form__actions">
                     {detailProduct.is_active ? (
                       <>
-                        <Button
-                          onClick={() => openMovementModal(detailProduct)}
-                          variant="secondary"
-                        >
-                          Movimentar estoque
-                        </Button>
-                        <Button
-                          onClick={() => openEditProduct(detailProduct)}
-                          variant="secondary"
-                        >
-                          Editar produto
-                        </Button>
-                        <Button
-                          disabled={actionProductId === detailProduct.id}
-                          onClick={() => handleDeleteProduct(detailProduct)}
-                          variant="secondary"
-                        >
-                          Enviar para lixeira
-                        </Button>
+                        {canMoveStock ? (
+                          <Button
+                            onClick={() => openMovementModal(detailProduct)}
+                            variant="secondary"
+                          >
+                            Movimentar estoque
+                          </Button>
+                        ) : null}
+                        {canWriteProduct ? (
+                          <>
+                            <Button
+                              onClick={() => openEditProduct(detailProduct)}
+                              variant="secondary"
+                            >
+                              Editar produto
+                            </Button>
+                            <Button
+                              disabled={actionProductId === detailProduct.id}
+                              onClick={() => handleDeleteProduct(detailProduct)}
+                              variant="secondary"
+                            >
+                              Enviar para lixeira
+                            </Button>
+                          </>
+                        ) : null}
+                        {!canMoveStock && !canWriteProduct ? (
+                          <p className="product-detail-actions__hint">
+                            Você pode consultar o histórico deste produto.
+                          </p>
+                        ) : null}
                       </>
                     ) : (
-                      <Button
-                        disabled={actionProductId === detailProduct.id}
-                        onClick={() => handleRestoreProduct(detailProduct)}
-                      >
-                        Restaurar produto
-                      </Button>
+                      <>
+                        {canWriteProduct ? (
+                          <Button
+                            disabled={actionProductId === detailProduct.id}
+                            onClick={() => handleRestoreProduct(detailProduct)}
+                          >
+                            Restaurar produto
+                          </Button>
+                        ) : (
+                          <p className="product-detail-actions__hint">
+                            Produto na lixeira. Você pode consultar o histórico.
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </section>
@@ -1625,13 +1962,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                               {MOVEMENT_LABELS[movement.movement_type] ??
                                 movement.movement_type}
                             </Badge>
-                            <span>{formatDate(movement.created_at)}</span>
+                            <strong>{formatMovementQuantity(movement)} unidades</strong>
                           </div>
                           <div className="movement-item__numbers">
-                            <div>
-                              <span>Quantidade</span>
-                              <strong>{movement.quantity}</strong>
-                            </div>
                             <div>
                               <span>Antes</span>
                               <strong>{movement.quantity_before}</strong>
@@ -1640,14 +1973,20 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                               <span>Depois</span>
                               <strong>{movement.quantity_after}</strong>
                             </div>
+                            <div>
+                              <span>Data</span>
+                              <strong>{formatCompactDateTime(movement.created_at)}</strong>
+                            </div>
                           </div>
                           <div className="movement-item__meta">
-                            <span>
-                              {movement.user_name ??
-                                movement.user_email ??
-                                'Usuário não informado'}
-                            </span>
-                            <p>{movement.reason || 'Sem observação.'}</p>
+                            <div>
+                              <span>Realizado por</span>
+                              <p>{getMovementActorName(movement)}</p>
+                            </div>
+                            <div>
+                              <span>Motivo</span>
+                              <p>{movement.reason || 'Sem observação.'}</p>
+                            </div>
                           </div>
                         </article>
                       ))}

@@ -11,7 +11,11 @@ export function getReplenishmentStatus(product) {
     return { label: 'Sem estoque', tone: 'danger' }
   }
 
-  return { label: 'Baixo estoque', tone: 'warning' }
+  if (product.quantity < product.minimum_quantity) {
+    return { label: 'Baixo estoque', tone: 'warning' }
+  }
+
+  return { label: 'Em estoque', tone: 'success' }
 }
 
 export function getReplenishmentPriority(product) {
@@ -19,5 +23,9 @@ export function getReplenishmentPriority(product) {
     return { label: 'Prioridade alta', tone: 'danger' }
   }
 
-  return { label: 'Prioridade média', tone: 'warning' }
+  if (product.quantity < product.minimum_quantity) {
+    return { label: 'Prioridade média', tone: 'warning' }
+  }
+
+  return { label: 'Sem prioridade', tone: 'neutral' }
 }

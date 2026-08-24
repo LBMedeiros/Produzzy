@@ -19,3 +19,4 @@ frontend/.env.*.local
 
 # Root enviroment
 .env
+.atlas/

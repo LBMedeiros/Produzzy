@@ -22,6 +22,12 @@ export function updateWorkspace(workspaceId, data) {
   })
 }
 
+export function deleteWorkspace(workspaceId) {
+  return request(`/workspaces/${workspaceId}`, {
+    method: 'DELETE',
+  })
+}
+
 export function listWorkspaceMembers(workspaceId) {
   return request(`/workspaces/${workspaceId}/members?limit=100`)
 }
@@ -30,9 +36,40 @@ export function listWorkspaceInvites(workspaceId) {
   return request(`/workspaces/${workspaceId}/invites?limit=100`)
 }
 
+export function createWorkspaceInvite(workspaceId, data) {
+  return request(`/workspaces/${workspaceId}/invites`, {
+    body: data,
+    method: 'POST',
+  })
+}
+
+export function createWorkspaceInviteLink(workspaceId) {
+  return request(`/workspaces/${workspaceId}/invite-link`, {
+    method: 'POST',
+  })
+}
+
+export function acceptWorkspaceInvite(token) {
+  return request(`/invites/${encodeURIComponent(token)}/accept`, {
+    method: 'POST',
+  })
+}
+
+export function revokeWorkspaceInvite(workspaceId, inviteId) {
+  return request(`/workspaces/${workspaceId}/invites/${inviteId}/revoke`, {
+    method: 'POST',
+  })
+}
+
 export function updateWorkspaceMember(workspaceId, memberId, data) {
   return request(`/workspaces/${workspaceId}/members/${memberId}`, {
     body: data,
     method: 'PATCH',
+  })
+}
+
+export function deleteWorkspaceMember(workspaceId, memberId) {
+  return request(`/workspaces/${workspaceId}/members/${memberId}`, {
+    method: 'DELETE',
   })
 }

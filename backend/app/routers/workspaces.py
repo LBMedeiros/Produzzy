@@ -1,13 +1,39 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
+from app.config import (
+    PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS,
+    PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS,
+)
 from app.dependencies import get_current_user, get_db
+from app.services.rate_limit_service import (
+    build_rate_limit_key,
+    run_with_failure_rate_limit,
+)
 
 
 router = APIRouter(
     tags=["Workspaces"],
 )
+
+
+def accept_invite_with_rate_limit(
+    token: str,
+    request: Request,
+    current_user: models.User,
+    db: Session,
+):
+    scope = "invite.accept"
+    key = build_rate_limit_key(request, f"user:{current_user.id}")
+
+    return run_with_failure_rate_limit(
+        scope,
+        key,
+        PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS,
+        lambda: crud.accept_workspace_invite(token, current_user, db),
+    )
 
 
 @router.get("/workspaces", response_model=list[schemas.WorkspaceResponse])
@@ -56,6 +82,20 @@ def update_workspace(
     db: Session = Depends(get_db),
 ):
     return crud.update_workspace(workspace_id, workspace_data, current_user, db)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_workspace(
+    workspace_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.delete_workspace(workspace_id, current_user, db)
+
+    return None
 
 
 @router.get(
@@ -132,6 +172,27 @@ def create_workspace_invite(
     )
 
 
+@router.post(
+    "/workspaces/{workspace_id}/invite-link",
+    response_model=schemas.WorkspaceInviteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_workspace_invite_link(
+    workspace_id: int,
+    invite_data: schemas.WorkspaceInviteLinkCreate = (
+        schemas.WorkspaceInviteLinkCreate()
+    ),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.create_workspace_invite_link(
+        workspace_id,
+        invite_data,
+        current_user,
+        db,
+    )
+
+
 @router.get(
     "/workspaces/{workspace_id}/invites",
     response_model=list[schemas.WorkspaceInviteResponse],
@@ -176,7 +237,8 @@ def revoke_workspace_invite(
 )
 def accept_workspace_invite(
     token: str,
+    request: Request,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return crud.accept_workspace_invite(token, current_user, db)
+    return accept_invite_with_rate_limit(token, request, current_user, db)

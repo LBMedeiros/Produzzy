@@ -91,6 +91,42 @@ def test_product_soft_delete_restore_and_dashboard(
     assert restore_response.json()["is_active"] is True
 
 
+def test_low_stock_uses_strict_minimum_rule(
+    client,
+    user_factory,
+    workspace_factory,
+):
+    owner = user_factory(name="Strict Stock Owner")
+    workspace = workspace_factory(owner["headers"], name="Strict Stock Workspace")
+
+    for quantity in (51, 50, 49, 1, 0):
+        response = client.post(
+            f"/workspaces/{workspace['id']}/products",
+            json={
+                "name": f"Produto {quantity}",
+                "category": "Teste",
+                "quantity": quantity,
+                "minimum_quantity": 50,
+            },
+            headers=owner["headers"],
+        )
+        assert response.status_code == 201
+
+    low_stock_response = client.get(
+        f"/workspaces/{workspace['id']}/products/low-stock?limit=100",
+        headers=owner["headers"],
+    )
+    assert low_stock_response.status_code == 200
+    assert [item["quantity"] for item in low_stock_response.json()] == [1, 49]
+
+    dashboard_response = client.get(
+        f"/workspaces/{workspace['id']}/dashboard/summary",
+        headers=owner["headers"],
+    )
+    assert dashboard_response.status_code == 200
+    assert dashboard_response.json()["low_stock_products"] == 2
+
+
 def test_restore_blocks_when_another_active_product_has_same_name(
     client,
     user_factory,

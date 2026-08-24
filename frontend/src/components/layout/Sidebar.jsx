@@ -40,6 +40,7 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
         onClick={onToggleCollapsed}
         title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
         aria-label={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
+        aria-expanded={!isCollapsed}
       >
         <ChevronIcon direction={isCollapsed ? 'right' : 'left'} />
       </button>

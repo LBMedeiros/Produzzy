@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ActionMenu from '../components/ui/ActionMenu'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
@@ -64,6 +65,7 @@ function LabelsPage() {
   const workspaceId = activeWorkspace?.id
   const [products, setProducts] = useState([])
   const [selectedProductId, setSelectedProductId] = useState('')
+  const [selectedOutputType, setSelectedOutputType] = useState('qr')
   const [qrBlob, setQrBlob] = useState(null)
   const [labelBlob, setLabelBlob] = useState(null)
   const [qrPreviewUrl, setQrPreviewUrl] = useState('')
@@ -215,6 +217,7 @@ function LabelsPage() {
       clearPreviews()
     }
     setSelectedProductId(String(productId))
+    setSelectedOutputType('qr')
     setIsLoadingQr(true)
     setError('')
     setSuccessMessage('')
@@ -251,6 +254,7 @@ function LabelsPage() {
       clearPreviews()
     }
     setSelectedProductId(String(productId))
+    setSelectedOutputType('label')
     setIsLoadingLabel(true)
     setError('')
     setSuccessMessage('')
@@ -289,6 +293,22 @@ function LabelsPage() {
         `etiqueta-${sanitizeFileName(selectedProduct.name)}-${selectedProduct.id}.png`,
       )
     }
+  }
+
+  async function handleGenerateSelected() {
+    if (selectedOutputType === 'label') {
+      return handleGenerateLabel()
+    }
+
+    return handleGenerateQrCode()
+  }
+
+  async function handleDownloadSelected() {
+    if (selectedOutputType === 'label') {
+      return handleDownloadLabel()
+    }
+
+    return handleDownloadQrCode()
   }
 
   async function handleDownloadLabelsSheet() {
@@ -344,24 +364,64 @@ function LabelsPage() {
     clearPreviews()
   }
 
+  function handleSelectProductForPreview(product) {
+    handleSelectProduct(product.id)
+  }
+
+  function getProductActionItems(product) {
+    return [
+      {
+        id: 'qr',
+        label: 'Gerar QR Code',
+        onClick: () => handleGenerateQrCode(product),
+      },
+      {
+        id: 'label',
+        label: 'Gerar etiqueta',
+        onClick: () => handleGenerateLabel(product),
+      },
+    ]
+  }
+
+  const activePreviewUrl =
+    selectedOutputType === 'label' ? labelPreviewUrl : qrPreviewUrl
+  const activePreviewAlt =
+    selectedOutputType === 'label'
+      ? 'Etiqueta real do produto'
+      : 'QR Code real do produto'
+  const activePreviewTitle =
+    selectedOutputType === 'label' ? 'Etiqueta' : 'QR Code'
+  const hasActivePreview = Boolean(activePreviewUrl)
+  const isGeneratingSelected =
+    selectedOutputType === 'label' ? isLoadingLabel : isLoadingQr
+  const activeDownloadLabel =
+    selectedOutputType === 'label' ? 'Baixar etiqueta' : 'Baixar QR Code'
+
   const columns = [
-    { key: 'name', label: 'Produto' },
+    {
+      key: 'name',
+      label: 'Produto',
+      render: (product) => (
+        <button
+          className="product-cell product-cell--button"
+          type="button"
+          onClick={() => handleSelectProductForPreview(product)}
+        >
+          <strong>{product.name}</strong>
+          <span>Código: {formatProductCode(product.id)}</span>
+        </button>
+      ),
+    },
     { key: 'category', label: 'Categoria' },
-    { key: 'id', label: 'ID' },
     {
       key: 'actions',
       label: 'Ações',
       render: (product) => (
-        <div className="table-actions">
-          <button type="button" onClick={() => handleSelectProduct(product.id)}>
-            Selecionar
-          </button>
-          <button type="button" onClick={() => handleGenerateQrCode(product)}>
-            QR Code
-          </button>
-          <button type="button" onClick={() => handleGenerateLabel(product)}>
-            Etiqueta
-          </button>
+        <div className="label-product-actions">
+          <ActionMenu
+            items={getProductActionItems(product)}
+            label={`Ações de ${product.name}`}
+          />
         </div>
       ),
     },
@@ -381,39 +441,16 @@ function LabelsPage() {
         <p className="stock-feedback stock-feedback--success">{successMessage}</p>
       ) : null}
 
-      <section className="feature-grid feature-grid--four">
-        <Card title="QR Code individual" eyebrow="Identificação">
-          <p>Acesse o detalhe do produto a partir da etiqueta física.</p>
-        </Card>
-        <Card title="Etiqueta individual" eyebrow="Arquivo para impressão">
-          <p>Combine a marca, o QR Code e o código de barras do produto.</p>
-        </Card>
-        <Card title="Impressão em lote" eyebrow="Para impressão">
-          <p>Organize vários itens em um arquivo pronto para impressão.</p>
-        </Card>
-        <Card title="Produto selecionado" eyebrow="Catálogo">
-          <p>{selectedProduct ? selectedProduct.name : 'Selecione um produto.'}</p>
-          {selectedProduct ? (
-            <small className="product-code">
-              Código: {formatProductCode(selectedProduct.id)}
-            </small>
-          ) : null}
-        </Card>
-      </section>
-
-      <Card title="Impressão em lote" eyebrow="Para impressão">
-        <p className="batch-printing__intro">
-          Escolha entre QR Codes identificados ou etiquetas completas para os
-          produtos ativos do workspace.
-        </p>
-        <div className="batch-printing">
-          <article className="batch-printing__option">
-            <div>
-              <h3>QR Codes para impressão</h3>
-              <p>
-                Gere um arquivo com QR Codes identificados pelo nome do produto.
-              </p>
-            </div>
+      <Card
+        className="batch-export-card"
+        title="Exportação em lote"
+        eyebrow="Para impressão"
+      >
+        <div className="batch-export">
+          <p>
+            Gere arquivos de identificação para todos os produtos ativos.
+          </p>
+          <div className="batch-export__actions">
             <Button
               disabled={isLoadingQrCodesSheet || !products.length}
               onClick={handleDownloadQrCodesSheet}
@@ -421,15 +458,6 @@ function LabelsPage() {
             >
               {isLoadingQrCodesSheet ? 'Baixando...' : 'Baixar QR Codes'}
             </Button>
-          </article>
-          <article className="batch-printing__option">
-            <div>
-              <h3>Etiquetas para impressão</h3>
-              <p>
-                Gere um arquivo com etiquetas completas, QR Code e código de
-                barras.
-              </p>
-            </div>
             <Button
               disabled={isLoadingLabelsSheet || !products.length}
               onClick={handleDownloadLabelsSheet}
@@ -437,12 +465,12 @@ function LabelsPage() {
             >
               {isLoadingLabelsSheet ? 'Baixando...' : 'Baixar etiquetas'}
             </Button>
-          </article>
+          </div>
         </div>
       </Card>
 
       <section className="content-grid content-grid--label">
-        <Card title="Prévia do arquivo" eyebrow="Visualização">
+        <Card className="label-generator-card" title="Gerador individual">
           <div className="label-preview-stack">
             <label className="stock-form">
               Produto
@@ -462,71 +490,86 @@ function LabelsPage() {
               </select>
             </label>
 
-            <div className="label-actions">
-              <Button
-                disabled={isLoadingQr || !selectedProduct}
-                onClick={() => handleGenerateQrCode()}
-                variant="secondary"
-              >
-                {isLoadingQr ? 'Gerando...' : 'Gerar QR Code'}
-              </Button>
-              <Button
-                disabled={isLoadingLabel || !selectedProduct}
-                onClick={() => handleGenerateLabel()}
-                variant="secondary"
-              >
-                {isLoadingLabel ? 'Gerando...' : 'Gerar etiqueta'}
-              </Button>
-            </div>
-
-            <div className="real-preview-grid">
-              <div className="real-preview-card real-preview-card--qr">
-                <h3>
-                  QR Code - {selectedProduct?.name ?? 'Selecione um produto'}
-                </h3>
-                {qrPreviewUrl ? (
-                  <img alt="QR Code real do produto" src={qrPreviewUrl} />
-                ) : (
-                  <div className="real-preview-placeholder">Gerar QR Code</div>
-                )}
+            <div className="label-type-field">
+              <span>Tipo</span>
+              <div className="segmented-control" role="tablist" aria-label="Tipo de arquivo">
                 <button
-                  disabled={!selectedProduct || isLoadingQr}
+                  aria-selected={selectedOutputType === 'qr'}
+                  className={selectedOutputType === 'qr' ? 'is-active' : ''}
+                  role="tab"
                   type="button"
-                  onClick={handleDownloadQrCode}
+                  onClick={() => setSelectedOutputType('qr')}
                 >
-                  Baixar QR Code
+                  QR Code
+                </button>
+                <button
+                  aria-selected={selectedOutputType === 'label'}
+                  className={selectedOutputType === 'label' ? 'is-active' : ''}
+                  role="tab"
+                  type="button"
+                  onClick={() => setSelectedOutputType('label')}
+                >
+                  Etiqueta
                 </button>
               </div>
-              <div className="real-preview-card real-preview-card--label">
+            </div>
+
+            <Button
+              className="label-generate-button"
+              disabled={isGeneratingSelected || !selectedProduct}
+              onClick={handleGenerateSelected}
+              variant="secondary"
+            >
+              {isGeneratingSelected ? 'Gerando...' : 'Gerar'}
+            </Button>
+
+            <p className="label-preview-title">Prévia</p>
+
+            <div className="real-preview-single">
+              <div
+                className={`real-preview-card ${
+                  selectedOutputType === 'label'
+                    ? 'real-preview-card--label'
+                    : 'real-preview-card--qr'
+                } ${hasActivePreview ? '' : 'real-preview-card--empty'}`}
+              >
                 <h3>
-                  Etiqueta - {selectedProduct?.name ?? 'Selecione um produto'}
+                  {activePreviewTitle} -{' '}
+                  {selectedProduct?.name ?? 'Selecione um produto'}
                 </h3>
-                {labelPreviewUrl ? (
-                  <img alt="Etiqueta real do produto" src={labelPreviewUrl} />
+                {hasActivePreview ? (
+                  <img alt={activePreviewAlt} src={activePreviewUrl} />
                 ) : (
-                  <div className="real-preview-placeholder">Gerar etiqueta</div>
+                  <div className="real-preview-placeholder">
+                    <strong>Nenhuma prévia ainda</strong>
+                    <span>Gere um QR Code ou etiqueta para visualizar.</span>
+                  </div>
                 )}
-                <button
-                  disabled={!selectedProduct || isLoadingLabel}
-                  type="button"
-                  onClick={handleDownloadLabel}
-                >
-                  Baixar etiqueta
-                </button>
-                {selectedProduct ? (
+                {hasActivePreview && selectedProduct ? (
                   <small className="real-preview-card__code">
                     Código: {formatProductCode(selectedProduct.id)}
                   </small>
+                ) : null}
+                {hasActivePreview ? (
+                  <button
+                    disabled={!selectedProduct || isGeneratingSelected}
+                    type="button"
+                    onClick={handleDownloadSelected}
+                  >
+                    {activeDownloadLabel}
+                  </button>
                 ) : null}
               </div>
             </div>
           </div>
         </Card>
-        <Card title="Produtos para etiqueta" eyebrow="Produtos ativos">
+        <Card className="label-products-card" title="Produtos ativos" eyebrow="Catálogo">
           {isLoadingProducts ? (
             <div className="stock-loading">Carregando produtos...</div>
           ) : products.length ? (
-            <DataTable columns={columns} rows={products} />
+            <div className="labels-product-table">
+              <DataTable columns={columns} rows={products} />
+            </div>
           ) : (
             <div className="stock-empty">
               <h2>Nenhum produto ativo</h2>

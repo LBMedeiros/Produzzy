@@ -10,6 +10,7 @@ import {
 import { useAuth } from './AuthContext'
 import {
   createWorkspace as createWorkspaceRequest,
+  deleteWorkspace as deleteWorkspaceRequest,
   getWorkspace as getWorkspaceRequest,
   listWorkspaces,
   updateWorkspace as updateWorkspaceRequest,
@@ -117,6 +118,38 @@ export function WorkspaceProvider({ children }) {
 
   const getWorkspace = useCallback((id) => getWorkspaceRequest(id), [])
 
+  const deleteWorkspace = useCallback(async (workspaceId) => {
+    const numericWorkspaceId = Number(workspaceId)
+
+    if (!Number.isInteger(numericWorkspaceId) || numericWorkspaceId <= 0) {
+      throw new Error('Workspace inválido.')
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await deleteWorkspaceRequest(numericWorkspaceId)
+
+      setWorkspaces((currentWorkspaces) => {
+        const nextWorkspaces = currentWorkspaces.filter(
+          (workspace) => workspace.id !== numericWorkspaceId,
+        )
+        const nextActiveWorkspace = pickWorkspace(nextWorkspaces)
+
+        setActiveWorkspace(nextActiveWorkspace)
+        persistActiveWorkspace(nextActiveWorkspace)
+
+        return nextWorkspaces
+      })
+    } catch (deleteError) {
+      setError(normalizeError(deleteError))
+      throw deleteError
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   const updateWorkspace = useCallback(async (workspaceId, name) => {
     const numericWorkspaceId = Number(workspaceId)
     const workspaceName = name.trim()
@@ -177,6 +210,7 @@ export function WorkspaceProvider({ children }) {
     () => ({
       activeWorkspace,
       createWorkspace,
+      deleteWorkspace,
       error,
       getWorkspace,
       loadWorkspaces,
@@ -188,6 +222,7 @@ export function WorkspaceProvider({ children }) {
     [
       activeWorkspace,
       createWorkspace,
+      deleteWorkspace,
       error,
       getWorkspace,
       loadWorkspaces,

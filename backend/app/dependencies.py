@@ -47,9 +47,6 @@ def get_current_user(
         raise credentials_exception
 
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuário inativo.",
-        )
+        raise credentials_exception
 
     return user

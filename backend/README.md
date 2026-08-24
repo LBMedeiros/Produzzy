@@ -74,13 +74,58 @@ Available variables:
 ```env
 DATABASE_URL=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_db
 # DATABASE_URL_TEST=postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_test_db
+PRODUZZY_ENV=development
 PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
 PRODUZZY_SECRET_KEY=replace-with-a-long-random-secret-key
 PRODUZZY_JWT_ALGORITHM=HS256
 PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES=60
+PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS=300
+PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_REGISTER_RATE_LIMIT_WINDOW_SECONDS=300
+PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS=300
+PRODUZZY_GOOGLE_CLIENT_ID=
+PRODUZZY_GOOGLE_CLIENT_SECRET=
 ```
 
 Do not commit a real `.env` file or production secrets.
+Never expose `PRODUZZY_GOOGLE_CLIENT_SECRET` to the frontend. The frontend
+only uses the public Google OAuth Client ID through `VITE_GOOGLE_CLIENT_ID`.
+Set `PRODUZZY_ENV=production` only in production-like environments. In
+production mode, the API refuses to start with the default or a short
+`PRODUZZY_SECRET_KEY`, and rejects wildcard or default local CORS origins.
+
+## Google Authentication
+
+Google sign-in uses Google Identity Services with the OAuth authorization code
+model in popup mode. The browser requests only these scopes:
+
+```text
+openid email profile
+```
+
+The frontend sends the authorization code to `POST /auth/google`; the backend
+exchanges it with Google, validates the returned ID token, and then issues the
+same Produzzy JWT used by email/password login. Google access or refresh tokens
+are not stored.
+
+To enable it locally:
+
+1. Create an OAuth Client in Google Cloud Console for a web application.
+2. Add your frontend origin to Authorized JavaScript origins, for example
+   `http://localhost:5173` or `http://127.0.0.1:5173`.
+3. In popup mode, Google uses the calling frontend origin as the `redirect_uri`
+   during the backend token exchange. Keep that origin registered in Google
+   Cloud and aligned with the value sent by the frontend.
+4. Keep the backend `PRODUZZY_ALLOWED_ORIGINS` aligned with the same frontend
+   origins.
+5. Set `PRODUZZY_GOOGLE_CLIENT_ID` and `PRODUZZY_GOOGLE_CLIENT_SECRET` in the
+   backend `.env`.
+6. Set `VITE_GOOGLE_CLIENT_ID` in the frontend `.env`.
+
+Do not request Gmail, Drive, contacts, or other Google API scopes unless a real
+future feature requires them.
 
 ## PostgreSQL Setup
 
@@ -116,6 +161,30 @@ PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://loca
 ```
 
 If the variable is missing, the API falls back to the local development origins above. Avoid using `*` in production.
+When `PRODUZZY_ENV=production`, `PRODUZZY_ALLOWED_ORIGINS` must contain explicit non-default origins and cannot include `*`.
+
+## Rate Limiting
+
+The API applies an in-memory rate limit to repeated failed attempts for login,
+registration, and invite acceptance. Login and registration limits are keyed by
+client host and e-mail. Invite acceptance is keyed by client host and the
+authenticated user, so repeated failures with different tokens are still
+throttled.
+
+The defaults allow 5 failed attempts in 300 seconds:
+
+```env
+PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS=300
+PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_REGISTER_RATE_LIMIT_WINDOW_SECONDS=300
+PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS=300
+```
+
+Set an attempt limit to `0` only for controlled local/debug scenarios. For
+multi-process or horizontally scaled production deployments, keep this API
+limit as a backstop and add a shared edge or proxy-level rate limiter.
 
 ## Alembic Migrations
 

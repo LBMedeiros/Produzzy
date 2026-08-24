@@ -24,6 +24,24 @@ export async function login(email, password) {
   return tokenData
 }
 
+export async function loginWithGoogle(code, redirectUri) {
+  const tokenData = await request('/auth/google', {
+    body: {
+      code,
+      redirect_uri: redirectUri,
+    },
+    headers: {
+      'X-Requested-With': 'XmlHttpRequest',
+    },
+    method: 'POST',
+    skipAuth: true,
+  })
+
+  setStoredToken(tokenData.access_token)
+
+  return tokenData
+}
+
 export function register(data) {
   return request('/auth/register', {
     body: data,

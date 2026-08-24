@@ -150,12 +150,24 @@ class Product(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "uq_users_auth_provider_provider_user_id",
+            "auth_provider",
+            "provider_user_id",
+            unique=True,
+            postgresql_where=text("provider_user_id IS NOT NULL"),
+            sqlite_where=text("provider_user_id IS NOT NULL"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
     name = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, unique=True, index=True)
-    hashed_password = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=True)
+    auth_provider = Column(String(30), nullable=False, default="password")
+    provider_user_id = Column(String(255), nullable=True, index=True)
 
     is_active = Column(Boolean, default=True, nullable=False)
 

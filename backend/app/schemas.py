@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class StockMovementType(str, Enum):
@@ -59,6 +59,32 @@ class ReplenishmentStatusFilter(str, Enum):
     all = "all"
 
 
+def normalize_email_input(value):
+    if not isinstance(value, str):
+        return value
+
+    return value.strip().lower()
+
+
+def normalize_required_name(value):
+    if not isinstance(value, str):
+        return value
+
+    value = value.strip()
+
+    if not value:
+        raise ValueError("Name cannot be blank.")
+
+    return value
+
+
+def normalize_present_required_name(value):
+    if value is None:
+        raise ValueError("Name cannot be blank.")
+
+    return normalize_required_name(value)
+
+
 class UserCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str = Field(
@@ -68,6 +94,16 @@ class UserCreate(BaseModel):
     )
     password: str = Field(min_length=8, max_length=128)
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        return normalize_required_name(value)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return normalize_email_input(value)
+
 
 class UserLogin(BaseModel):
     email: str = Field(
@@ -76,6 +112,16 @@ class UserLogin(BaseModel):
         pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
     )
     password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return normalize_email_input(value)
+
+
+class GoogleAuthCode(BaseModel):
+    code: str = Field(min_length=1)
+    redirect_uri: str = Field(min_length=1, max_length=500)
 
 
 class UserResponse(BaseModel):
@@ -101,9 +147,19 @@ class TokenData(BaseModel):
 class WorkspaceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        return normalize_required_name(value)
+
 
 class WorkspaceUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        return normalize_required_name(value)
 
 
 class WorkspaceResponse(BaseModel):
@@ -142,6 +198,15 @@ class WorkspaceInviteCreate(BaseModel):
     )
     role: WorkspaceRole
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return normalize_email_input(value)
+
+
+class WorkspaceInviteLinkCreate(BaseModel):
+    role: WorkspaceRole = WorkspaceRole.viewer
+
 
 class WorkspaceInviteResponse(BaseModel):
     id: int
@@ -166,12 +231,22 @@ class ProductCreate(BaseModel):
     quantity: int = Field(ge=0)
     minimum_quantity: int = Field(ge=0)
 
+    @field_validator("name", "category", mode="before")
+    @classmethod
+    def normalize_required_text(cls, value):
+        return normalize_present_required_name(value)
+
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     category: Optional[str] = Field(default=None, min_length=1, max_length=100)
     quantity: Optional[int] = Field(default=None, ge=0)
     minimum_quantity: Optional[int] = Field(default=None, ge=0)
+
+    @field_validator("name", "category", mode="before")
+    @classmethod
+    def normalize_required_text(cls, value):
+        return normalize_present_required_name(value)
 
 
 class ProductResponse(BaseModel):
@@ -272,10 +347,20 @@ class CategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=255)
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        return normalize_present_required_name(value)
+
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        return normalize_present_required_name(value)
 
 
 class CategoryResponse(BaseModel):
@@ -304,6 +389,32 @@ class DashboardSummary(BaseModel):
     low_stock_products: int
     total_stock_quantity: int
     total_stock_movements: int
+
+
+class WorkspaceSearchProductResult(BaseModel):
+    id: int
+    name: str
+    category: str
+    code: str
+    quantity: int
+    minimum_quantity: int
+
+
+class WorkspaceSearchReplenishmentResult(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    product_category: Optional[str] = None
+    product_code: str
+    status: str
+    quantity_needed: int
+
+
+class WorkspaceSearchResponse(BaseModel):
+    products: list[WorkspaceSearchProductResult] = Field(default_factory=list)
+    replenishments: list[WorkspaceSearchReplenishmentResult] = Field(
+        default_factory=list
+    )
 
 
 class AuditLogResponse(BaseModel):

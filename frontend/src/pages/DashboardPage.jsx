@@ -5,16 +5,12 @@ import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import StatCard from '../components/ui/StatCard'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import {
-  getReplenishmentQuantity,
-  getReplenishmentStatus,
-  needsReplenishment,
-} from '../lib/replenishment'
+import { getReplenishmentStatus, needsReplenishment } from '../lib/replenishment'
 import {
   getDashboardSummary,
   listRecentActivity,
 } from '../services/dashboardService'
-import { listLowStockProducts } from '../services/productService'
+import { listLowStockProducts, listProducts } from '../services/productService'
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -30,13 +26,6 @@ function getFriendlyError(error) {
 
 function formatNumber(value) {
   return new Intl.NumberFormat('pt-BR').format(value ?? 0)
-}
-
-function formatRequiredUnits(product) {
-  const quantity = getReplenishmentQuantity(product)
-  const unitLabel = quantity === 1 ? 'unidade' : 'unidades'
-
-  return `Precisa repor ${formatNumber(quantity)} ${unitLabel}`
 }
 
 function formatDate(value) {
@@ -96,6 +85,7 @@ function DashboardPage({ onNavigate }) {
   const workspaceId = activeWorkspace?.id
   const [summary, setSummary] = useState(null)
   const [lowStockProducts, setLowStockProducts] = useState([])
+  const [stockAttentionProducts, setStockAttentionProducts] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
   const [activityError, setActivityError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -111,13 +101,15 @@ function DashboardPage({ onNavigate }) {
     setActivityError('')
 
     try {
-      const [summaryData, lowStockItems] = await Promise.all([
+      const [summaryData, lowStockItems, activeProducts] = await Promise.all([
         getDashboardSummary(workspaceId),
         listLowStockProducts(workspaceId),
+        listProducts(workspaceId, { limit: 100, status: 'active' }),
       ])
 
       setSummary(summaryData)
       setLowStockProducts(lowStockItems)
+      setStockAttentionProducts(activeProducts.filter(needsReplenishment))
 
       try {
         const activityItems = await listRecentActivity(workspaceId, { limit: 6 })
@@ -142,40 +134,43 @@ function DashboardPage({ onNavigate }) {
   }, [loadDashboard])
 
   const replenishmentProducts = useMemo(
-    () => lowStockProducts.filter(needsReplenishment),
-    [lowStockProducts],
+    () => stockAttentionProducts,
+    [stockAttentionProducts],
   )
   const attentionProducts = replenishmentProducts.slice(0, 6)
-  const replenishmentPreview = replenishmentProducts.slice(0, 3)
+  const outOfStockCount = useMemo(
+    () => stockAttentionProducts.filter((product) => product.quantity <= 0).length,
+    [stockAttentionProducts],
+  )
 
   const stats = useMemo(
     () => [
       {
-        label: 'Produtos ativos',
+        label: 'Total de produtos',
         tone: 'blue',
         trend: `${formatNumber(summary?.total_categories)} categorias cadastradas`,
         value: formatNumber(summary?.total_products),
       },
       {
-        label: 'Baixo estoque',
+        label: 'Estoque baixo',
         tone: 'yellow',
-        trend: 'Produtos que precisam de atenção',
-        value: formatNumber(replenishmentProducts.length),
+        trend: 'Abaixo do mínimo cadastrado',
+        value: formatNumber(lowStockProducts.length),
       },
       {
-        label: 'Quantidade em estoque',
+        label: 'Sem estoque',
         tone: 'green',
-        trend: 'Soma dos produtos ativos',
-        value: formatNumber(summary?.total_stock_quantity),
+        trend: 'Produtos com quantidade zerada',
+        value: formatNumber(outOfStockCount),
       },
       {
-        label: 'Movimentações registradas',
+        label: 'Movimentações',
         tone: 'slate',
-        trend: 'Histórico do workspace',
+        trend: 'Total registrado no workspace',
         value: formatNumber(summary?.total_stock_movements),
       },
     ],
-    [replenishmentProducts, summary],
+    [lowStockProducts.length, outOfStockCount, summary],
   )
 
   const attentionColumns = [
@@ -195,6 +190,15 @@ function DashboardPage({ onNavigate }) {
 
         return <Badge tone={status.tone}>{status.label}</Badge>
       },
+    },
+    {
+      key: 'action',
+      label: 'Ação',
+      render: () => (
+        <Button onClick={() => onNavigate('stock')} size="sm" variant="secondary">
+          Abrir estoque
+        </Button>
+      ),
     },
   ]
 
@@ -228,17 +232,17 @@ function DashboardPage({ onNavigate }) {
           </section>
 
           <section className="content-grid content-grid--two">
-            <Card title="Produtos que precisam de atenção" eyebrow="Estoque">
+            <Card title="Atenção do estoque" eyebrow="Inventory attention">
               {attentionProducts.length ? (
                 <DataTable columns={attentionColumns} rows={attentionProducts} />
               ) : (
                 <div className="stock-empty">
-                  <h2>Nenhum produto em baixo estoque</h2>
-                  <p>Os produtos ativos estão acima da quantidade mínima cadastrada.</p>
+                  <h2>Estoque saudável</h2>
+                  <p>Nenhum produto ativo está zerado ou abaixo do mínimo cadastrado.</p>
                 </div>
               )}
             </Card>
-            <Card title="Atividades recentes" eyebrow="Histórico">
+            <Card title="Atividades recentes" eyebrow="Recent activity">
               {activityError ? (
                 <p className="stock-feedback stock-feedback--error">
                   {activityError}
@@ -254,44 +258,7 @@ function DashboardPage({ onNavigate }) {
             </Card>
           </section>
 
-          <section className="feature-grid">
-            <Card
-              action={
-                <Button
-                  onClick={() => onNavigate('production')}
-                  size="sm"
-                  variant="secondary"
-                >
-                  Ver reposição
-                </Button>
-              }
-              className="feature-card"
-              title="Necessidades de reposição"
-              eyebrow="Estoque"
-            >
-              {replenishmentPreview.length ? (
-                <div className="replenishment-preview-list">
-                  {replenishmentPreview.map((product) => {
-                    const status = getReplenishmentStatus(product)
-
-                    return (
-                      <div className="replenishment-preview-item" key={product.id}>
-                        <div>
-                          <strong>{product.name}</strong>
-                          <span>{formatRequiredUnits(product)}</span>
-                        </div>
-                        <Badge tone={status.tone}>{status.label}</Badge>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="replenishment-preview-empty">
-                  <strong>Tudo certo por aqui</strong>
-                  <span>Nenhum produto precisa de reposição no momento.</span>
-                </div>
-              )}
-            </Card>
+          <section className="feature-grid feature-grid--single">
             <Card
               className="feature-card"
               title="Atalho para etiquetas/QR Code"

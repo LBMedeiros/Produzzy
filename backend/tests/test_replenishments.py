@@ -683,3 +683,80 @@ def test_owner_manages_multiple_assignees_without_workspace_leaks(
     assert {item["id"] for item in remove_response.json()["assignees"]} == {
         admin["user"]["id"]
     }
+
+
+def test_completed_replenishment_rejects_assignee_update_via_patch(
+    client,
+    user_factory,
+    workspace_factory,
+    workspace_member_factory,
+):
+    owner = user_factory(name="Closed Assignee Owner")
+    workspace = workspace_factory(owner["headers"], name="Closed Assignee")
+    product = create_product(client, workspace, owner)
+    employee = workspace_member_factory(
+        owner["headers"],
+        workspace["id"],
+        "employee",
+    )
+    admin = workspace_member_factory(
+        owner["headers"],
+        workspace["id"],
+        "admin",
+    )
+    request_item = create_replenishment(
+        client,
+        workspace,
+        owner,
+        product,
+    )
+
+    assign_response = client.patch(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{request_item['id']}"
+        ),
+        json={"assigned_to_user_id": employee["user"]["id"]},
+        headers=owner["headers"],
+    )
+    assert assign_response.status_code == 200, assign_response.text
+    assert assign_response.json()["assigned_to_user_id"] == employee["user"]["id"]
+
+    completed_response = client.patch(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{request_item['id']}"
+        ),
+        json={"status": "completed"},
+        headers=owner["headers"],
+    )
+    assert completed_response.status_code == 200, completed_response.text
+
+    blocked_update = client.patch(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{request_item['id']}"
+        ),
+        json={"assigned_to_user_id": admin["user"]["id"]},
+        headers=owner["headers"],
+    )
+
+    assert blocked_update.status_code == 400
+    assert blocked_update.json()["detail"] == (
+        "Não é possível alterar responsáveis de uma necessidade "
+        "concluída, estocada ou cancelada."
+    )
+
+    detail_response = client.get(
+        (
+            f"/workspaces/{workspace['id']}/replenishments/"
+            f"{request_item['id']}"
+        ),
+        headers=owner["headers"],
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["assigned_to_user_id"] == employee["user"]["id"]
+    assert {assignee["id"] for assignee in detail["assignees"]} == {
+        employee["user"]["id"]
+    }

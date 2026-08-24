@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { formatWorkspaceRole, getWorkspaceRoleValue } from '../lib/formatters'
 import { listWorkspaceMembers } from '../services/workspaceService'
@@ -61,6 +62,109 @@ function getWorkspaceUpdateError(error) {
   }
 
   return error?.message ?? 'Não foi possível salvar as alterações.'
+}
+
+function getWorkspaceDeleteError(error) {
+  if (error?.status === 403) {
+    return 'Apenas o owner principal pode excluir este workspace.'
+  }
+
+  if (error?.status === 0) {
+    return 'Não foi possível conectar ao servidor.'
+  }
+
+  return error?.message ?? 'Não foi possível excluir o workspace.'
+}
+
+function DeleteWorkspaceModal({
+  activeWorkspace,
+  deleteWorkspace,
+  onClose,
+}) {
+  const [confirmationName, setConfirmationName] = useState('')
+  const [error, setError] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const workspaceName = activeWorkspace?.name ?? ''
+  const canConfirm = confirmationName === workspaceName
+
+  async function handleDeleteWorkspace() {
+    if (!activeWorkspace?.id || !canConfirm) {
+      return
+    }
+
+    setIsDeleting(true)
+    setError('')
+
+    try {
+      await deleteWorkspace(activeWorkspace.id)
+      onClose()
+    } catch (deleteError) {
+      setError(getWorkspaceDeleteError(deleteError))
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section
+        className="workspace-modal danger-confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-workspace-title"
+      >
+        <div className="workspace-modal__header">
+          <div>
+            <span>Ação irreversível</span>
+            <h2 id="delete-workspace-title">Excluir workspace</h2>
+          </div>
+          <button
+            aria-label="Fechar modal"
+            className="icon-button"
+            disabled={isDeleting}
+            onClick={onClose}
+            type="button"
+          >
+            x
+          </button>
+        </div>
+
+        <div className="workspace-form">
+          <p className="workspace-modal__text">
+            Esta ação remove o workspace, produtos, categorias, movimentações,
+            reposições, convites e membros vinculados. Não será possível desfazer.
+          </p>
+          <label>
+            Digite {workspaceName} para confirmar
+            <input
+              autoFocus
+              disabled={isDeleting}
+              onChange={(event) => {
+                setConfirmationName(event.target.value)
+                setError('')
+              }}
+              value={confirmationName}
+            />
+          </label>
+
+          {error ? <p className="form-error">{error}</p> : null}
+
+          <div className="workspace-form__actions">
+            <Button
+              disabled={!canConfirm || isDeleting}
+              onClick={handleDeleteWorkspace}
+              variant="danger"
+            >
+              {isDeleting ? 'Excluindo...' : 'Excluir workspace'}
+            </Button>
+            <Button disabled={isDeleting} onClick={onClose} variant="secondary">
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
 }
 
 function WorkspaceSettingsSection({
@@ -191,7 +295,9 @@ function WorkspaceSettingsSection({
 
 function SettingsPage() {
   const { isAuthenticated, user } = useAuth()
-  const { activeWorkspace, updateWorkspace } = useWorkspace()
+  const { activeWorkspace, deleteWorkspace, updateWorkspace } = useWorkspace()
+  const { resolvedTheme, setThemePreference, themePreference } = useTheme()
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [resolvedRole, setResolvedRole] = useState({
     role: '',
     workspaceId: null,
@@ -338,9 +444,19 @@ function SettingsPage() {
             <div className="settings-preference">
               <div>
                 <strong>Tema da interface</strong>
-                <span>O tema escuro será liberado em uma versão futura.</span>
+                <span>
+                  Preferência atual: {resolvedTheme === 'dark' ? 'Escuro' : 'Claro'}.
+                </span>
               </div>
-              <span className="settings-preference__value">Claro</span>
+              <select
+                className="settings-preference__select"
+                onChange={(event) => setThemePreference(event.target.value)}
+                value={themePreference}
+              >
+                <option value="system">Sistema</option>
+                <option value="light">Claro</option>
+                <option value="dark">Escuro</option>
+              </select>
             </div>
             <div className="settings-preference">
               <div>
@@ -372,17 +488,32 @@ function SettingsPage() {
             <div>
               <h3>Excluir workspace</h3>
               <p>
-                A exclusão de workspace ainda não está disponível. Nenhuma
-                informação será apagada por enquanto; quando esse recurso for
-                liberado, haverá confirmação de segurança antes de qualquer ação.
+                Remove este workspace e seus dados vinculados. Esta ação exige
+                confirmação pelo nome e não pode ser desfeita.
               </p>
             </div>
-            <Button disabled variant="secondary">
-              Exclusão em breve
+            <Button
+              disabled={!canEditWorkspace || isResolvingRole}
+              onClick={() => setIsDeleteModalOpen(true)}
+              variant="danger"
+            >
+              Excluir workspace
             </Button>
           </div>
+          {!canEditWorkspace && !isResolvingRole ? (
+            <p className="settings-section__hint">
+              Apenas o owner principal pode excluir este workspace.
+            </p>
+          ) : null}
         </Card>
       </div>
+      {isDeleteModalOpen ? (
+        <DeleteWorkspaceModal
+          activeWorkspace={activeWorkspace}
+          deleteWorkspace={deleteWorkspace}
+          onClose={() => setIsDeleteModalOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }

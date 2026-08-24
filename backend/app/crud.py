@@ -1,8 +1,9 @@
 import secrets
+import unicodedata
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -18,10 +19,11 @@ REPLENISHMENT_CREATE_ROLES = {"owner", "admin", "employee"}
 REPLENISHMENT_UPDATE_ROLES = {"owner", "admin", "employee"}
 REPLENISHMENT_ASSIGN_ROLES = {"owner", "admin", "employee"}
 REPLENISHMENT_MANAGE_ASSIGNEES_ROLES = {"owner", "admin"}
-MEMBER_MANAGE_ROLES = {"owner"}
+MEMBER_MANAGE_ROLES = {"owner", "admin"}
 MEMBER_ROLE_UPDATE_ROLES = {"owner", "admin"}
 INVITE_MANAGE_ROLES = {"owner", "admin"}
 AUDIT_LOG_READ_ROLES = {"owner", "admin"}
+ADMIN_MEMBER_TARGET_ROLES = {"employee", "viewer"}
 ACTIVE_PRODUCT_NAME_EXISTS = (
     "An active product with this name already exists in this workspace."
 )
@@ -34,6 +36,15 @@ ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS = (
 ACTIVE_REPLENISHMENT_EXISTS = (
     "Já existe uma necessidade ativa para este produto."
 )
+INVITE_LINK_EMAIL_DOMAIN = "invite.produzzy.local"
+
+
+def normalize_search_value(value: str):
+    normalized_value = unicodedata.normalize("NFKD", value)
+
+    return "".join(
+        char for char in normalized_value if not unicodedata.combining(char)
+    ).lower()
 
 
 def normalize_email(email: str):
@@ -44,6 +55,19 @@ def get_user_by_email(email: str, db: Session):
     return (
         db.query(models.User)
         .filter(models.User.email == normalize_email(email))
+        .first()
+    )
+
+
+def get_user_by_provider_user_id(
+    auth_provider: str,
+    provider_user_id: str,
+    db: Session,
+):
+    return (
+        db.query(models.User)
+        .filter(models.User.auth_provider == auth_provider)
+        .filter(models.User.provider_user_id == provider_user_id)
         .first()
     )
 
@@ -62,6 +86,7 @@ def create_user(user_data: schemas.UserCreate, db: Session):
         name=user_data.name.strip(),
         email=email,
         hashed_password=get_password_hash(user_data.password),
+        auth_provider="password",
     )
 
     db.add(new_user)
@@ -74,23 +99,101 @@ def create_user(user_data: schemas.UserCreate, db: Session):
 def authenticate_user(login_data: schemas.UserLogin, db: Session):
     user = get_user_by_email(login_data.email, db)
 
-    if not user or not verify_password(
-        login_data.password,
-        user.hashed_password,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-mail ou senha inválidos.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    invalid_credentials_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="E-mail ou senha inválidos.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if not user or not user.hashed_password:
+        raise invalid_credentials_error
+
+    if not verify_password(login_data.password, user.hashed_password):
+        raise invalid_credentials_error
 
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuário inativo.",
-        )
+        raise invalid_credentials_error
 
     return user
+
+
+def is_google_authoritative_for_email(email: str, google_claims: dict):
+    normalized_email = normalize_email(email)
+
+    return normalized_email.endswith("@gmail.com") or bool(google_claims.get("hd"))
+
+
+def authenticate_google_user(google_claims: dict, db: Session):
+    provider_user_id = str(google_claims.get("sub") or "").strip()
+    email = normalize_email(str(google_claims.get("email") or ""))
+    name = str(google_claims.get("name") or "").strip() or email.split("@")[0]
+
+    if not provider_user_id or not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credencial do Google inválida.",
+        )
+
+    existing_provider_user = get_user_by_provider_user_id(
+        "google",
+        provider_user_id,
+        db,
+    )
+
+    if existing_provider_user:
+        if not existing_provider_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credencial do Google inválida.",
+            )
+
+        return existing_provider_user
+
+    existing_email_user = get_user_by_email(email, db)
+
+    if existing_email_user:
+        if not existing_email_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credencial do Google inválida.",
+            )
+
+        if existing_email_user.provider_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este e-mail já está vinculado a outra conta Google.",
+            )
+
+        if not is_google_authoritative_for_email(email, google_claims):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Entre com e-mail e senha para vincular este Google "
+                    "com segurança."
+                ),
+            )
+
+        existing_email_user.auth_provider = "google"
+        existing_email_user.provider_user_id = provider_user_id
+        db.commit()
+        db.refresh(existing_email_user)
+
+        return existing_email_user
+
+    new_user = models.User(
+        name=name,
+        email=email,
+        hashed_password=None,
+        auth_provider="google",
+        provider_user_id=provider_user_id,
+        is_active=True,
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
 
 
 def normalize_role(role):
@@ -362,6 +465,68 @@ def update_workspace(
     return attach_current_user_role(workspace, current_user, db)
 
 
+def delete_workspace(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        {schemas.WorkspaceRole.owner.value},
+    )
+    workspace = get_workspace_by_id(workspace_id, db)
+
+    if workspace.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas o owner principal pode excluir o workspace.",
+        )
+
+    replenishment_ids = [
+        request_id
+        for (request_id,) in (
+            db.query(models.ReplenishmentRequest.id)
+            .filter(models.ReplenishmentRequest.workspace_id == workspace_id)
+            .all()
+        )
+    ]
+
+    if replenishment_ids:
+        db.query(models.ReplenishmentAssignee).filter(
+            models.ReplenishmentAssignee.replenishment_request_id.in_(
+                replenishment_ids,
+            ),
+        ).delete(synchronize_session=False)
+
+    db.query(models.ReplenishmentRequest).filter(
+        models.ReplenishmentRequest.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.query(models.StockMovement).filter(
+        models.StockMovement.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.query(models.Product).filter(
+        models.Product.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.query(models.Category).filter(
+        models.Category.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.query(models.WorkspaceInvite).filter(
+        models.WorkspaceInvite.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.query(models.WorkspaceMember).filter(
+        models.WorkspaceMember.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.query(models.AuditLog).filter(
+        models.AuditLog.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.delete(workspace)
+    db.commit()
+
+    return None
+
+
 def list_workspace_members(
     workspace_id: int,
     current_user: models.User,
@@ -416,6 +581,123 @@ def count_workspace_owners(workspace_id: int, db: Session):
     )
 
 
+def is_workspace_owner_member(
+    member: models.WorkspaceMember,
+    workspace: models.Workspace,
+):
+    return (
+        member.user_id == workspace.owner_id
+        or member.role == schemas.WorkspaceRole.owner.value
+    )
+
+
+def ensure_admin_can_manage_member_role(
+    current_member: models.WorkspaceMember,
+    target_member: models.WorkspaceMember,
+    new_role: str,
+):
+    if current_member.role != schemas.WorkspaceRole.admin.value:
+        return
+
+    if current_member.id == target_member.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin não pode alterar o próprio cargo.",
+        )
+
+    if target_member.role not in ADMIN_MEMBER_TARGET_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin só pode alterar membros employee ou viewer.",
+        )
+
+    if new_role not in ADMIN_MEMBER_TARGET_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin só pode alternar cargos entre employee e viewer.",
+        )
+
+
+def expire_pending_invites_for_email(
+    workspace_id: int,
+    email: str,
+    current_user: models.User,
+    db: Session,
+):
+    pending_invites = (
+        db.query(models.WorkspaceInvite)
+        .filter(models.WorkspaceInvite.workspace_id == workspace_id)
+        .filter(models.WorkspaceInvite.email == email)
+        .filter(models.WorkspaceInvite.status == schemas.InviteStatus.pending.value)
+        .all()
+    )
+
+    for pending_invite in pending_invites:
+        if not is_expired(pending_invite.expires_at):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Já existe um convite pendente válido para este e-mail.",
+            )
+
+        expire_workspace_invite(pending_invite, current_user, db)
+
+    if pending_invites:
+        db.flush()
+
+
+def expire_workspace_invite(
+    invite: models.WorkspaceInvite,
+    current_user: models.User,
+    db: Session,
+):
+    invite.status = schemas.InviteStatus.expired.value
+    release_workspace_invite_link_email(invite)
+    create_audit_log(
+        db=db,
+        workspace_id=invite.workspace_id,
+        user_id=current_user.id,
+        action="invite.expired",
+        entity_type="workspace_invite",
+        entity_id=invite.id,
+        metadata={"role": invite.role},
+    )
+
+
+def expire_stale_pending_invites(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+):
+    pending_invites = (
+        db.query(models.WorkspaceInvite)
+        .filter(models.WorkspaceInvite.workspace_id == workspace_id)
+        .filter(models.WorkspaceInvite.status == schemas.InviteStatus.pending.value)
+        .all()
+    )
+    expired_any = False
+
+    for invite in pending_invites:
+        if is_expired(invite.expires_at):
+            expire_workspace_invite(invite, current_user, db)
+            expired_any = True
+
+    if expired_any:
+        db.commit()
+
+
+def get_workspace_invite_link_email(workspace_id: int):
+    return f"workspace-{workspace_id}@{INVITE_LINK_EMAIL_DOMAIN}"
+
+
+def is_workspace_invite_link(invite: models.WorkspaceInvite):
+    return invite.email.endswith(f"@{INVITE_LINK_EMAIL_DOMAIN}")
+
+
+def release_workspace_invite_link_email(invite: models.WorkspaceInvite):
+    if is_workspace_invite_link(invite):
+        invite.email = f"{invite.status}-{invite.id}-{invite.email}"
+
+
 def update_workspace_member(
     workspace_id: int,
     member_id: int,
@@ -433,10 +715,7 @@ def update_workspace_member(
     member = get_member_by_id(workspace_id, member_id, db)
     new_role = normalize_role(member_data.role)
 
-    if (
-        member.user_id == workspace.owner_id
-        or member.role == schemas.WorkspaceRole.owner.value
-    ):
+    if is_workspace_owner_member(member, workspace):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não é possível alterar o cargo de um owner.",
@@ -448,14 +727,7 @@ def update_workspace_member(
             detail="Não é permitido atribuir o cargo owner por este endpoint.",
         )
 
-    if (
-        current_member.role == schemas.WorkspaceRole.admin.value
-        and current_member.id == member.id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin não pode alterar o próprio cargo.",
-        )
+    ensure_admin_can_manage_member_role(current_member, member, new_role)
 
     old_role = member.role
     member.role = new_role
@@ -485,21 +757,34 @@ def delete_workspace_member(
     current_user: models.User,
     db: Session,
 ):
-    require_workspace_role(
+    current_member = require_workspace_role(
         workspace_id,
         current_user,
         db,
         MEMBER_MANAGE_ROLES,
     )
+    workspace = get_workspace_by_id(workspace_id, db)
     member = get_member_by_id(workspace_id, member_id, db)
 
-    if (
-        member.role == schemas.WorkspaceRole.owner.value
-        and count_workspace_owners(workspace_id, db) <= 1
-    ):
+    if is_workspace_owner_member(member, workspace):
+        if count_workspace_owners(workspace_id, db) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Não é possível remover o último owner do workspace.",
+            )
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível remover o último owner do workspace.",
+            detail="Não é possível remover um owner por este endpoint.",
+        )
+
+    if (
+        current_member.role == schemas.WorkspaceRole.admin.value
+        and member.role not in ADMIN_MEMBER_TARGET_ROLES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin só pode remover membros employee ou viewer.",
         )
 
     create_audit_log(
@@ -561,10 +846,83 @@ def create_workspace_invite(
             detail="Usuário já é membro deste workspace.",
         )
 
+    expire_pending_invites_for_email(workspace_id, email, current_user, db)
+
     invite = models.WorkspaceInvite(
         workspace_id=workspace_id,
         email=email,
         role=role,
+        token=secrets.token_urlsafe(32),
+        status=schemas.InviteStatus.pending.value,
+        expires_at=aware_utc_now() + timedelta(days=7),
+        created_by_user_id=current_user.id,
+    )
+
+    db.add(invite)
+    try:
+        db.flush()
+        create_audit_log(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+            action="invite.created",
+            entity_type="workspace_invite",
+            entity_id=invite.id,
+            metadata={"role": invite.role},
+        )
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Já existe um convite pendente válido para este e-mail.",
+        )
+
+    db.refresh(invite)
+
+    return invite
+
+
+def create_workspace_invite_link(
+    workspace_id: int,
+    invite_data: schemas.WorkspaceInviteLinkCreate,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        INVITE_MANAGE_ROLES,
+    )
+    role = normalize_role(invite_data.role)
+
+    if role != schemas.WorkspaceRole.viewer.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Links de convite usam o cargo viewer por padrão.",
+        )
+
+    email = get_workspace_invite_link_email(workspace_id)
+    pending_invites = (
+        db.query(models.WorkspaceInvite)
+        .filter(models.WorkspaceInvite.workspace_id == workspace_id)
+        .filter(models.WorkspaceInvite.email == email)
+        .filter(models.WorkspaceInvite.status == schemas.InviteStatus.pending.value)
+        .all()
+    )
+
+    for pending_invite in pending_invites:
+        if not is_expired(pending_invite.expires_at):
+            return pending_invite
+
+        expire_workspace_invite(pending_invite, current_user, db)
+        release_workspace_invite_link_email(pending_invite)
+
+    invite = models.WorkspaceInvite(
+        workspace_id=workspace_id,
+        email=email,
+        role=schemas.WorkspaceRole.viewer.value,
         token=secrets.token_urlsafe(32),
         status=schemas.InviteStatus.pending.value,
         expires_at=aware_utc_now() + timedelta(days=7),
@@ -577,7 +935,7 @@ def create_workspace_invite(
         db=db,
         workspace_id=workspace_id,
         user_id=current_user.id,
-        action="invite.created",
+        action="invite.link_created",
         entity_type="workspace_invite",
         entity_id=invite.id,
         metadata={"role": invite.role},
@@ -601,6 +959,7 @@ def list_workspace_invites(
         db,
         INVITE_MANAGE_ROLES,
     )
+    expire_stale_pending_invites(workspace_id, current_user, db)
 
     query = (
         db.query(models.WorkspaceInvite)
@@ -663,33 +1022,50 @@ def accept_workspace_invite(
         )
 
     if is_expired(invite.expires_at):
-        invite.status = schemas.InviteStatus.expired.value
+        expire_workspace_invite(invite, current_user, db)
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Convite expirado.",
         )
 
-    if normalize_email(current_user.email) != normalize_email(invite.email):
+    is_invite_link = is_workspace_invite_link(invite)
+
+    if (
+        not is_invite_link
+        and normalize_email(current_user.email) != normalize_email(invite.email)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="O e-mail do usuário não corresponde ao convite.",
         )
 
+    if invite.role == schemas.WorkspaceRole.owner.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Convites não podem criar novos owners.",
+        )
+
     member = get_workspace_member(invite.workspace_id, current_user.id, db)
 
-    if member is None:
-        member = models.WorkspaceMember(
-            workspace_id=invite.workspace_id,
-            user_id=current_user.id,
-            role=invite.role,
+    if member is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Usuário já é membro deste workspace.",
         )
-        db.add(member)
-        db.flush()
+
+    member = models.WorkspaceMember(
+        workspace_id=invite.workspace_id,
+        user_id=current_user.id,
+        role=invite.role,
+    )
+    db.add(member)
+    db.flush()
 
     invite.status = schemas.InviteStatus.accepted.value
     invite.accepted_by_user_id = current_user.id
     invite.accepted_at = aware_utc_now()
+    release_workspace_invite_link_email(invite)
     create_audit_log(
         db=db,
         workspace_id=invite.workspace_id,
@@ -712,7 +1088,7 @@ def revoke_workspace_invite(
     current_user: models.User,
     db: Session,
 ):
-    require_workspace_role(
+    current_member = require_workspace_role(
         workspace_id,
         current_user,
         db,
@@ -731,6 +1107,25 @@ def revoke_workspace_invite(
             detail="Convite não encontrado.",
         )
 
+    if (
+        current_member.role == schemas.WorkspaceRole.admin.value
+        and invite.role not in ADMIN_MEMBER_TARGET_ROLES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin só pode revogar convites de employee ou viewer.",
+        )
+
+    if invite.status == schemas.InviteStatus.pending.value and is_expired(
+        invite.expires_at,
+    ):
+        expire_workspace_invite(invite, current_user, db)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Convite expirado.",
+        )
+
     if invite.status != schemas.InviteStatus.pending.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -738,6 +1133,7 @@ def revoke_workspace_invite(
         )
 
     invite.status = schemas.InviteStatus.revoked.value
+    release_workspace_invite_link_email(invite)
     create_audit_log(
         db=db,
         workspace_id=workspace_id,
@@ -901,7 +1297,8 @@ def list_low_stock_products(
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
         .filter(models.Product.is_active.is_(True))
-        .filter(models.Product.quantity <= models.Product.minimum_quantity)
+        .filter(models.Product.quantity > 0)
+        .filter(models.Product.quantity < models.Product.minimum_quantity)
         .order_by(models.Product.quantity.asc())
     )
 
@@ -1432,6 +1829,108 @@ def list_replenishment_requests(
     return paginate_query(query, page, limit).all()
 
 
+def search_workspace(db: Session, workspace_id: int, query_text: str, limit: int = 5):
+    normalized_query = query_text.strip()
+
+    if len(normalized_query) < 2:
+        return {
+            "products": [],
+            "replenishments": [],
+        }
+
+    like_query = f"%{normalized_query}%"
+    numeric_product_id = None
+
+    if normalized_query.isdigit():
+        numeric_product_id = int(normalized_query.lstrip("0") or "0")
+
+    product_filters = [
+        models.Product.name.ilike(like_query),
+        models.Product.category.ilike(like_query),
+        cast(models.Product.id, String).ilike(like_query),
+    ]
+
+    if numeric_product_id:
+        product_filters.append(models.Product.id == numeric_product_id)
+
+    products = (
+        db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.is_active.is_(True))
+        .filter(or_(*product_filters))
+        .order_by(models.Product.name.asc())
+        .limit(limit)
+        .all()
+    )
+
+    status_labels = {
+        schemas.ReplenishmentStatus.open.value: "Necessário repor",
+        schemas.ReplenishmentStatus.in_progress.value: "Em andamento",
+        schemas.ReplenishmentStatus.completed.value: "Pronto para estocar",
+        schemas.ReplenishmentStatus.stocked.value: "Estocado",
+        schemas.ReplenishmentStatus.canceled.value: "Cancelada",
+    }
+    normalized_status_query = normalize_search_value(normalized_query)
+    matching_statuses = [
+        status_value
+        for status_value, label in status_labels.items()
+        if normalized_status_query in normalize_search_value(status_value)
+        or normalized_status_query in normalize_search_value(label)
+    ]
+
+    replenishment_filters = [
+        models.Product.name.ilike(like_query),
+        models.Product.category.ilike(like_query),
+        cast(models.Product.id, String).ilike(like_query),
+        models.ReplenishmentRequest.status.ilike(like_query),
+    ]
+
+    if numeric_product_id:
+        replenishment_filters.append(models.Product.id == numeric_product_id)
+
+    if matching_statuses:
+        replenishment_filters.append(
+            models.ReplenishmentRequest.status.in_(matching_statuses)
+        )
+
+    replenishments = (
+        db.query(models.ReplenishmentRequest)
+        .join(models.ReplenishmentRequest.product)
+        .filter(models.ReplenishmentRequest.workspace_id == workspace_id)
+        .filter(models.Product.is_active.is_(True))
+        .filter(or_(*replenishment_filters))
+        .order_by(models.ReplenishmentRequest.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "products": [
+            {
+                "id": product.id,
+                "name": product.name,
+                "category": product.category,
+                "code": str(product.id).zfill(9),
+                "quantity": product.quantity,
+                "minimum_quantity": product.minimum_quantity,
+            }
+            for product in products
+        ],
+        "replenishments": [
+            {
+                "id": replenishment.id,
+                "product_id": replenishment.product_id,
+                "product_name": replenishment.product_name,
+                "product_category": replenishment.product_category,
+                "product_code": str(replenishment.product_id).zfill(9),
+                "status": replenishment.status,
+                "quantity_needed": replenishment.quantity_needed,
+            }
+            for replenishment in replenishments
+        ],
+    }
+
+
 def update_replenishment_request(
     workspace_id: int,
     request_id: int,
@@ -1487,6 +1986,7 @@ def update_replenishment_request(
             )
 
     if "assigned_to_user_id" in update_data:
+        ensure_replenishment_accepts_assignees(replenishment_request)
         validate_replenishment_assignee(
             workspace_id,
             update_data["assigned_to_user_id"],
@@ -1601,7 +2101,7 @@ def ensure_replenishment_accepts_assignees(replenishment_request):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "Não é possível alterar responsáveis de uma necessidade "
-                "concluída ou cancelada."
+                "concluída, estocada ou cancelada."
             ),
         )
 
@@ -2126,7 +2626,8 @@ def get_dashboard_summary(db: Session, workspace_id: int):
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
         .filter(models.Product.is_active.is_(True))
-        .filter(models.Product.quantity <= models.Product.minimum_quantity)
+        .filter(models.Product.quantity > 0)
+        .filter(models.Product.quantity < models.Product.minimum_quantity)
         .count()
     )
 

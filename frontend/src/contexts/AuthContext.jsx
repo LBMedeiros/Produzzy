@@ -7,11 +7,13 @@ import {
   useMemo,
   useState,
 } from 'react'
+import { flushSync } from 'react-dom'
 import { onUnauthorized } from '../lib/api'
 import {
   getMe,
   getToken,
   login as loginRequest,
+  loginWithGoogle as loginWithGoogleRequest,
   logout as logoutRequest,
   register as registerRequest,
 } from '../services/authService'
@@ -24,6 +26,13 @@ function normalizeError(error) {
   }
 
   return error?.message ?? 'Não foi possível concluir a ação.'
+}
+
+function shouldUseAuthViewTransition() {
+  return Boolean(
+    document.startViewTransition &&
+      !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+  )
 }
 
 export function AuthProvider({ children }) {
@@ -104,10 +113,48 @@ export function AuthProvider({ children }) {
 
     try {
       const tokenData = await loginRequest(email, password)
-      setToken(tokenData.access_token)
-
       const currentUser = await getMe()
-      setUser(currentUser)
+      const commitSession = () => {
+        setToken(tokenData.access_token)
+        setUser(currentUser)
+      }
+
+      if (shouldUseAuthViewTransition()) {
+        document.startViewTransition(() => {
+          flushSync(commitSession)
+        })
+      } else {
+        commitSession()
+      }
+
+      return currentUser
+    } catch (loginError) {
+      logoutRequest()
+      setUser(null)
+      setToken(null)
+      setError(normalizeError(loginError))
+      throw loginError
+    }
+  }, [])
+
+  const loginWithGoogle = useCallback(async (code, redirectUri) => {
+    setError('')
+
+    try {
+      const tokenData = await loginWithGoogleRequest(code, redirectUri)
+      const currentUser = await getMe()
+      const commitSession = () => {
+        setToken(tokenData.access_token)
+        setUser(currentUser)
+      }
+
+      if (shouldUseAuthViewTransition()) {
+        document.startViewTransition(() => {
+          flushSync(commitSession)
+        })
+      } else {
+        commitSession()
+      }
 
       return currentUser
     } catch (loginError) {
@@ -140,13 +187,24 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(user && token),
       loading,
       login,
+      loginWithGoogle,
       logout,
       refreshMe,
       register,
       token,
       user,
     }),
-    [error, loading, login, logout, refreshMe, register, token, user],
+    [
+      error,
+      loading,
+      login,
+      loginWithGoogle,
+      logout,
+      refreshMe,
+      register,
+      token,
+      user,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

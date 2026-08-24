@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppLayout from './components/layout/AppLayout'
 import BrandIcon from './components/ui/BrandIcon'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext'
 import CreateWorkspacePage from './pages/CreateWorkspacePage'
 import DashboardPage from './pages/DashboardPage'
+import InviteAcceptancePage from './pages/InviteAcceptancePage'
 import LabelsPage from './pages/LabelsPage'
 import LoginPage from './pages/LoginPage'
 import ProductionPage from './pages/ProductionPage'
@@ -17,6 +19,26 @@ const pageComponents = {
   production: ProductionPage,
   settings: SettingsPage,
   stock: StockPage,
+}
+
+function getInviteTokenFromPath(pathname = window.location.pathname) {
+  const match = pathname.match(/^\/invites\/([^/]+)\/accept\/?$/)
+
+  if (!match) {
+    return ''
+  }
+
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return ''
+  }
+}
+
+function clearInviteAcceptPath() {
+  if (getInviteTokenFromPath()) {
+    window.history.replaceState(window.history.state, '', '/')
+  }
 }
 
 function LoadingScreen({ message }) {
@@ -33,10 +55,26 @@ function ProtectedApp() {
   const { activeWorkspace, loading: workspaceLoading } = useWorkspace()
   const [activePage, setActivePage] = useState('dashboard')
   const [navigationIntent, setNavigationIntent] = useState(null)
+  const [inviteToken, setInviteToken] = useState(() => getInviteTokenFromPath())
+
+  useEffect(() => {
+    function handleLocationChange() {
+      setInviteToken(getInviteTokenFromPath())
+    }
+
+    window.addEventListener('popstate', handleLocationChange)
+
+    return () => window.removeEventListener('popstate', handleLocationChange)
+  }, [])
 
   function handleNavigate(page, intent = null) {
     setNavigationIntent(intent)
     setActivePage(page)
+  }
+
+  function handleInviteDone() {
+    clearInviteAcceptPath()
+    setInviteToken('')
   }
 
   if (authLoading) {
@@ -45,6 +83,10 @@ function ProtectedApp() {
 
   if (!isAuthenticated) {
     return <LoginPage />
+  }
+
+  if (inviteToken) {
+    return <InviteAcceptancePage token={inviteToken} onDone={handleInviteDone} />
   }
 
   if (workspaceLoading && !activeWorkspace) {
@@ -81,9 +123,11 @@ function WorkspaceScope() {
 
 function App() {
   return (
-    <AuthProvider>
-      <WorkspaceScope />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <WorkspaceScope />
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 
