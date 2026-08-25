@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { getReplenishmentQuantity } from '../../lib/replenishment'
 import Button from '../ui/Button'
 
@@ -30,7 +31,14 @@ function ReplenishmentCreationModal({
   const bodyRef = useRef(null)
 
   useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow
+
+    document.body.style.overflow = 'hidden'
     bodyRef.current?.scrollTo({ top: 0 })
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+    }
   }, [])
 
   function handleSubmit(event) {
@@ -56,7 +64,7 @@ function ReplenishmentCreationModal({
       ? 'Necessário repor'
       : 'Sugestão inicial'
 
-  return (
+  const modal = (
     <div className="modal-backdrop" role="presentation">
       <section
         aria-modal="true"
@@ -162,6 +170,12 @@ function ReplenishmentCreationModal({
       </section>
     </div>
   )
+
+  if (typeof document === 'undefined') {
+    return null
+  }
+
+  return createPortal(modal, document.body)
 }
 
 export default ReplenishmentCreationModal
