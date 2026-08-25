@@ -45,7 +45,7 @@ function CreateWorkspacePage() {
               autoFocus
               maxLength="100"
               onChange={(event) => setName(event.target.value)}
-              placeholder="Bordados Medeiros"
+              placeholder="Escreva o nome do seu Workspace"
               required
               value={name}
             />

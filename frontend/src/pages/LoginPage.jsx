@@ -96,6 +96,57 @@ function GoogleIcon() {
   )
 }
 
+function PasswordVisibilityIcon({ isVisible }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M2.5 12s3.6-6.5 9.5-6.5S21.5 12 21.5 12 17.9 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <path d="M12 9.25a2.75 2.75 0 1 1 0 5.5 2.75 2.75 0 0 1 0-5.5Z" />
+      {isVisible ? <path d="M4.5 4.5 19.5 19.5" /> : null}
+    </svg>
+  )
+}
+
+function PasswordField({
+  autoComplete,
+  id,
+  isVisible,
+  label,
+  minLength,
+  onChange,
+  onToggle,
+  placeholder,
+  value,
+}) {
+  const visibilityLabel = isVisible ? 'Ocultar senha' : 'Mostrar senha'
+
+  return (
+    <div className="login-field">
+      <label htmlFor={id}>{label}</label>
+      <span className="login-password-field">
+        <input
+          autoComplete={autoComplete}
+          id={id}
+          minLength={minLength}
+          onChange={onChange}
+          placeholder={placeholder}
+          required
+          type={isVisible ? 'text' : 'password'}
+          value={value}
+        />
+        <button
+          aria-label={visibilityLabel}
+          aria-pressed={isVisible}
+          className="login-password-field__toggle"
+          type="button"
+          onClick={onToggle}
+        >
+          <PasswordVisibilityIcon isVisible={isVisible} />
+        </button>
+      </span>
+    </div>
+  )
+}
+
 function BenefitIcon({ type }) {
   if (type === 'stock') {
     return (
@@ -159,6 +210,11 @@ function LoginPage() {
   const { login, loginWithGoogle, register } = useAuth()
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState(initialForm)
+  const [visiblePasswords, setVisiblePasswords] = useState({
+    confirmPassword: false,
+    password: false,
+  })
+  const [rememberMe, setRememberMe] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -169,6 +225,13 @@ function LoginPage() {
     setForm((currentForm) => ({
       ...currentForm,
       [field]: value,
+    }))
+  }
+
+  function togglePasswordVisibility(field) {
+    setVisiblePasswords((currentState) => ({
+      ...currentState,
+      [field]: !currentState[field],
     }))
   }
 
@@ -190,7 +253,9 @@ function LoginPage() {
         })
       }
 
-      await login(form.email, form.password)
+      await login(form.email, form.password, {
+        rememberMe: !isRegisterMode && rememberMe,
+      })
     } catch (submitError) {
       setError(getFriendlyError(submitError))
     } finally {
@@ -241,7 +306,9 @@ function LoginPage() {
             }
 
             try {
-              await loginWithGoogle(response.code, window.location.origin)
+              await loginWithGoogle(response.code, window.location.origin, {
+                rememberMe: !isRegisterMode && rememberMe,
+              })
               finish(resolve)
             } catch (googleError) {
               finish(reject, googleError)
@@ -267,6 +334,10 @@ function LoginPage() {
 
   function toggleMode() {
     setMode((currentMode) => (currentMode === 'login' ? 'register' : 'login'))
+    setVisiblePasswords({
+      confirmPassword: false,
+      password: false,
+    })
     setError('')
   }
 
@@ -329,33 +400,43 @@ function LoginPage() {
               value={form.email}
             />
           </label>
-          <label>
-            Senha
-            <input
-              autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
-              minLength={isRegisterMode ? 8 : 1}
-              onChange={(event) => updateField('password', event.target.value)}
-              placeholder="Digite sua senha"
-              required
-              type="password"
-              value={form.password}
-            />
-          </label>
+          <PasswordField
+            autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
+            id="login-password"
+            isVisible={visiblePasswords.password}
+            label="Senha"
+            minLength={isRegisterMode ? 8 : 1}
+            placeholder="Digite sua senha"
+            value={form.password}
+            onChange={(event) => updateField('password', event.target.value)}
+            onToggle={() => togglePasswordVisibility('password')}
+          />
 
           {isRegisterMode ? (
-            <label>
-              Confirmar senha
+            <PasswordField
+              autoComplete="new-password"
+              id="login-confirm-password"
+              isVisible={visiblePasswords.confirmPassword}
+              label="Confirmar senha"
+              minLength="8"
+              placeholder="Repita sua senha"
+              value={form.confirmPassword}
+              onChange={(event) =>
+                updateField('confirmPassword', event.target.value)
+              }
+              onToggle={() => togglePasswordVisibility('confirmPassword')}
+            />
+          ) : null}
+
+          {!isRegisterMode ? (
+            <label className="login-remember">
               <input
-                autoComplete="new-password"
-                minLength="8"
-                onChange={(event) =>
-                  updateField('confirmPassword', event.target.value)
-                }
-                placeholder="Repita sua senha"
-                required
-                type="password"
-                value={form.confirmPassword}
+                checked={rememberMe}
+                type="checkbox"
+                onChange={(event) => setRememberMe(event.target.checked)}
               />
+              <span className="login-remember__box" aria-hidden="true"></span>
+              <span>Lembrar de mim</span>
             </label>
           ) : null}
 

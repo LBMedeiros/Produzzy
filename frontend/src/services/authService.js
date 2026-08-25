@@ -5,7 +5,7 @@ import {
   setStoredToken,
 } from '../lib/api'
 
-export async function login(email, password) {
+export async function login(email, password, options = {}) {
   const formData = new URLSearchParams()
   formData.set('username', email.trim())
   formData.set('password', password)
@@ -19,12 +19,14 @@ export async function login(email, password) {
     skipAuth: true,
   })
 
-  setStoredToken(tokenData.access_token)
+  setStoredToken(tokenData.access_token, {
+    rememberMe: Boolean(options.rememberMe),
+  })
 
   return tokenData
 }
 
-export async function loginWithGoogle(code, redirectUri) {
+export async function loginWithGoogle(code, redirectUri, options = {}) {
   const tokenData = await request('/auth/google', {
     body: {
       code,
@@ -37,7 +39,9 @@ export async function loginWithGoogle(code, redirectUri) {
     skipAuth: true,
   })
 
-  setStoredToken(tokenData.access_token)
+  setStoredToken(tokenData.access_token, {
+    rememberMe: Boolean(options.rememberMe),
+  })
 
   return tokenData
 }

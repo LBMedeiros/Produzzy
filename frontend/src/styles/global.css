@@ -4141,6 +4141,150 @@ a {
   gap: 16px;
 }
 
+.login-field {
+  display: grid;
+  gap: 8px;
+}
+
+.login-field > label {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.login-password-field {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.login-password-field:focus-within {
+  border-color: rgba(37, 99, 235, 0.52);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.login-password-field input {
+  min-height: 40px;
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  padding: 0 0 0 12px;
+}
+
+.login-password-field input:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+.login-password-field__toggle {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  margin-right: 3px;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.login-password-field__toggle:hover {
+  background: #f1f5f9;
+  color: #2563eb;
+}
+
+.login-password-field__toggle:focus-visible {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  outline: none;
+}
+
+.login-password-field__toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.login-form .login-remember {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  color: #475569;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.login-form .login-remember input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.login-remember__box {
+  position: relative;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #ffffff;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.login-remember__box::after {
+  width: 8px;
+  height: 4px;
+  border-bottom: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  content: "";
+  opacity: 0;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.login-form .login-remember input:checked + .login-remember__box {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.login-form .login-remember input:checked + .login-remember__box::after {
+  opacity: 1;
+}
+
+.login-form .login-remember input:focus-visible + .login-remember__box {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.login-form .login-remember:hover .login-remember__box {
+  border-color: #2563eb;
+}
+
 .login-social {
   display: grid;
   gap: 10px;

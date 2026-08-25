@@ -31,15 +31,34 @@ export function apiUrl(path) {
 }
 
 export function getStoredToken() {
-  return localStorage.getItem(TOKEN_STORAGE_KEY)
+  const sessionToken = sessionStorage.getItem(TOKEN_STORAGE_KEY)
+  const persistentToken = localStorage.getItem(TOKEN_STORAGE_KEY)
+
+  if (sessionToken && persistentToken) {
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+  }
+
+  return sessionToken || persistentToken
 }
 
-export function setStoredToken(token) {
-  localStorage.setItem(TOKEN_STORAGE_KEY, token)
+export function setStoredToken(token, { rememberMe = false } = {}) {
+  clearStoredToken()
+
+  if (!token) {
+    return
+  }
+
+  if (rememberMe) {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token)
+    return
+  }
+
+  sessionStorage.setItem(TOKEN_STORAGE_KEY, token)
 }
 
 export function clearStoredToken() {
   localStorage.removeItem(TOKEN_STORAGE_KEY)
+  sessionStorage.removeItem(TOKEN_STORAGE_KEY)
 }
 
 export function onUnauthorized(handler) {
@@ -149,6 +168,7 @@ export async function request(path, options = {}) {
     const message = getErrorMessage(data, 'Não foi possível concluir a solicitação.')
 
     if (response.status === 401) {
+      clearStoredToken()
       unauthorizedHandlers.forEach((handler) => handler())
     }
 
@@ -198,6 +218,7 @@ export async function requestBlob(path, options = {}) {
     const message = getErrorMessage(data, 'Não foi possível baixar o arquivo.')
 
     if (response.status === 401) {
+      clearStoredToken()
       unauthorizedHandlers.forEach((handler) => handler())
     }
 

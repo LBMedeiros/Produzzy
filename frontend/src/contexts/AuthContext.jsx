@@ -108,11 +108,11 @@ export function AuthProvider({ children }) {
     }
   }, [clearSession])
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, options = {}) => {
     setError('')
 
     try {
-      const tokenData = await loginRequest(email, password)
+      const tokenData = await loginRequest(email, password, options)
       const currentUser = await getMe()
       const commitSession = () => {
         setToken(tokenData.access_token)
@@ -137,11 +137,11 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const loginWithGoogle = useCallback(async (code, redirectUri) => {
+  const loginWithGoogle = useCallback(async (code, redirectUri, options = {}) => {
     setError('')
 
     try {
-      const tokenData = await loginWithGoogleRequest(code, redirectUri)
+      const tokenData = await loginWithGoogleRequest(code, redirectUri, options)
       const currentUser = await getMe()
       const commitSession = () => {
         setToken(tokenData.access_token)
