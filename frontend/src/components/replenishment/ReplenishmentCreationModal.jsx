@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getReplenishmentQuantity } from '../../lib/replenishment'
 import Button from '../ui/Button'
 
@@ -27,6 +27,11 @@ function ReplenishmentCreationModal({
   )
   const [notes, setNotes] = useState('')
   const [validationError, setValidationError] = useState('')
+  const bodyRef = useRef(null)
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 })
+  }, [])
 
   function handleSubmit(event) {
     event.preventDefault()
@@ -55,7 +60,7 @@ function ReplenishmentCreationModal({
     <div className="modal-backdrop" role="presentation">
       <section
         aria-modal="true"
-        className="workspace-modal stock-modal"
+        className="workspace-modal stock-modal replenishment-creation-modal"
         role="dialog"
       >
         <div className="workspace-modal__header">
@@ -74,84 +79,86 @@ function ReplenishmentCreationModal({
           </button>
         </div>
 
-        <div className="replenishment-modal__summary">
-          <span>Produto selecionado</span>
-          <strong>{product.name}</strong>
-          <div className="replenishment-modal__metrics">
-            <div>
-              <span>Categoria</span>
-              <strong>{product.category}</strong>
-            </div>
-            <div>
-              <span>Estoque atual</span>
-              <strong>{formatNumber(product.quantity)}</strong>
-            </div>
-            <div>
-              <span>Mínimo cadastrado</span>
-              <strong>{formatNumber(product.minimum_quantity)}</strong>
-            </div>
-            <div>
-              <span>{suggestionLabel}</span>
-              <strong>{formatNumber(suggestedQuantity)} un.</strong>
+        <div className="replenishment-creation-modal__body" ref={bodyRef}>
+          <div className="replenishment-modal__summary">
+            <span>Produto selecionado</span>
+            <strong>{product.name}</strong>
+            <div className="replenishment-modal__metrics">
+              <div>
+                <span>Categoria</span>
+                <strong>{product.category}</strong>
+              </div>
+              <div>
+                <span>Estoque atual</span>
+                <strong>{formatNumber(product.quantity)}</strong>
+              </div>
+              <div>
+                <span>Mínimo cadastrado</span>
+                <strong>{formatNumber(product.minimum_quantity)}</strong>
+              </div>
+              <div>
+                <span>{suggestionLabel}</span>
+                <strong>{formatNumber(suggestedQuantity)} un.</strong>
+              </div>
             </div>
           </div>
+
+          <form className="stock-form" onSubmit={handleSubmit}>
+            <label>
+              Tipo de reposição
+              <select
+                disabled={isSaving}
+                onChange={(event) => setReplenishmentType(event.target.value)}
+                value={replenishmentType}
+              >
+                <option value="purchase">Compra</option>
+                <option value="production">Produção</option>
+              </select>
+            </label>
+            <label>
+              Quantidade prevista
+              <input
+                disabled={isSaving}
+                min="1"
+                onChange={(event) => setQuantityNeeded(event.target.value)}
+                required
+                type="number"
+                value={quantityNeeded}
+              />
+            </label>
+            <p className="stock-form__hint">
+              Essa quantidade é apenas uma previsão e não altera o estoque
+              automaticamente.
+            </p>
+
+            <label>
+              Observação (opcional)
+              <textarea
+                disabled={isSaving}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Prazo, fornecedor ou orientação para a produção"
+                value={notes}
+              />
+            </label>
+
+            {validationError || error ? (
+              <p className="form-error">{validationError || error}</p>
+            ) : null}
+
+            <div className="workspace-form__actions">
+              <Button disabled={isSaving} type="submit">
+                {isSaving ? 'Criando...' : 'Confirmar'}
+              </Button>
+              <Button
+                disabled={isSaving}
+                onClick={onClose}
+                variant="secondary"
+              >
+                Voltar
+              </Button>
+            </div>
+          </form>
         </div>
-
-        <form className="stock-form" onSubmit={handleSubmit}>
-          <label>
-            Tipo de reposição
-            <select
-              disabled={isSaving}
-              onChange={(event) => setReplenishmentType(event.target.value)}
-              value={replenishmentType}
-            >
-              <option value="purchase">Compra</option>
-              <option value="production">Produção</option>
-            </select>
-          </label>
-          <label>
-            Quantidade prevista
-            <input
-              disabled={isSaving}
-              min="1"
-              onChange={(event) => setQuantityNeeded(event.target.value)}
-              required
-              type="number"
-              value={quantityNeeded}
-            />
-          </label>
-          <p className="stock-form__hint">
-            Essa quantidade é apenas uma previsão e não altera o estoque
-            automaticamente.
-          </p>
-
-          <label>
-            Observação (opcional)
-            <textarea
-              disabled={isSaving}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Prazo, fornecedor ou orientação para a produção"
-              value={notes}
-            />
-          </label>
-
-          {validationError || error ? (
-            <p className="form-error">{validationError || error}</p>
-          ) : null}
-
-          <div className="workspace-form__actions">
-            <Button disabled={isSaving} type="submit">
-              {isSaving ? 'Criando...' : 'Confirmar'}
-            </Button>
-            <Button
-              disabled={isSaving}
-              onClick={onClose}
-              variant="secondary"
-            >
-              Voltar
-            </Button>
-          </div>
-        </form>
       </section>
     </div>
   )
