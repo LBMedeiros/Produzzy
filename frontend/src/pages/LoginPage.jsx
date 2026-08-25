@@ -310,7 +310,7 @@ function LoginPage() {
               <input
                 autoComplete="name"
                 onChange={(event) => updateField('name', event.target.value)}
-                placeholder="Lucas Medeiros"
+                placeholder="Digite seu nome"
                 required
                 type="text"
                 value={form.name}
@@ -323,7 +323,7 @@ function LoginPage() {
             <input
               autoComplete="email"
               onChange={(event) => updateField('email', event.target.value)}
-              placeholder="lucas@empresa.com"
+              placeholder="Digite seu email"
               required
               type="email"
               value={form.email}
