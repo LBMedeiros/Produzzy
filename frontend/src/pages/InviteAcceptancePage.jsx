@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { acceptWorkspaceInvite } from '../services/workspaceService'
+import {
+  acceptWorkspaceInvite,
+  acceptWorkspaceInviteLink,
+} from '../services/workspaceService'
 
-function getInviteError(error) {
-  if (error?.status === 403) {
+function getInviteError(error, type) {
+  if (type === 'individual' && error?.status === 403) {
     return 'Este convite pertence a outro e-mail.'
   }
 
@@ -16,23 +19,34 @@ function getInviteError(error) {
   return error?.message ?? 'Não foi possível aceitar o convite.'
 }
 
-function InviteAcceptancePage({ onDone, token }) {
+function InviteAcceptancePage({ onDone, token, type = 'individual' }) {
   const { loadWorkspaces, selectWorkspace } = useWorkspace()
   const [status, setStatus] = useState('loading')
-  const [message, setMessage] = useState('Aceitando convite...')
+  const [message, setMessage] = useState(
+    type === 'link'
+      ? 'Você foi convidado para participar deste workspace como Visualizador.'
+      : 'Aceitando convite...',
+  )
+  const isInviteLink = type === 'link'
 
   const acceptInvite = useCallback(async () => {
     if (!token) {
       setStatus('error')
-      setMessage('Convite inválido.')
+      setMessage(isInviteLink ? 'Link de convite inválido.' : 'Convite inválido.')
       return
     }
 
     setStatus('loading')
-    setMessage('Aceitando convite...')
+    setMessage(
+      isInviteLink
+        ? 'Entrando no workspace como Visualizador...'
+        : 'Aceitando convite...',
+    )
 
     try {
-      const membership = await acceptWorkspaceInvite(token)
+      const membership = isInviteLink
+        ? await acceptWorkspaceInviteLink(token)
+        : await acceptWorkspaceInvite(token)
       const workspaces = await loadWorkspaces()
       const acceptedWorkspace = workspaces.find(
         (workspace) => workspace.id === membership.workspace_id,
@@ -44,12 +58,16 @@ function InviteAcceptancePage({ onDone, token }) {
 
       window.history.replaceState(window.history.state, '', '/')
       setStatus('success')
-      setMessage('Convite aceito. O workspace foi adicionado à sua conta.')
+      setMessage(
+        isInviteLink
+          ? 'Entrada confirmada. O workspace foi adicionado à sua conta.'
+          : 'Convite aceito. O workspace foi adicionado à sua conta.',
+      )
     } catch (error) {
       setStatus('error')
-      setMessage(getInviteError(error))
+      setMessage(getInviteError(error, type))
     }
-  }, [loadWorkspaces, selectWorkspace, token])
+  }, [isInviteLink, loadWorkspaces, selectWorkspace, token, type])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -68,8 +86,18 @@ function InviteAcceptancePage({ onDone, token }) {
         </div>
 
         <div className="workspace-empty-card__copy">
-          <span>Convite de workspace</span>
-          <h1>{status === 'success' ? 'Convite aceito' : 'Aceitar convite'}</h1>
+          <span>
+            {isInviteLink ? 'Link compartilhável' : 'Convite de workspace'}
+          </span>
+          <h1>
+            {status === 'success'
+              ? isInviteLink
+                ? 'Entrada confirmada'
+                : 'Convite aceito'
+              : isInviteLink
+                ? 'Entrar no workspace'
+                : 'Aceitar convite'}
+          </h1>
           <p>{message}</p>
         </div>
 

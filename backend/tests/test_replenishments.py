@@ -1,3 +1,6 @@
+from app import crud
+
+
 def create_product(client, workspace, account, name="Produto"):
     response = client.post(
         f"/workspaces/{workspace['id']}/products",
@@ -359,6 +362,8 @@ def test_replenishment_blocks_active_duplicates_and_allows_terminal_history(
     product = create_product(client, workspace, owner)
 
     first_request = create_replenishment(client, workspace, owner, product)
+    assert first_request["status"] == "open"
+
     duplicate_response = client.post(
         f"/workspaces/{workspace['id']}/replenishments",
         json={
@@ -372,6 +377,37 @@ def test_replenishment_blocks_active_duplicates_and_allows_terminal_history(
     assert duplicate_response.json()["detail"] == (
         "Já existe uma necessidade ativa para este produto."
     )
+
+    other_product = create_product(
+        client,
+        workspace,
+        owner,
+        name="Produto sem conflito",
+    )
+    other_product_request = create_replenishment(
+        client,
+        workspace,
+        owner,
+        other_product,
+    )
+    assert other_product_request["product_id"] == other_product["id"]
+
+    other_workspace = workspace_factory(
+        owner["headers"],
+        name="Lifecycle Other Workspace",
+    )
+    other_workspace_product = create_product(
+        client,
+        other_workspace,
+        owner,
+    )
+    other_workspace_request = create_replenishment(
+        client,
+        other_workspace,
+        owner,
+        other_workspace_product,
+    )
+    assert other_workspace_request["workspace_id"] == other_workspace["id"]
 
     canceled_response = client.patch(
         (
@@ -393,6 +429,21 @@ def test_replenishment_blocks_active_duplicates_and_allows_terminal_history(
         headers=owner["headers"],
     )
     assert completed_response.status_code == 200
+    assert completed_response.json()["status"] == "completed"
+
+    completed_duplicate_response = client.post(
+        f"/workspaces/{workspace['id']}/replenishments",
+        json={
+            "product_id": product["id"],
+            "type": "production",
+            "quantity_needed": 4,
+        },
+        headers=owner["headers"],
+    )
+    assert completed_duplicate_response.status_code == 409
+    assert completed_duplicate_response.json()["detail"] == (
+        "Já existe uma necessidade ativa para este produto."
+    )
 
     stocked_response = client.patch(
         (
@@ -422,6 +473,44 @@ def test_replenishment_blocks_active_duplicates_and_allows_terminal_history(
     assert stocked_list.status_code == 200
     assert [item["id"] for item in stocked_list.json()] == [
         second_request["id"]
+    ]
+
+
+def test_replenishment_database_duplicate_race_returns_conflict(
+    client,
+    user_factory,
+    workspace_factory,
+    monkeypatch,
+):
+    owner = user_factory(name="Race Owner")
+    workspace = workspace_factory(owner["headers"], name="Race Workspace")
+    product = create_product(client, workspace, owner)
+    first_request = create_replenishment(client, workspace, owner, product)
+
+    monkeypatch.setattr(crud, "ACTIVE_REPLENISHMENT_STATUSES", ())
+
+    duplicate_response = client.post(
+        f"/workspaces/{workspace['id']}/replenishments",
+        json={
+            "product_id": product["id"],
+            "type": "production",
+            "quantity_needed": 4,
+        },
+        headers=owner["headers"],
+    )
+
+    assert duplicate_response.status_code == 409
+    assert duplicate_response.json()["detail"] == (
+        "Já existe uma necessidade ativa para este produto."
+    )
+
+    list_response = client.get(
+        f"/workspaces/{workspace['id']}/replenishments?status=all",
+        headers=owner["headers"],
+    )
+    assert list_response.status_code == 200
+    assert [item["id"] for item in list_response.json()] == [
+        first_request["id"]
     ]
 
 

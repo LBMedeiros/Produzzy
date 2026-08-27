@@ -36,6 +36,10 @@ export function listWorkspaceInvites(workspaceId) {
   return request(`/workspaces/${workspaceId}/invites?limit=100`)
 }
 
+export function listWorkspaceInviteLinks(workspaceId) {
+  return request(`/workspaces/${workspaceId}/invite-links?limit=100`)
+}
+
 export function createWorkspaceInvite(workspaceId, data) {
   return request(`/workspaces/${workspaceId}/invites`, {
     body: data,
@@ -44,7 +48,7 @@ export function createWorkspaceInvite(workspaceId, data) {
 }
 
 export function createWorkspaceInviteLink(workspaceId) {
-  return request(`/workspaces/${workspaceId}/invite-link`, {
+  return request(`/workspaces/${workspaceId}/invite-links`, {
     method: 'POST',
   })
 }
@@ -55,8 +59,20 @@ export function acceptWorkspaceInvite(token) {
   })
 }
 
+export function acceptWorkspaceInviteLink(token) {
+  return request(`/invite-links/${encodeURIComponent(token)}/accept`, {
+    method: 'POST',
+  })
+}
+
 export function revokeWorkspaceInvite(workspaceId, inviteId) {
   return request(`/workspaces/${workspaceId}/invites/${inviteId}/revoke`, {
+    method: 'POST',
+  })
+}
+
+export function revokeWorkspaceInviteLink(workspaceId, linkId) {
+  return request(`/workspaces/${workspaceId}/invite-links/${linkId}/revoke`, {
     method: 'POST',
   })
 }

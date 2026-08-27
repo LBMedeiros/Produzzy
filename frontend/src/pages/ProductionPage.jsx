@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -41,6 +41,8 @@ const requestFilters = [
 ]
 
 const activeRequestStatuses = new Set(['open', 'in_progress', 'completed'])
+const REPLENISHMENT_REFRESH_INTERVAL_MS = 10000
+const BACKGROUND_REFRESH_DEDUPE_MS = 1000
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -87,30 +89,89 @@ function ProductionPage({
   const [isSaving, setIsSaving] = useState(false)
   const [updatingRequestId, setUpdatingRequestId] = useState(null)
   const [requestFilter, setRequestFilter] = useState('open')
+  const loadRequestIdRef = useRef(0)
+  const isLoadInFlightRef = useRef(false)
+  const lastBackgroundRefreshAtRef = useRef(0)
 
-  const loadReplenishment = useCallback(async () => {
+  const loadReplenishment = useCallback(async (options = {}) => {
+    const {
+      background = false,
+      preserveError = false,
+      skipIfInFlight = false,
+    } = options
+
     if (!workspaceId) {
+      loadRequestIdRef.current += 1
+      isLoadInFlightRef.current = false
+      setProducts([])
+      setRequests([])
+      setIsLoading(false)
       return
     }
 
-    setIsLoading(true)
-    setError('')
+    if (skipIfInFlight && isLoadInFlightRef.current) {
+      return
+    }
+
+    const loadRequestId = loadRequestIdRef.current + 1
+    loadRequestIdRef.current = loadRequestId
+    isLoadInFlightRef.current = true
+
+    if (!background) {
+      setIsLoading(true)
+    }
+
+    if (!preserveError) {
+      setError('')
+    }
 
     try {
       const [activeProducts, requestItems] = await Promise.all([
         listProducts(workspaceId, { limit: 100, status: 'active' }),
         listReplenishments(workspaceId, { limit: 100, status: 'all' }),
       ])
-      setProducts(activeProducts.filter(needsReplenishment))
-      setRequests(requestItems)
+
+      if (loadRequestIdRef.current === loadRequestId) {
+        setProducts(activeProducts.filter(needsReplenishment))
+        setRequests(requestItems)
+
+        if (!preserveError) {
+          setError('')
+        }
+      }
     } catch (loadError) {
-      setProducts([])
-      setRequests([])
-      setError(getFriendlyError(loadError))
+      if (loadRequestIdRef.current === loadRequestId) {
+        if (!background) {
+          setProducts([])
+          setRequests([])
+        }
+
+        setError(getFriendlyError(loadError))
+      }
     } finally {
-      setIsLoading(false)
+      if (loadRequestIdRef.current === loadRequestId) {
+        isLoadInFlightRef.current = false
+
+        if (!background) {
+          setIsLoading(false)
+        }
+      }
     }
   }, [workspaceId])
+
+  const refreshReplenishmentInBackground = useCallback(() => {
+    const now = Date.now()
+
+    if (
+      now - lastBackgroundRefreshAtRef.current <
+      BACKGROUND_REFRESH_DEDUPE_MS
+    ) {
+      return
+    }
+
+    lastBackgroundRefreshAtRef.current = now
+    loadReplenishment({ background: true, skipIfInFlight: true })
+  }, [loadReplenishment])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -119,6 +180,44 @@ function ProductionPage({
 
     return () => window.clearTimeout(timeoutId)
   }, [loadReplenishment])
+
+  useEffect(() => {
+    if (!workspaceId) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshReplenishmentInBackground()
+      }
+    }, REPLENISHMENT_REFRESH_INTERVAL_MS)
+
+    return () => window.clearInterval(intervalId)
+  }, [refreshReplenishmentInBackground, workspaceId])
+
+  useEffect(() => {
+    if (!workspaceId) {
+      return undefined
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        refreshReplenishmentInBackground()
+      }
+    }
+
+    function handleFocus() {
+      refreshReplenishmentInBackground()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [refreshReplenishmentInBackground, workspaceId])
 
   useEffect(() => {
     if (
@@ -227,6 +326,8 @@ function ProductionPage({
   async function handleCreateRequest(requestData) {
     setIsSaving(true)
     setFormError('')
+    setError('')
+    setSuccessMessage('')
 
     try {
       const createdRequest = await createReplenishment(workspaceId, {
@@ -234,13 +335,28 @@ function ProductionPage({
         ...requestData,
       })
       setRequests((currentRequests) => [createdRequest, ...currentRequests])
+      setProducts((currentProducts) =>
+        currentProducts.filter(
+          (product) => product.id !== createdRequest.product_id,
+        ),
+      )
       setCreationModal(null)
       setRequestFilter('open')
       setSuccessMessage(
         `Necessidade de ${requestTypeLabels[createdRequest.type].toLowerCase()} criada com sucesso.`,
       )
+      await loadReplenishment({ background: true })
     } catch (createError) {
-      setFormError(getFriendlyError(createError))
+      const friendlyMessage = getFriendlyError(createError)
+
+      if (createError?.status === 409) {
+        setCreationModal(null)
+        setRequestFilter('open')
+        await loadReplenishment({ background: true, preserveError: true })
+        setError(friendlyMessage)
+      } else {
+        setFormError(friendlyMessage)
+      }
     } finally {
       setIsSaving(false)
     }
@@ -252,12 +368,17 @@ function ProductionPage({
     setSuccessMessage('')
 
     try {
-      await updateReplenishment(workspaceId, requestItem.id, { status })
-      const requestItems = await listReplenishments(workspaceId, {
-        limit: 100,
-        status: 'all',
-      })
-      setRequests(requestItems)
+      const updatedRequest = await updateReplenishment(
+        workspaceId,
+        requestItem.id,
+        { status },
+      )
+      setRequests((currentRequests) =>
+        currentRequests.map((currentRequest) =>
+          currentRequest.id === requestItem.id ? updatedRequest : currentRequest,
+        ),
+      )
+      await loadReplenishment({ background: true })
 
       if (status === 'completed') {
         setSuccessMessage(
@@ -289,6 +410,7 @@ function ProductionPage({
           currentRequest.id === requestItem.id ? updatedRequest : currentRequest,
         ),
       )
+      await loadReplenishment({ background: true })
       setSuccessMessage(
         shouldAssign
           ? 'Você assumiu esta necessidade de reposição.'
@@ -316,7 +438,12 @@ function ProductionPage({
           <h1>Reposição</h1>
           <p>Veja produtos que precisam ser comprados, produzidos ou repostos.</p>
         </div>
-        <Button onClick={loadReplenishment} variant="secondary">
+        <Button
+          onClick={() =>
+            loadReplenishment({ background: true, skipIfInFlight: true })
+          }
+          variant="secondary"
+        >
           Atualizar dados
         </Button>
       </div>

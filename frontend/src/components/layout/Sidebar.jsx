@@ -25,7 +25,10 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
   const role = getWorkspaceRole(user, activeWorkspace)
 
   return (
-    <aside className={`sidebar ${isCollapsed ? 'is-collapsed' : ''}`}>
+    <aside
+      aria-label="Menu lateral"
+      className={`sidebar ${isCollapsed ? 'is-collapsed' : ''}`}
+    >
       <div className="brand">
         <BrandIcon />
         <div className="brand__text">
@@ -54,6 +57,8 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
               className={`sidebar__item ${activePage === item.id ? 'is-active' : ''}`}
               key={item.id}
               type="button"
+              aria-label={item.label}
+              aria-current={activePage === item.id ? 'page' : undefined}
               onClick={() => onNavigate(item.id)}
               title={item.label}
             >

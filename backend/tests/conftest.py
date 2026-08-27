@@ -60,7 +60,8 @@ def clean_database():
                 "TRUNCATE TABLE "
                 "audit_logs, replenishment_assignees, "
                 "replenishment_requests, stock_movements, "
-                "workspace_invites, "
+                "workspace_invite_link_acceptances, "
+                "workspace_invite_links, workspace_invites, "
                 "workspace_members, products, categories, workspaces, users "
                 "RESTART IDENTITY CASCADE"
             )

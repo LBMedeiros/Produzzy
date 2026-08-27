@@ -48,6 +48,41 @@ def get_invite_status(invite_id: int):
         return invite.status
 
 
+def mark_invite_link_expired(link_id: int):
+    with SessionLocal() as db:
+        invite_link = (
+            db.query(models.WorkspaceInviteLink)
+            .filter(models.WorkspaceInviteLink.id == link_id)
+            .first()
+        )
+        assert invite_link is not None
+
+        invite_link.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+        db.commit()
+
+
+def get_invite_link_status(link_id: int):
+    with SessionLocal() as db:
+        invite_link = (
+            db.query(models.WorkspaceInviteLink)
+            .filter(models.WorkspaceInviteLink.id == link_id)
+            .first()
+        )
+        assert invite_link is not None
+
+        return invite_link.status
+
+
+def count_workspace_memberships(workspace_id: int, user_id: int):
+    with SessionLocal() as db:
+        return (
+            db.query(models.WorkspaceMember)
+            .filter(models.WorkspaceMember.workspace_id == workspace_id)
+            .filter(models.WorkspaceMember.user_id == user_id)
+            .count()
+        )
+
+
 def test_user_creates_workspace_and_becomes_owner(
     client,
     user_factory,
@@ -799,6 +834,242 @@ def test_invite_requires_matching_authenticated_email(
         headers=wrong_user["headers"],
     )
     assert accept_response.status_code == 403
+
+
+def test_invite_link_allows_multiple_viewers_and_counts_usage(
+    client,
+    user_factory,
+    workspace_factory,
+):
+    owner = user_factory(name="Invite Link Owner")
+    workspace = workspace_factory(owner["headers"], name="Invite Link Workspace")
+
+    create_response = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=owner["headers"],
+    )
+    assert create_response.status_code == 201, create_response.text
+    invite_link = create_response.json()
+    assert invite_link["role"] == "viewer"
+    assert invite_link["status"] == "active"
+    assert invite_link["usage_count"] == 0
+    assert invite_link["invite_url"] == f"/join/{invite_link['token']}"
+
+    duplicate_create = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=owner["headers"],
+    )
+    assert duplicate_create.status_code == 201, duplicate_create.text
+    assert duplicate_create.json()["id"] == invite_link["id"]
+    assert duplicate_create.json()["token"] == invite_link["token"]
+
+    account_a = user_factory(name="Invite Link User A")
+    account_b = user_factory(name="Invite Link User B")
+
+    accept_a = client.post(
+        f"/invite-links/{invite_link['token']}/accept",
+        headers=account_a["headers"],
+    )
+    assert accept_a.status_code == 200, accept_a.text
+    assert accept_a.json()["role"] == "viewer"
+    assert accept_a.json()["workspace_id"] == workspace["id"]
+
+    accept_b = client.post(
+        f"/invite-links/{invite_link['token']}/accept",
+        headers=account_b["headers"],
+    )
+    assert accept_b.status_code == 200, accept_b.text
+    assert accept_b.json()["role"] == "viewer"
+
+    repeat_accept_a = client.post(
+        f"/invite-links/{invite_link['token']}/accept",
+        headers=account_a["headers"],
+    )
+    assert repeat_accept_a.status_code == 200, repeat_accept_a.text
+    assert count_workspace_memberships(
+        workspace["id"],
+        account_a["user"]["id"],
+    ) == 1
+
+    list_response = client.get(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=owner["headers"],
+    )
+    assert list_response.status_code == 200, list_response.text
+    listed_link = next(
+        item for item in list_response.json() if item["id"] == invite_link["id"]
+    )
+    assert listed_link["usage_count"] == 2
+    assert "token" not in listed_link
+    assert "invite_url" not in listed_link
+
+
+def test_invite_link_expired_revoked_invalid_and_existing_member_behaviour(
+    client,
+    user_factory,
+    workspace_factory,
+):
+    owner = user_factory(name="Invite Link Lifecycle Owner")
+    workspace = workspace_factory(
+        owner["headers"],
+        name="Invite Link Lifecycle",
+    )
+
+    expired_link_response = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=owner["headers"],
+    )
+    assert expired_link_response.status_code == 201, expired_link_response.text
+    expired_link = expired_link_response.json()
+    mark_invite_link_expired(expired_link["id"])
+
+    expired_user = user_factory(name="Expired Link User")
+    expired_accept = client.post(
+        f"/invite-links/{expired_link['token']}/accept",
+        headers=expired_user["headers"],
+    )
+    assert expired_accept.status_code == 400
+    assert expired_accept.json()["detail"] == "Link de convite expirado."
+    assert get_invite_link_status(expired_link["id"]) == "expired"
+
+    revoked_link_response = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=owner["headers"],
+    )
+    assert revoked_link_response.status_code == 201, revoked_link_response.text
+    revoked_link = revoked_link_response.json()
+
+    revoke_response = client.post(
+        (
+            f"/workspaces/{workspace['id']}/invite-links/"
+            f"{revoked_link['id']}/revoke"
+        ),
+        headers=owner["headers"],
+    )
+    assert revoke_response.status_code == 200, revoke_response.text
+    assert revoke_response.json()["status"] == "revoked"
+
+    revoked_user = user_factory(name="Revoked Link User")
+    revoked_accept = client.post(
+        f"/invite-links/{revoked_link['token']}/accept",
+        headers=revoked_user["headers"],
+    )
+    assert revoked_accept.status_code == 400
+    assert revoked_accept.json()["detail"] == "Link de convite revogado."
+
+    invalid_user = user_factory(name="Invalid Link User")
+    invalid_accept = client.post(
+        f"/invite-links/missing-{uuid4().hex}/accept",
+        headers=invalid_user["headers"],
+    )
+    assert invalid_accept.status_code == 404
+
+    active_link_response = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=owner["headers"],
+    )
+    assert active_link_response.status_code == 201, active_link_response.text
+    existing_member_accept = client.post(
+        f"/invite-links/{active_link_response.json()['token']}/accept",
+        headers=owner["headers"],
+    )
+    assert existing_member_accept.status_code == 400
+    assert existing_member_accept.json()["detail"] == (
+        "Usuário já é membro deste workspace."
+    )
+
+
+def test_invite_link_permissions_and_workspace_isolation(
+    client,
+    user_factory,
+    workspace_factory,
+    workspace_member_factory,
+):
+    owner = user_factory(name="Invite Link Permission Owner")
+    workspace = workspace_factory(
+        owner["headers"],
+        name="Invite Link Permission",
+    )
+    admin = workspace_member_factory(
+        owner["headers"],
+        workspace["id"],
+        "admin",
+    )
+    viewer = workspace_member_factory(
+        owner["headers"],
+        workspace["id"],
+        "viewer",
+    )
+
+    viewer_create = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=viewer["headers"],
+    )
+    assert viewer_create.status_code == 403
+
+    admin_create = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        headers=admin["headers"],
+    )
+    assert admin_create.status_code == 201, admin_create.text
+    invite_link = admin_create.json()
+
+    blocked_role = client.post(
+        f"/workspaces/{workspace['id']}/invite-links",
+        json={"role": "employee"},
+        headers=owner["headers"],
+    )
+    assert blocked_role.status_code == 400
+
+    viewer_revoke = client.post(
+        (
+            f"/workspaces/{workspace['id']}/invite-links/"
+            f"{invite_link['id']}/revoke"
+        ),
+        headers=viewer["headers"],
+    )
+    assert viewer_revoke.status_code == 403
+
+    admin_revoke = client.post(
+        (
+            f"/workspaces/{workspace['id']}/invite-links/"
+            f"{invite_link['id']}/revoke"
+        ),
+        headers=admin["headers"],
+    )
+    assert admin_revoke.status_code == 200, admin_revoke.text
+
+    owner_a = user_factory(name="Invite Link Owner A")
+    workspace_a = workspace_factory(
+        owner_a["headers"],
+        name="Invite Link Isolation A",
+    )
+    owner_b = user_factory(name="Invite Link Owner B")
+    workspace_b = workspace_factory(
+        owner_b["headers"],
+        name="Invite Link Isolation B",
+    )
+    link_b_response = client.post(
+        f"/workspaces/{workspace_b['id']}/invite-links",
+        headers=owner_b["headers"],
+    )
+    assert link_b_response.status_code == 201, link_b_response.text
+    link_b = link_b_response.json()
+
+    wrong_workspace_revoke = client.post(
+        (
+            f"/workspaces/{workspace_a['id']}/invite-links/"
+            f"{link_b['id']}/revoke"
+        ),
+        headers=owner_a["headers"],
+    )
+    assert wrong_workspace_revoke.status_code == 404
+
+    outsider_list = client.get(
+        f"/workspaces/{workspace_b['id']}/invite-links",
+        headers=owner_a["headers"],
+    )
+    assert outsider_list.status_code == 403
 
 
 def test_invite_accept_rate_limits_repeated_email_mismatch(

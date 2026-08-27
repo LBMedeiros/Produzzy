@@ -36,6 +36,24 @@ def accept_invite_with_rate_limit(
     )
 
 
+def accept_invite_link_with_rate_limit(
+    token: str,
+    request: Request,
+    current_user: models.User,
+    db: Session,
+):
+    scope = "invite_link.accept"
+    key = build_rate_limit_key(request, f"user:{current_user.id}")
+
+    return run_with_failure_rate_limit(
+        scope,
+        key,
+        PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS,
+        lambda: crud.accept_workspace_invite_link(token, current_user, db),
+    )
+
+
 @router.get("/workspaces", response_model=list[schemas.WorkspaceResponse])
 def list_workspaces(
     current_user: models.User = Depends(get_current_user),
@@ -173,8 +191,8 @@ def create_workspace_invite(
 
 
 @router.post(
-    "/workspaces/{workspace_id}/invite-link",
-    response_model=schemas.WorkspaceInviteResponse,
+    "/workspaces/{workspace_id}/invite-links",
+    response_model=schemas.WorkspaceInviteLinkResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_workspace_invite_link(
@@ -190,6 +208,47 @@ def create_workspace_invite_link(
         invite_data,
         current_user,
         db,
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/invite-link",
+    response_model=schemas.WorkspaceInviteLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_workspace_invite_link_legacy(
+    workspace_id: int,
+    invite_data: schemas.WorkspaceInviteLinkCreate = (
+        schemas.WorkspaceInviteLinkCreate()
+    ),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.create_workspace_invite_link(
+        workspace_id,
+        invite_data,
+        current_user,
+        db,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/invite-links",
+    response_model=list[schemas.WorkspaceInviteLinkListResponse],
+)
+def list_workspace_invite_links(
+    workspace_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    return crud.list_workspace_invite_links(
+        workspace_id,
+        current_user,
+        db,
+        page,
+        limit,
     )
 
 
@@ -210,6 +269,24 @@ def list_workspace_invites(
         db,
         page,
         limit,
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/invite-links/{link_id}/revoke",
+    response_model=schemas.WorkspaceInviteLinkResponse,
+)
+def revoke_workspace_invite_link(
+    workspace_id: int,
+    link_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.revoke_workspace_invite_link(
+        workspace_id,
+        link_id,
+        current_user,
+        db,
     )
 
 
@@ -242,3 +319,21 @@ def accept_workspace_invite(
     db: Session = Depends(get_db),
 ):
     return accept_invite_with_rate_limit(token, request, current_user, db)
+
+
+@router.post(
+    "/invite-links/{token}/accept",
+    response_model=schemas.WorkspaceMemberResponse,
+)
+def accept_workspace_invite_link(
+    token: str,
+    request: Request,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return accept_invite_link_with_rate_limit(
+        token,
+        request,
+        current_user,
+        db,
+    )

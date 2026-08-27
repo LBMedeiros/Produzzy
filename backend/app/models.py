@@ -206,10 +206,20 @@ class User(Base):
         back_populates="created_by_user",
         foreign_keys="WorkspaceInvite.created_by_user_id",
     )
+    created_workspace_invite_links = relationship(
+        "WorkspaceInviteLink",
+        back_populates="created_by_user",
+        foreign_keys="WorkspaceInviteLink.created_by_user_id",
+    )
     accepted_workspace_invites = relationship(
         "WorkspaceInvite",
         back_populates="accepted_by_user",
         foreign_keys="WorkspaceInvite.accepted_by_user_id",
+    )
+    invite_link_acceptances = relationship(
+        "WorkspaceInviteLinkAcceptance",
+        back_populates="user",
+        foreign_keys="WorkspaceInviteLinkAcceptance.user_id",
     )
     created_replenishment_requests = relationship(
         "ReplenishmentRequest",
@@ -266,6 +276,11 @@ class Workspace(Base):
     )
     invites = relationship(
         "WorkspaceInvite",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
+    invite_links = relationship(
+        "WorkspaceInviteLink",
         back_populates="workspace",
         cascade="all, delete-orphan",
     )
@@ -407,6 +422,99 @@ class WorkspaceInvite(Base):
         return f"/invites/{self.token}/accept"
 
 
+class WorkspaceInviteLink(Base):
+    __tablename__ = "workspace_invite_links"
+    __table_args__ = (
+        CheckConstraint(
+            "role = 'viewer'",
+            name="ck_workspace_invite_links_role_viewer",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'expired', 'revoked')",
+            name="ck_workspace_invite_links_status",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id"),
+        nullable=False,
+        index=True,
+    )
+    token = Column(String(255), nullable=False, unique=True, index=True)
+    role = Column(String(20), nullable=False, default="viewer")
+    status = Column(String(20), nullable=False, default="active", index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    workspace = relationship(
+        "Workspace",
+        back_populates="invite_links",
+    )
+    created_by_user = relationship(
+        "User",
+        back_populates="created_workspace_invite_links",
+        foreign_keys=[created_by_user_id],
+    )
+    acceptances = relationship(
+        "WorkspaceInviteLinkAcceptance",
+        back_populates="invite_link",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def invite_url(self):
+        return f"/join/{self.token}"
+
+    @property
+    def usage_count(self):
+        return len(self.acceptances or [])
+
+
+class WorkspaceInviteLinkAcceptance(Base):
+    __tablename__ = "workspace_invite_link_acceptances"
+    __table_args__ = (
+        UniqueConstraint(
+            "invite_link_id",
+            "user_id",
+            name="uq_workspace_invite_link_acceptances_link_user",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    invite_link_id = Column(
+        Integer,
+        ForeignKey("workspace_invite_links.id"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    accepted_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    invite_link = relationship(
+        "WorkspaceInviteLink",
+        back_populates="acceptances",
+    )
+    user = relationship(
+        "User",
+        back_populates="invite_link_acceptances",
+        foreign_keys=[user_id],
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -530,6 +638,18 @@ class ReplenishmentRequest(Base):
             "ix_replenishment_requests_workspace_status",
             "workspace_id",
             "status",
+        ),
+        Index(
+            "uq_replenishment_requests_active_product",
+            "workspace_id",
+            "product_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('open', 'in_progress', 'completed')"
+            ),
+            sqlite_where=text(
+                "status IN ('open', 'in_progress', 'completed')"
+            ),
         ),
     )
 

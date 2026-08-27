@@ -25,6 +25,12 @@ class InviteStatus(str, Enum):
     revoked = "revoked"
 
 
+class InviteLinkStatus(str, Enum):
+    active = "active"
+    expired = "expired"
+    revoked = "revoked"
+
+
 class ProductStatus(str, Enum):
     active = "active"
     deleted = "deleted"
@@ -221,6 +227,36 @@ class WorkspaceInviteResponse(BaseModel):
     accepted_by_user_id: Optional[int] = None
     created_at: Optional[datetime] = None
     accepted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceInviteLinkResponse(BaseModel):
+    id: int
+    workspace_id: int
+    token: str
+    role: str
+    status: str
+    invite_url: str
+    expires_at: datetime
+    created_by_user_id: int
+    created_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    usage_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceInviteLinkListResponse(BaseModel):
+    id: int
+    workspace_id: int
+    role: str
+    status: str
+    expires_at: datetime
+    created_by_user_id: int
+    created_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    usage_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 

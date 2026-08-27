@@ -21,22 +21,27 @@ const pageComponents = {
   stock: StockPage,
 }
 
-function getInviteTokenFromPath(pathname = window.location.pathname) {
-  const match = pathname.match(/^\/invites\/([^/]+)\/accept\/?$/)
+function getInviteAcceptTargetFromPath(pathname = window.location.pathname) {
+  const individualMatch = pathname.match(/^\/invites\/([^/]+)\/accept\/?$/)
+  const linkMatch = pathname.match(/^\/join\/([^/]+)\/?$/)
+  const match = individualMatch || linkMatch
 
   if (!match) {
-    return ''
+    return null
   }
 
   try {
-    return decodeURIComponent(match[1])
+    return {
+      token: decodeURIComponent(match[1]),
+      type: individualMatch ? 'individual' : 'link',
+    }
   } catch {
-    return ''
+    return null
   }
 }
 
 function clearInviteAcceptPath() {
-  if (getInviteTokenFromPath()) {
+  if (getInviteAcceptTargetFromPath()) {
     window.history.replaceState(window.history.state, '', '/')
   }
 }
@@ -55,11 +60,13 @@ function ProtectedApp() {
   const { activeWorkspace, loading: workspaceLoading } = useWorkspace()
   const [activePage, setActivePage] = useState('dashboard')
   const [navigationIntent, setNavigationIntent] = useState(null)
-  const [inviteToken, setInviteToken] = useState(() => getInviteTokenFromPath())
+  const [inviteAcceptTarget, setInviteAcceptTarget] = useState(() =>
+    getInviteAcceptTargetFromPath(),
+  )
 
   useEffect(() => {
     function handleLocationChange() {
-      setInviteToken(getInviteTokenFromPath())
+      setInviteAcceptTarget(getInviteAcceptTargetFromPath())
     }
 
     window.addEventListener('popstate', handleLocationChange)
@@ -74,7 +81,7 @@ function ProtectedApp() {
 
   function handleInviteDone() {
     clearInviteAcceptPath()
-    setInviteToken('')
+    setInviteAcceptTarget(null)
   }
 
   if (authLoading) {
@@ -85,8 +92,14 @@ function ProtectedApp() {
     return <LoginPage />
   }
 
-  if (inviteToken) {
-    return <InviteAcceptancePage token={inviteToken} onDone={handleInviteDone} />
+  if (inviteAcceptTarget?.token) {
+    return (
+      <InviteAcceptancePage
+        token={inviteAcceptTarget.token}
+        type={inviteAcceptTarget.type}
+        onDone={handleInviteDone}
+      />
+    )
   }
 
   if (workspaceLoading && !activeWorkspace) {

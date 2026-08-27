@@ -36,6 +36,12 @@ ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS = (
 ACTIVE_REPLENISHMENT_EXISTS = (
     "Já existe uma necessidade ativa para este produto."
 )
+ACTIVE_REPLENISHMENT_INDEX_NAME = "uq_replenishment_requests_active_product"
+ACTIVE_REPLENISHMENT_STATUSES = (
+    schemas.ReplenishmentStatus.open.value,
+    schemas.ReplenishmentStatus.in_progress.value,
+    schemas.ReplenishmentStatus.completed.value,
+)
 INVITE_LINK_EMAIL_DOMAIN = "invite.produzzy.local"
 
 
@@ -500,6 +506,22 @@ def delete_workspace(
             ),
         ).delete(synchronize_session=False)
 
+    invite_link_ids = [
+        invite_link_id
+        for (invite_link_id,) in (
+            db.query(models.WorkspaceInviteLink.id)
+            .filter(models.WorkspaceInviteLink.workspace_id == workspace_id)
+            .all()
+        )
+    ]
+
+    if invite_link_ids:
+        db.query(models.WorkspaceInviteLinkAcceptance).filter(
+            models.WorkspaceInviteLinkAcceptance.invite_link_id.in_(
+                invite_link_ids,
+            ),
+        ).delete(synchronize_session=False)
+
     db.query(models.ReplenishmentRequest).filter(
         models.ReplenishmentRequest.workspace_id == workspace_id,
     ).delete(synchronize_session=False)
@@ -514,6 +536,9 @@ def delete_workspace(
     ).delete(synchronize_session=False)
     db.query(models.WorkspaceInvite).filter(
         models.WorkspaceInvite.workspace_id == workspace_id,
+    ).delete(synchronize_session=False)
+    db.query(models.WorkspaceInviteLink).filter(
+        models.WorkspaceInviteLink.workspace_id == workspace_id,
     ).delete(synchronize_session=False)
     db.query(models.WorkspaceMember).filter(
         models.WorkspaceMember.workspace_id == workspace_id,
@@ -660,6 +685,23 @@ def expire_workspace_invite(
         entity_type="workspace_invite",
         entity_id=invite.id,
         metadata={"role": invite.role},
+    )
+
+
+def expire_workspace_invite_link(
+    invite_link: models.WorkspaceInviteLink,
+    current_user: models.User | None,
+    db: Session,
+):
+    invite_link.status = schemas.InviteLinkStatus.expired.value
+    create_audit_log(
+        db=db,
+        workspace_id=invite_link.workspace_id,
+        user_id=current_user.id if current_user else None,
+        action="invite_link.expired",
+        entity_type="workspace_invite_link",
+        entity_id=invite_link.id,
+        metadata={"role": invite_link.role},
     )
 
 
@@ -903,47 +945,94 @@ def create_workspace_invite_link(
             detail="Links de convite usam o cargo viewer por padrão.",
         )
 
-    email = get_workspace_invite_link_email(workspace_id)
-    pending_invites = (
-        db.query(models.WorkspaceInvite)
-        .filter(models.WorkspaceInvite.workspace_id == workspace_id)
-        .filter(models.WorkspaceInvite.email == email)
-        .filter(models.WorkspaceInvite.status == schemas.InviteStatus.pending.value)
+    active_links = (
+        db.query(models.WorkspaceInviteLink)
+        .options(joinedload(models.WorkspaceInviteLink.acceptances))
+        .filter(models.WorkspaceInviteLink.workspace_id == workspace_id)
+        .filter(
+            models.WorkspaceInviteLink.status
+            == schemas.InviteLinkStatus.active.value
+        )
+        .order_by(models.WorkspaceInviteLink.created_at.desc())
         .all()
     )
 
-    for pending_invite in pending_invites:
-        if not is_expired(pending_invite.expires_at):
-            return pending_invite
+    expired_any = False
 
-        expire_workspace_invite(pending_invite, current_user, db)
-        release_workspace_invite_link_email(pending_invite)
+    for active_link in active_links:
+        if not is_expired(active_link.expires_at):
+            return active_link
 
-    invite = models.WorkspaceInvite(
+        expire_workspace_invite_link(active_link, current_user, db)
+        expired_any = True
+
+    if expired_any:
+        db.flush()
+
+    invite_link = models.WorkspaceInviteLink(
         workspace_id=workspace_id,
-        email=email,
         role=schemas.WorkspaceRole.viewer.value,
         token=secrets.token_urlsafe(32),
-        status=schemas.InviteStatus.pending.value,
+        status=schemas.InviteLinkStatus.active.value,
         expires_at=aware_utc_now() + timedelta(days=7),
         created_by_user_id=current_user.id,
     )
 
-    db.add(invite)
+    db.add(invite_link)
     db.flush()
     create_audit_log(
         db=db,
         workspace_id=workspace_id,
         user_id=current_user.id,
-        action="invite.link_created",
-        entity_type="workspace_invite",
-        entity_id=invite.id,
-        metadata={"role": invite.role},
+        action="invite_link.created",
+        entity_type="workspace_invite_link",
+        entity_id=invite_link.id,
+        metadata={"role": invite_link.role},
     )
     db.commit()
-    db.refresh(invite)
+    db.refresh(invite_link)
 
-    return invite
+    return invite_link
+
+
+def list_workspace_invite_links(
+    workspace_id: int,
+    current_user: models.User,
+    db: Session,
+    page: int = 1,
+    limit: int = 20,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        INVITE_MANAGE_ROLES,
+    )
+    invite_links = (
+        paginate_query(
+            db.query(models.WorkspaceInviteLink)
+            .options(joinedload(models.WorkspaceInviteLink.acceptances))
+            .filter(models.WorkspaceInviteLink.workspace_id == workspace_id)
+            .order_by(models.WorkspaceInviteLink.created_at.desc()),
+            page,
+            limit,
+        )
+        .all()
+    )
+    expired_any = False
+
+    for invite_link in invite_links:
+        if (
+            invite_link.status == schemas.InviteLinkStatus.active.value
+            and is_expired(invite_link.expires_at)
+        ):
+            expire_workspace_invite_link(invite_link, current_user, db)
+            expired_any = True
+
+    if expired_any:
+        db.commit()
+
+    return invite_links
 
 
 def list_workspace_invites(
@@ -964,6 +1053,11 @@ def list_workspace_invites(
     query = (
         db.query(models.WorkspaceInvite)
         .filter(models.WorkspaceInvite.workspace_id == workspace_id)
+        .filter(
+            ~models.WorkspaceInvite.email.like(
+                f"%@{INVITE_LINK_EMAIL_DOMAIN}"
+            )
+        )
         .order_by(models.WorkspaceInvite.created_at.desc())
     )
 
@@ -1080,6 +1174,171 @@ def accept_workspace_invite(
     db.refresh(member)
 
     return member
+
+
+def accept_workspace_invite_link(
+    token: str,
+    current_user: models.User,
+    db: Session,
+):
+    invite_link = (
+        db.query(models.WorkspaceInviteLink)
+        .options(joinedload(models.WorkspaceInviteLink.acceptances))
+        .filter(models.WorkspaceInviteLink.token == token)
+        .first()
+    )
+
+    if invite_link is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link de convite não encontrado.",
+        )
+
+    if invite_link.status == schemas.InviteLinkStatus.revoked.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de convite revogado.",
+        )
+
+    if invite_link.status == schemas.InviteLinkStatus.expired.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de convite expirado.",
+        )
+
+    if is_expired(invite_link.expires_at):
+        expire_workspace_invite_link(invite_link, current_user, db)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de convite expirado.",
+        )
+
+    member = get_workspace_member(invite_link.workspace_id, current_user.id, db)
+    existing_acceptance = (
+        db.query(models.WorkspaceInviteLinkAcceptance)
+        .filter(
+            models.WorkspaceInviteLinkAcceptance.invite_link_id
+            == invite_link.id
+        )
+        .filter(models.WorkspaceInviteLinkAcceptance.user_id == current_user.id)
+        .first()
+    )
+
+    if member is not None and existing_acceptance is not None:
+        return member
+
+    if member is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Usuário já é membro deste workspace.",
+        )
+
+    member = models.WorkspaceMember(
+        workspace_id=invite_link.workspace_id,
+        user_id=current_user.id,
+        role=schemas.WorkspaceRole.viewer.value,
+    )
+    db.add(member)
+    db.flush()
+
+    db.add(
+        models.WorkspaceInviteLinkAcceptance(
+            invite_link_id=invite_link.id,
+            user_id=current_user.id,
+        )
+    )
+    create_audit_log(
+        db=db,
+        workspace_id=invite_link.workspace_id,
+        user_id=current_user.id,
+        action="invite_link.accepted",
+        entity_type="workspace_invite_link",
+        entity_id=invite_link.id,
+        metadata={
+            "invite_link_id": invite_link.id,
+            "role": schemas.WorkspaceRole.viewer.value,
+        },
+    )
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        member = get_workspace_member(invite_link.workspace_id, current_user.id, db)
+
+        if member is not None:
+            return member
+
+        raise
+
+    db.refresh(member)
+
+    return member
+
+
+def revoke_workspace_invite_link(
+    workspace_id: int,
+    link_id: int,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        INVITE_MANAGE_ROLES,
+    )
+    invite_link = (
+        db.query(models.WorkspaceInviteLink)
+        .options(joinedload(models.WorkspaceInviteLink.acceptances))
+        .filter(models.WorkspaceInviteLink.workspace_id == workspace_id)
+        .filter(models.WorkspaceInviteLink.id == link_id)
+        .first()
+    )
+
+    if invite_link is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link de convite não encontrado.",
+        )
+
+    if (
+        invite_link.status == schemas.InviteLinkStatus.active.value
+        and is_expired(invite_link.expires_at)
+    ):
+        expire_workspace_invite_link(invite_link, current_user, db)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de convite expirado.",
+        )
+
+    if invite_link.status != schemas.InviteLinkStatus.active.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Somente links ativos podem ser revogados.",
+        )
+
+    invite_link.status = schemas.InviteLinkStatus.revoked.value
+    invite_link.revoked_at = aware_utc_now()
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        action="invite_link.revoked",
+        entity_type="workspace_invite_link",
+        entity_id=invite_link.id,
+        metadata={
+            "invite_link_id": invite_link.id,
+            "role": invite_link.role,
+        },
+    )
+
+    db.commit()
+    db.refresh(invite_link)
+
+    return invite_link
 
 
 def revoke_workspace_invite(
@@ -1700,6 +1959,28 @@ def replenishment_metadata(replenishment_request):
     }
 
 
+def is_active_replenishment_unique_violation(error: IntegrityError):
+    original_error = getattr(error, "orig", None)
+    diagnostic = getattr(original_error, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+
+    if constraint_name == ACTIVE_REPLENISHMENT_INDEX_NAME:
+        return True
+
+    error_message = str(original_error or error)
+
+    if ACTIVE_REPLENISHMENT_INDEX_NAME in error_message:
+        return True
+
+    normalized_message = error_message.lower()
+
+    return (
+        "unique constraint failed" in normalized_message
+        and "replenishment_requests.workspace_id" in normalized_message
+        and "replenishment_requests.product_id" in normalized_message
+    )
+
+
 def create_replenishment_request(
     workspace_id: int,
     request_data: schemas.ReplenishmentRequestCreate,
@@ -1723,11 +2004,7 @@ def create_replenishment_request(
         .filter(models.ReplenishmentRequest.product_id == product.id)
         .filter(
             models.ReplenishmentRequest.status.in_(
-                [
-                    schemas.ReplenishmentStatus.open.value,
-                    schemas.ReplenishmentStatus.in_progress.value,
-                    schemas.ReplenishmentStatus.completed.value,
-                ]
+                ACTIVE_REPLENISHMENT_STATUSES
             )
         )
         .first()
@@ -1749,33 +2026,47 @@ def create_replenishment_request(
         quantity_needed=request_data.quantity_needed,
         notes=request_data.notes,
     )
-    db.add(replenishment_request)
-    db.flush()
-    replenishment_request.product = product
+    request_id = None
 
-    if request_data.assigned_to_user_id is not None:
-        db.add(
-            models.ReplenishmentAssignee(
-                replenishment_id=replenishment_request.id,
-                user_id=request_data.assigned_to_user_id,
-                assigned_by_user_id=current_user.id,
+    try:
+        db.add(replenishment_request)
+        db.flush()
+        request_id = replenishment_request.id
+        replenishment_request.product = product
+
+        if request_data.assigned_to_user_id is not None:
+            db.add(
+                models.ReplenishmentAssignee(
+                    replenishment_id=replenishment_request.id,
+                    user_id=request_data.assigned_to_user_id,
+                    assigned_by_user_id=current_user.id,
+                )
             )
-        )
 
-    create_audit_log(
-        db=db,
-        workspace_id=workspace_id,
-        user_id=current_user.id,
-        action="replenishment.created",
-        entity_type="replenishment_request",
-        entity_id=replenishment_request.id,
-        metadata=replenishment_metadata(replenishment_request),
-    )
-    db.commit()
+        create_audit_log(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=current_user.id,
+            action="replenishment.created",
+            entity_type="replenishment_request",
+            entity_id=replenishment_request.id,
+            metadata=replenishment_metadata(replenishment_request),
+        )
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+
+        if is_active_replenishment_unique_violation(error):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=ACTIVE_REPLENISHMENT_EXISTS,
+            ) from error
+
+        raise
 
     return get_replenishment_request_by_id(
         workspace_id,
-        replenishment_request.id,
+        request_id,
         db,
     )
 
