@@ -56,6 +56,14 @@ export function setStoredToken(token, { rememberMe = false } = {}) {
   sessionStorage.setItem(TOKEN_STORAGE_KEY, token)
 }
 
+export function replaceStoredToken(token) {
+  const sessionToken = sessionStorage.getItem(TOKEN_STORAGE_KEY)
+  const persistentToken = localStorage.getItem(TOKEN_STORAGE_KEY)
+  const rememberMe = Boolean(persistentToken && !sessionToken)
+
+  setStoredToken(token, { rememberMe })
+}
+
 export function clearStoredToken() {
   localStorage.removeItem(TOKEN_STORAGE_KEY)
   sessionStorage.removeItem(TOKEN_STORAGE_KEY)

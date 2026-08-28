@@ -5,12 +5,8 @@ import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import StatCard from '../components/ui/StatCard'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { getReplenishmentStatus, needsReplenishment } from '../lib/replenishment'
-import {
-  getDashboardSummary,
-  listRecentActivity,
-} from '../services/dashboardService'
-import { listLowStockProducts, listProducts } from '../services/productService'
+import { getReplenishmentStatus } from '../lib/replenishment'
+import { getDashboard } from '../services/dashboardService'
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -84,10 +80,8 @@ function DashboardPage({ onNavigate }) {
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
   const [summary, setSummary] = useState(null)
-  const [lowStockProducts, setLowStockProducts] = useState([])
-  const [stockAttentionProducts, setStockAttentionProducts] = useState([])
+  const [attentionProducts, setAttentionProducts] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
-  const [activityError, setActivityError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -98,27 +92,17 @@ function DashboardPage({ onNavigate }) {
 
     setIsLoading(true)
     setError('')
-    setActivityError('')
 
     try {
-      const [summaryData, lowStockItems, activeProducts] = await Promise.all([
-        getDashboardSummary(workspaceId),
-        listLowStockProducts(workspaceId),
-        listProducts(workspaceId, { limit: 100, status: 'active' }),
-      ])
+      const dashboard = await getDashboard(workspaceId)
 
-      setSummary(summaryData)
-      setLowStockProducts(lowStockItems)
-      setStockAttentionProducts(activeProducts.filter(needsReplenishment))
-
-      try {
-        const activityItems = await listRecentActivity(workspaceId, { limit: 6 })
-        setRecentActivity(activityItems.map(formatAuditLog))
-      } catch (activityLoadError) {
-        setRecentActivity([])
-        setActivityError(getFriendlyError(activityLoadError))
-      }
+      setSummary(dashboard.summary)
+      setAttentionProducts(dashboard.attention_products ?? [])
+      setRecentActivity((dashboard.recent_activity ?? []).map(formatAuditLog))
     } catch (loadError) {
+      setSummary(null)
+      setAttentionProducts([])
+      setRecentActivity([])
       setError(getFriendlyError(loadError))
     } finally {
       setIsLoading(false)
@@ -133,16 +117,6 @@ function DashboardPage({ onNavigate }) {
     return () => window.clearTimeout(timeoutId)
   }, [loadDashboard])
 
-  const replenishmentProducts = useMemo(
-    () => stockAttentionProducts,
-    [stockAttentionProducts],
-  )
-  const attentionProducts = replenishmentProducts.slice(0, 6)
-  const outOfStockCount = useMemo(
-    () => stockAttentionProducts.filter((product) => product.quantity <= 0).length,
-    [stockAttentionProducts],
-  )
-
   const stats = useMemo(
     () => [
       {
@@ -155,13 +129,13 @@ function DashboardPage({ onNavigate }) {
         label: 'Estoque baixo',
         tone: 'yellow',
         trend: 'Abaixo do mínimo cadastrado',
-        value: formatNumber(lowStockProducts.length),
+        value: formatNumber(summary?.low_stock_products),
       },
       {
         label: 'Sem estoque',
         tone: 'green',
         trend: 'Produtos com quantidade zerada',
-        value: formatNumber(outOfStockCount),
+        value: formatNumber(summary?.out_of_stock_products),
       },
       {
         label: 'Movimentações',
@@ -170,7 +144,7 @@ function DashboardPage({ onNavigate }) {
         value: formatNumber(summary?.total_stock_movements),
       },
     ],
-    [lowStockProducts.length, outOfStockCount, summary],
+    [summary],
   )
 
   const attentionColumns = [
@@ -243,11 +217,7 @@ function DashboardPage({ onNavigate }) {
               )}
             </Card>
             <Card title="Atividades recentes" eyebrow="Recent activity">
-              {activityError ? (
-                <p className="stock-feedback stock-feedback--error">
-                  {activityError}
-                </p>
-              ) : recentActivity.length ? (
+              {recentActivity.length ? (
                 <DataTable columns={activityColumns} rows={recentActivity} />
               ) : (
                 <div className="stock-empty">

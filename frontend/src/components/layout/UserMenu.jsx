@@ -1,6 +1,7 @@
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import { getInitials, getWorkspaceRole } from '../../lib/formatters'
+import { getWorkspaceRole } from '../../lib/formatters'
+import UserAvatar from '../ui/UserAvatar'
 
 function UserMenu({ user }) {
   const { logout } = useAuth()
@@ -10,7 +11,11 @@ function UserMenu({ user }) {
   return (
     <div className="user-menu" role="menu" aria-label="Menu do usuário">
       <div className="user-menu__profile">
-        <div className="avatar avatar--light">{getInitials(user?.name)}</div>
+        <UserAvatar
+          className="avatar--light"
+          name={user?.name}
+          src={user?.avatar_url}
+        />
         <div>
           <strong>{user?.name ?? 'Usuário'}</strong>
           {user?.email ? <span>{user.email}</span> : null}

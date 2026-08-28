@@ -25,3 +25,23 @@ def get_dashboard_summary(
     )
 
     return crud.get_dashboard_summary(db, workspace_id)
+
+
+@router.get("", response_model=schemas.DashboardResponse)
+def get_dashboard(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    member = crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+
+    return crud.get_dashboard(
+        db=db,
+        workspace_id=workspace_id,
+        include_recent_activity=member.role in crud.AUDIT_LOG_READ_ROLES,
+    )

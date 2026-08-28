@@ -107,6 +107,72 @@ def test_user_creates_workspace_and_becomes_owner(
     assert members[0]["role"] == "owner"
 
 
+def test_workspace_team_returns_members_pending_invites_and_enforces_roles(
+    client,
+    user_factory,
+    workspace_factory,
+    workspace_member_factory,
+):
+    owner = user_factory(name="Team Owner")
+    workspace = workspace_factory(owner["headers"], name="Team Workspace")
+    admin = workspace_member_factory(owner["headers"], workspace["id"], "admin")
+    viewer = workspace_member_factory(owner["headers"], workspace["id"], "viewer")
+    outsider = user_factory(name="Team Outsider")
+    other_workspace = workspace_factory(
+        outsider["headers"],
+        name="Other Team Workspace",
+    )
+
+    pending_email = unique_email("pending-team")
+    invite_response = client.post(
+        f"/workspaces/{workspace['id']}/invites",
+        json={"email": pending_email, "role": "employee"},
+        headers=owner["headers"],
+    )
+    assert invite_response.status_code == 201, invite_response.text
+
+    other_invite_response = client.post(
+        f"/workspaces/{other_workspace['id']}/invites",
+        json={"email": unique_email("other-pending-team"), "role": "viewer"},
+        headers=outsider["headers"],
+    )
+    assert other_invite_response.status_code == 201, other_invite_response.text
+
+    owner_response = client.get(
+        f"/workspaces/{workspace['id']}/team",
+        headers=owner["headers"],
+    )
+    assert owner_response.status_code == 200, owner_response.text
+    team = owner_response.json()
+    member_user_ids = {member["user_id"] for member in team["members"]}
+    assert member_user_ids == {
+        owner["user"]["id"],
+        admin["user"]["id"],
+        viewer["user"]["id"],
+    }
+    assert [invite["email"] for invite in team["pending_invites"]] == [
+        pending_email
+    ]
+
+    admin_response = client.get(
+        f"/workspaces/{workspace['id']}/team",
+        headers=admin["headers"],
+    )
+    assert admin_response.status_code == 200
+
+    viewer_response = client.get(
+        f"/workspaces/{workspace['id']}/team",
+        headers=viewer["headers"],
+    )
+    assert viewer_response.status_code == 403
+
+    outsider_response = client.get(
+        f"/workspaces/{workspace['id']}/team",
+        headers=outsider["headers"],
+    )
+    assert outsider_response.status_code == 403
+
+
 def test_workspace_rejects_blank_name_after_trim(client, user_factory):
     account = user_factory(name="Blank Workspace Owner")
 

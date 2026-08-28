@@ -136,6 +136,18 @@ def list_workspace_members(
     )
 
 
+@router.get(
+    "/workspaces/{workspace_id}/team",
+    response_model=schemas.WorkspaceTeamResponse,
+)
+def get_workspace_team(
+    workspace_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.get_workspace_team(workspace_id, current_user, db)
+
+
 @router.patch(
     "/workspaces/{workspace_id}/members/{member_id}",
     response_model=schemas.WorkspaceMemberResponse,

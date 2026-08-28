@@ -36,6 +36,10 @@ export function listWorkspaceInvites(workspaceId) {
   return request(`/workspaces/${workspaceId}/invites?limit=100`)
 }
 
+export function getWorkspaceTeam(workspaceId) {
+  return request(`/workspaces/${workspaceId}/team`)
+}
+
 export function listWorkspaceInviteLinks(workspaceId) {
   return request(`/workspaces/${workspaceId}/invite-links?limit=100`)
 }

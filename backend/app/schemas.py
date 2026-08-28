@@ -134,6 +134,7 @@ class UserResponse(BaseModel):
     id: int
     name: str
     email: str
+    avatar_url: Optional[str] = None
     is_active: bool
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -141,9 +142,37 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserProfileUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        return normalize_required_name(value)
+
+
+class UserEmailChange(BaseModel):
+    email: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+    current_password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return normalize_email_input(value)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user: UserResponse
+
+
+class EmailChangeResponse(Token):
+    pass
 
 
 class TokenData(BaseModel):
@@ -259,6 +288,11 @@ class WorkspaceInviteLinkListResponse(BaseModel):
     usage_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class WorkspaceTeamResponse(BaseModel):
+    members: list[WorkspaceMemberResponse] = Field(default_factory=list)
+    pending_invites: list[WorkspaceInviteResponse] = Field(default_factory=list)
 
 
 class ProductCreate(BaseModel):
@@ -423,6 +457,7 @@ class DashboardSummary(BaseModel):
     total_products: int
     total_categories: int
     low_stock_products: int
+    out_of_stock_products: int = 0
     total_stock_quantity: int
     total_stock_movements: int
 
@@ -470,3 +505,9 @@ class AuditLogResponse(BaseModel):
         from_attributes=True,
         populate_by_name=True,
     )
+
+
+class DashboardResponse(BaseModel):
+    summary: DashboardSummary
+    attention_products: list[ProductResponse] = Field(default_factory=list)
+    recent_activity: list[AuditLogResponse] = Field(default_factory=list)

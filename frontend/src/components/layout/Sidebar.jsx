@@ -1,7 +1,8 @@
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import { getInitials, getWorkspaceRole } from '../../lib/formatters'
+import { getWorkspaceRole } from '../../lib/formatters'
 import BrandIcon from '../ui/BrandIcon'
+import UserAvatar from '../ui/UserAvatar'
 import {
   ChevronIcon,
   DashboardIcon,
@@ -72,7 +73,7 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
       </nav>
 
       <div className="sidebar__user">
-        <div className="avatar">{getInitials(user?.name)}</div>
+        <UserAvatar name={user?.name} src={user?.avatar_url} />
         <div className="sidebar__user-text">
           <strong>{user?.name ?? 'Usuário'}</strong>
           <span>{role}</span>

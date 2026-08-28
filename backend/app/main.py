@@ -1,7 +1,14 @@
-from fastapi import FastAPI
+import logging
+from time import perf_counter
+
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import PRODUZZY_ALLOWED_ORIGINS
+from app.database import engine
 from app.routers import (
     audit_logs,
     auth,
@@ -16,6 +23,11 @@ from app.routers import (
 )
 
 
+CORS_PREFLIGHT_MAX_AGE_SECONDS = 600
+REQUEST_TIMING_QUIET_PATHS = {"/health"}
+logger = logging.getLogger(__name__)
+request_logger = logging.getLogger("produzzy.requests")
+
 app = FastAPI(
     title="Produzzy API",
     description="API para controle de estoque e produção.",
@@ -29,7 +41,46 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=CORS_PREFLIGHT_MAX_AGE_SECONDS,
 )
+
+
+@app.middleware("http")
+async def add_request_timing(request: Request, call_next):
+    started_at = perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        duration_ms = round((perf_counter() - started_at) * 1000)
+        request_logger.exception(
+            "%s %s %s %sms",
+            request.method,
+            request.url.path,
+            status_code,
+            duration_ms,
+        )
+        response = JSONResponse(
+            status_code=status_code,
+            content={"detail": "Erro interno do servidor."},
+        )
+        response.headers["X-Process-Time-Ms"] = str(duration_ms)
+        return response
+
+    duration_ms = round((perf_counter() - started_at) * 1000)
+    response.headers["X-Process-Time-Ms"] = str(duration_ms)
+
+    if request.url.path not in REQUEST_TIMING_QUIET_PATHS:
+        request_logger.info(
+            "%s %s %s %sms",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+
+    return response
 
 
 app.include_router(auth.router)
@@ -58,3 +109,18 @@ def health_check():
         "status": "ok",
         "message": "API funcionando corretamente.",
     }
+
+
+@app.get("/ready")
+def readiness_check():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        logger.warning("Readiness check failed.")
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "not_ready"},
+        )
+
+    return {"status": "ready"}

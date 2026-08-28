@@ -168,6 +168,8 @@ class User(Base):
     hashed_password = Column(String(255), nullable=True)
     auth_provider = Column(String(30), nullable=False, default="password")
     provider_user_id = Column(String(255), nullable=True, index=True)
+    avatar_url = Column(String(500), nullable=True)
+    avatar_public_id = Column(String(255), nullable=True)
 
     is_active = Column(Boolean, default=True, nullable=False)
 

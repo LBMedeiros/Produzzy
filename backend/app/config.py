@@ -132,6 +132,18 @@ PRODUZZY_GOOGLE_CLIENT_SECRET = os.getenv(
     "PRODUZZY_GOOGLE_CLIENT_SECRET",
     "",
 ).strip()
+PRODUZZY_CLOUDINARY_CLOUD_NAME = os.getenv(
+    "PRODUZZY_CLOUDINARY_CLOUD_NAME",
+    "",
+).strip()
+PRODUZZY_CLOUDINARY_API_KEY = os.getenv(
+    "PRODUZZY_CLOUDINARY_API_KEY",
+    "",
+).strip()
+PRODUZZY_CLOUDINARY_API_SECRET = os.getenv(
+    "PRODUZZY_CLOUDINARY_API_SECRET",
+    "",
+).strip()
 
 validate_security_settings(
     PRODUZZY_ENV,

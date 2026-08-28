@@ -1,6 +1,7 @@
 import {
   clearStoredToken,
   getStoredToken,
+  replaceStoredToken,
   request,
   setStoredToken,
 } from '../lib/api'
@@ -56,6 +57,40 @@ export function register(data) {
 
 export function getMe() {
   return request('/auth/me')
+}
+
+export function updateProfile(data) {
+  return request('/auth/me', {
+    body: data,
+    method: 'PATCH',
+  })
+}
+
+export async function changeEmail(data) {
+  const result = await request('/auth/me/change-email', {
+    body: data,
+    method: 'POST',
+  })
+
+  replaceStoredToken(result.access_token)
+
+  return result
+}
+
+export function uploadAvatar(file) {
+  const formData = new FormData()
+  formData.set('file', file)
+
+  return request('/auth/me/avatar', {
+    body: formData,
+    method: 'POST',
+  })
+}
+
+export function removeAvatar() {
+  return request('/auth/me/avatar', {
+    method: 'DELETE',
+  })
 }
 
 export function getToken() {

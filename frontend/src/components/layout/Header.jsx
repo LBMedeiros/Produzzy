@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../ui/Button'
+import UserAvatar from '../ui/UserAvatar'
 import CreateWorkspaceModal from './CreateWorkspaceModal'
 import MemberAvatars from './MemberAvatars'
 import MembersPopover from './MembersPopover'
@@ -14,8 +15,7 @@ import {
 } from '../../lib/formatters'
 import {
   deleteWorkspaceMember,
-  listWorkspaceInvites,
-  listWorkspaceMembers,
+  getWorkspaceTeam,
   revokeWorkspaceInvite,
   updateWorkspaceMember,
 } from '../../services/workspaceService'
@@ -159,6 +159,7 @@ function Header({ onNavigate }) {
   const [searchError, setSearchError] = useState('')
   const [activeSearchIndex, setActiveSearchIndex] = useState(0)
   const [workspaceMembers, setWorkspaceMembers] = useState([])
+  const [membersWorkspaceId, setMembersWorkspaceId] = useState(null)
   const [isMembersLoading, setIsMembersLoading] = useState(false)
   const [membersError, setMembersError] = useState('')
   const [membersFeedback, setMembersFeedback] = useState('')
@@ -236,6 +237,7 @@ function Header({ onNavigate }) {
     return [
       {
         id: `current-${user.id}`,
+        avatar_url: user.avatar_url,
         initials: getInitials(user.name),
         name: user.name,
       },
@@ -310,10 +312,15 @@ function Header({ onNavigate }) {
     : 0
   const activeSearchResult = flatSearchResults[boundedActiveSearchIndex]
 
-  const loadMembers = useCallback(async () => {
+  const loadMembers = useCallback(async ({ force = false } = {}) => {
     if (!workspaceId) {
       setWorkspaceMembers([])
+      setMembersWorkspaceId(null)
       return []
+    }
+
+    if (!force && membersWorkspaceId === workspaceId) {
+      return workspaceMembers
     }
 
     const requestId = membersRequestIdRef.current + 1
@@ -322,10 +329,9 @@ function Header({ onNavigate }) {
     setMembersError('')
 
     try {
-      const [memberItems, inviteItems] = await Promise.all([
-        listWorkspaceMembers(workspaceId),
-        listWorkspaceInvites(workspaceId),
-      ])
+      const teamData = await getWorkspaceTeam(workspaceId)
+      const memberItems = teamData.members ?? []
+      const inviteItems = teamData.pending_invites ?? []
       const normalizedMembers = (Array.isArray(memberItems) ? memberItems : []).map(
         normalizeMember,
       )
@@ -336,12 +342,14 @@ function Header({ onNavigate }) {
 
       if (membersRequestIdRef.current === requestId) {
         setWorkspaceMembers(teamItems)
+        setMembersWorkspaceId(workspaceId)
       }
 
       return teamItems
     } catch (error) {
       if (membersRequestIdRef.current === requestId) {
         setWorkspaceMembers([])
+        setMembersWorkspaceId(null)
         setMembersError(getMembersError(error))
       }
 
@@ -351,21 +359,25 @@ function Header({ onNavigate }) {
         setIsMembersLoading(false)
       }
     }
-  }, [workspaceId])
+  }, [membersWorkspaceId, workspaceId, workspaceMembers])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setMembersFeedback('')
+      setMembersError('')
       setRemovingMemberId(null)
+      setRevokingInviteId(null)
       setSavingMemberId(null)
-      loadMembers()
+      setWorkspaceMembers([])
+      setMembersWorkspaceId(null)
+      setIsMembersLoading(false)
     }, 0)
 
     return () => {
       window.clearTimeout(timeoutId)
       membersRequestIdRef.current += 1
     }
-  }, [loadMembers])
+  }, [workspaceId])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1002,7 +1014,11 @@ function Header({ onNavigate }) {
               aria-expanded={isUserMenuOpen}
               title={user?.email}
             >
-              <div className="avatar avatar--light">{getInitials(user?.name)}</div>
+              <UserAvatar
+                className="avatar--light"
+                name={user?.name}
+                src={user?.avatar_url}
+              />
               <strong>{getFirstName(user?.name)}</strong>
               <span className="select-chevron" aria-hidden="true"></span>
             </button>
@@ -1018,7 +1034,7 @@ function Header({ onNavigate }) {
         <ShareWorkspaceModal
           currentMemberRole={currentMemberRole}
           onClose={() => setIsShareOpen(false)}
-          onInviteCreated={loadMembers}
+          onInviteCreated={() => loadMembers({ force: true })}
         />
       ) : null}
     </>

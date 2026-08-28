@@ -15,7 +15,11 @@ import {
   login as loginRequest,
   loginWithGoogle as loginWithGoogleRequest,
   logout as logoutRequest,
+  changeEmail as changeEmailRequest,
+  removeAvatar as removeAvatarRequest,
   register as registerRequest,
+  updateProfile as updateProfileRequest,
+  uploadAvatar as uploadAvatarRequest,
 } from '../services/authService'
 
 const AuthContext = createContext(null)
@@ -112,10 +116,10 @@ export function AuthProvider({ children }) {
     setError('')
 
     try {
-      const tokenData = await loginRequest(email, password, options)
-      const currentUser = await getMe()
+      const authData = await loginRequest(email, password, options)
+      const currentUser = authData.user
       const commitSession = () => {
-        setToken(tokenData.access_token)
+        setToken(authData.access_token)
         setUser(currentUser)
       }
 
@@ -141,10 +145,10 @@ export function AuthProvider({ children }) {
     setError('')
 
     try {
-      const tokenData = await loginWithGoogleRequest(code, redirectUri, options)
-      const currentUser = await getMe()
+      const authData = await loginWithGoogleRequest(code, redirectUri, options)
+      const currentUser = authData.user
       const commitSession = () => {
-        setToken(tokenData.access_token)
+        setToken(authData.access_token)
         setUser(currentUser)
       }
 
@@ -177,6 +181,39 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
+  const updateProfile = useCallback(async (data) => {
+    const updatedUser = await updateProfileRequest(data)
+
+    setUser(updatedUser)
+
+    return updatedUser
+  }, [])
+
+  const changeEmail = useCallback(async (data) => {
+    const result = await changeEmailRequest(data)
+
+    setUser(result.user)
+    setToken(result.access_token)
+
+    return result
+  }, [])
+
+  const uploadAvatar = useCallback(async (file) => {
+    const updatedUser = await uploadAvatarRequest(file)
+
+    setUser(updatedUser)
+
+    return updatedUser
+  }, [])
+
+  const removeAvatar = useCallback(async () => {
+    const updatedUser = await removeAvatarRequest()
+
+    setUser(updatedUser)
+
+    return updatedUser
+  }, [])
+
   const logout = useCallback(() => {
     clearSession()
   }, [clearSession])
@@ -189,20 +226,28 @@ export function AuthProvider({ children }) {
       login,
       loginWithGoogle,
       logout,
+      changeEmail,
+      removeAvatar,
       refreshMe,
       register,
       token,
+      updateProfile,
+      uploadAvatar,
       user,
     }),
     [
+      changeEmail,
       error,
       loading,
       login,
       loginWithGoogle,
       logout,
+      removeAvatar,
       refreshMe,
       register,
       token,
+      updateProfile,
+      uploadAvatar,
       user,
     ],
   )
