@@ -1,6 +1,7 @@
 import secrets
 import unicodedata
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
 
 from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
@@ -102,8 +103,20 @@ def create_user(user_data: schemas.UserCreate, db: Session):
     return new_user
 
 
-def authenticate_user(login_data: schemas.UserLogin, db: Session):
+def elapsed_ms(started_at: float):
+    return round((perf_counter() - started_at) * 1000)
+
+
+def authenticate_user(
+    login_data: schemas.UserLogin,
+    db: Session,
+    auth_timings: dict[str, int] | None = None,
+):
+    lookup_started_at = perf_counter()
     user = get_user_by_email(login_data.email, db)
+
+    if auth_timings is not None:
+        auth_timings["user_lookup_ms"] = elapsed_ms(lookup_started_at)
 
     invalid_credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -112,9 +125,17 @@ def authenticate_user(login_data: schemas.UserLogin, db: Session):
     )
 
     if not user or not user.hashed_password:
+        if auth_timings is not None:
+            auth_timings.setdefault("password_verify_ms", 0)
         raise invalid_credentials_error
 
-    if not verify_password(login_data.password, user.hashed_password):
+    password_verify_started_at = perf_counter()
+    is_valid_password = verify_password(login_data.password, user.hashed_password)
+
+    if auth_timings is not None:
+        auth_timings["password_verify_ms"] = elapsed_ms(password_verify_started_at)
+
+    if not is_valid_password:
         raise invalid_credentials_error
 
     if not user.is_active:

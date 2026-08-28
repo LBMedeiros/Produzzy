@@ -58,6 +58,20 @@ def get_app_env():
     return os.getenv("PRODUZZY_ENV", DEFAULT_PRODUZZY_ENV).strip().lower()
 
 
+def get_api_version():
+    explicit_version = os.getenv("PRODUZZY_API_VERSION", "").strip()
+
+    if explicit_version:
+        return explicit_version
+
+    render_commit = os.getenv("RENDER_GIT_COMMIT", "").strip()
+
+    if render_commit:
+        return render_commit[:12]
+
+    return get_app_env()
+
+
 def is_production_environment(app_env: str):
     return app_env in PRODUCTION_ENVIRONMENTS
 
@@ -92,6 +106,7 @@ def validate_security_settings(
 
 
 PRODUZZY_ENV = get_app_env()
+PRODUZZY_API_VERSION = get_api_version()
 DATABASE_URL = get_database_url()
 PRODUZZY_ALLOWED_ORIGINS = get_allowed_origins()
 PRODUZZY_SECRET_KEY = os.getenv(

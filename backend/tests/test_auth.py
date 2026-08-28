@@ -55,6 +55,7 @@ def test_register_login_and_me(client, user_factory):
 def assert_token_payload_has_safe_user(data, expected_email, expected_name):
     assert data["access_token"]
     assert data["token_type"] == "bearer"
+    assert data["user"]["id"]
     assert data["user"]["email"] == expected_email
     assert data["user"]["name"] == expected_name
     assert "password" not in data["user"]
@@ -118,6 +119,8 @@ def test_oauth_token_login_returns_token_user_and_working_token(client):
     )
 
     assert response.status_code == 200, response.text
+    assert response.headers["x-process-time-ms"]
+    assert response.headers["x-produzzy-api-version"]
     data = response.json()
     assert_token_payload_has_safe_user(data, email, "OAuth Token User")
 
@@ -127,6 +130,52 @@ def test_oauth_token_login_returns_token_user_and_working_token(client):
     )
     assert me_response.status_code == 200
     assert me_response.json()["email"] == email
+
+
+def test_auth_token_logs_internal_timing_without_sensitive_data(
+    client,
+    monkeypatch,
+):
+    email = unique_email("token-timing")
+    password = "strong-password"
+    logged_messages = []
+
+    def capture_log(message, *args):
+        logged_messages.append(message % args)
+
+    monkeypatch.setattr(auth_router.auth_logger, "info", capture_log)
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "name": "Token Timing User",
+            "email": email,
+            "password": password,
+        },
+    )
+    assert register_response.status_code == 201, register_response.text
+
+    response = client.post(
+        "/auth/token",
+        data={
+            "username": email,
+            "password": password,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    login_message = next(
+        message
+        for message in logged_messages
+        if message.startswith("auth.login success")
+    )
+
+    assert "lookup=" in login_message
+    assert "password_verify=" in login_message
+    assert "token=" in login_message
+    assert "total=" in login_message
+    assert email not in login_message
+    assert password not in login_message
+    assert response.json()["access_token"] not in login_message
 
 
 def test_login_rejects_invalid_credentials_without_token_payload(

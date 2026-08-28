@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.config import PRODUZZY_ALLOWED_ORIGINS
+from app.config import PRODUZZY_ALLOWED_ORIGINS, PRODUZZY_API_VERSION
 from app.database import engine
 from app.routers import (
     audit_logs,
@@ -25,6 +25,10 @@ from app.routers import (
 
 CORS_PREFLIGHT_MAX_AGE_SECONDS = 600
 REQUEST_TIMING_QUIET_PATHS = {"/health"}
+EXPOSED_RESPONSE_HEADERS = [
+    "X-Process-Time-Ms",
+    "X-Produzzy-API-Version",
+]
 logger = logging.getLogger(__name__)
 request_logger = logging.getLogger("produzzy.requests")
 
@@ -41,6 +45,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=EXPOSED_RESPONSE_HEADERS,
     max_age=CORS_PREFLIGHT_MAX_AGE_SECONDS,
 )
 
@@ -66,10 +71,12 @@ async def add_request_timing(request: Request, call_next):
             content={"detail": "Erro interno do servidor."},
         )
         response.headers["X-Process-Time-Ms"] = str(duration_ms)
+        response.headers["X-Produzzy-API-Version"] = PRODUZZY_API_VERSION
         return response
 
     duration_ms = round((perf_counter() - started_at) * 1000)
     response.headers["X-Process-Time-Ms"] = str(duration_ms)
+    response.headers["X-Produzzy-API-Version"] = PRODUZZY_API_VERSION
 
     if request.url.path not in REQUEST_TIMING_QUIET_PATHS:
         request_logger.info(
@@ -108,6 +115,7 @@ def health_check():
     return {
         "status": "ok",
         "message": "API funcionando corretamente.",
+        "api_version": PRODUZZY_API_VERSION,
     }
 
 

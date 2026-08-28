@@ -13,7 +13,9 @@ def test_health_is_liveness_and_includes_timing_header(client):
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.json()["api_version"]
     assert response.headers["x-process-time-ms"]
+    assert response.headers["x-produzzy-api-version"]
 
 
 def test_cors_preflight_uses_cache_max_age(client):

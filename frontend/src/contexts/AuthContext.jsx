@@ -39,6 +39,29 @@ function shouldUseAuthViewTransition() {
   )
 }
 
+function isValidAuthenticatedUser(candidate) {
+  return Boolean(
+    candidate &&
+      typeof candidate === 'object' &&
+      candidate.id !== undefined &&
+      candidate.id !== null &&
+      typeof candidate.email === 'string' &&
+      candidate.email.trim() &&
+      typeof candidate.name === 'string' &&
+      candidate.name.trim(),
+  )
+}
+
+function getValidAccessToken(authData) {
+  const accessToken = authData?.access_token
+
+  if (typeof accessToken === 'string' && accessToken.trim()) {
+    return accessToken
+  }
+
+  throw new Error('Não foi possível validar a sessão de login.')
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(() => getToken())
@@ -61,7 +84,13 @@ export function AuthProvider({ children }) {
       return null
     }
 
-    const currentUser = await getMe()
+    const currentUser = await getMe(storedToken)
+
+    if (!isValidAuthenticatedUser(currentUser)) {
+      clearSession()
+      return null
+    }
+
     setUser(currentUser)
     setToken(storedToken)
 
@@ -86,9 +115,14 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const currentUser = await getMe()
+        const currentUser = await getMe(storedToken)
 
         if (!isMounted) {
+          return
+        }
+
+        if (!isValidAuthenticatedUser(currentUser)) {
+          clearSession()
           return
         }
 
@@ -117,9 +151,17 @@ export function AuthProvider({ children }) {
 
     try {
       const authData = await loginRequest(email, password, options)
-      const currentUser = authData.user
+      const accessToken = getValidAccessToken(authData)
+      const currentUser = isValidAuthenticatedUser(authData.user)
+        ? authData.user
+        : await getMe(accessToken)
+
+      if (!isValidAuthenticatedUser(currentUser)) {
+        throw new Error('Não foi possível validar a sessão de login.')
+      }
+
       const commitSession = () => {
-        setToken(authData.access_token)
+        setToken(accessToken)
         setUser(currentUser)
       }
 
@@ -146,9 +188,17 @@ export function AuthProvider({ children }) {
 
     try {
       const authData = await loginWithGoogleRequest(code, redirectUri, options)
-      const currentUser = authData.user
+      const accessToken = getValidAccessToken(authData)
+      const currentUser = isValidAuthenticatedUser(authData.user)
+        ? authData.user
+        : await getMe(accessToken)
+
+      if (!isValidAuthenticatedUser(currentUser)) {
+        throw new Error('Não foi possível validar a sessão de login.')
+      }
+
       const commitSession = () => {
-        setToken(authData.access_token)
+        setToken(accessToken)
         setUser(currentUser)
       }
 

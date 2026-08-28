@@ -55,8 +55,8 @@ export function register(data) {
   })
 }
 
-export function getMe() {
-  return request('/auth/me')
+export function getMe(token) {
+  return request('/auth/me', token ? { token } : undefined)
 }
 
 export function updateProfile(data) {

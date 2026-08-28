@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from time import perf_counter
 
 from fastapi import (
     APIRouter,
@@ -33,13 +34,22 @@ from app.services.security_service import (
 
 
 logger = logging.getLogger(__name__)
+auth_logger = logging.getLogger("produzzy.auth")
 router = APIRouter(
     prefix="/auth",
     tags=["Auth"],
 )
 
 
-def create_token_for_user(user: models.User):
+def elapsed_ms(started_at: float):
+    return round((perf_counter() - started_at) * 1000)
+
+
+def create_token_for_user(
+    user: models.User,
+    auth_timings: dict[str, int] | None = None,
+):
+    token_started_at = perf_counter()
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
     access_token = create_access_token(
@@ -47,11 +57,62 @@ def create_token_for_user(user: models.User):
         expires_delta=access_token_expires,
     )
 
+    if auth_timings is not None:
+        auth_timings["token_creation_ms"] = elapsed_ms(token_started_at)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": user,
     }
+
+
+def log_password_login_timing(
+    outcome: str,
+    rate_limit_key: str,
+    auth_timings: dict[str, int],
+):
+    auth_logger.info(
+        (
+            "auth.login %s key=%s lookup=%sms password_verify=%sms "
+            "token=%sms total=%sms"
+        ),
+        outcome,
+        rate_limit_key[:12],
+        auth_timings.get("user_lookup_ms", 0),
+        auth_timings.get("password_verify_ms", 0),
+        auth_timings.get("token_creation_ms", 0),
+        auth_timings.get("total_auth_ms", 0),
+    )
+
+
+def authenticate_password_login(
+    login_data: schemas.UserLogin,
+    request: Request,
+    db: Session,
+):
+    total_started_at = perf_counter()
+    auth_timings: dict[str, int] = {}
+    key = build_rate_limit_key(request, crud.normalize_email(login_data.email))
+
+    try:
+        user = run_with_failure_rate_limit(
+            "auth.login",
+            key,
+            PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS,
+            PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+            lambda: crud.authenticate_user(login_data, db, auth_timings),
+        )
+        response = create_token_for_user(user, auth_timings)
+    except HTTPException:
+        auth_timings["total_auth_ms"] = elapsed_ms(total_started_at)
+        log_password_login_timing("failure", key, auth_timings)
+        raise
+
+    auth_timings["total_auth_ms"] = elapsed_ms(total_started_at)
+    log_password_login_timing("success", key, auth_timings)
+
+    return response
 
 
 @router.post(
@@ -81,16 +142,7 @@ def login_user(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    key = build_rate_limit_key(request, crud.normalize_email(login_data.email))
-    user = run_with_failure_rate_limit(
-        "auth.login",
-        key,
-        PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS,
-        PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-        lambda: crud.authenticate_user(login_data, db),
-    )
-
-    return create_token_for_user(user)
+    return authenticate_password_login(login_data, request, db)
 
 
 @router.post("/token", response_model=schemas.Token)
@@ -104,16 +156,7 @@ def login_for_swagger(
         password=form_data.password,
     )
 
-    key = build_rate_limit_key(request, crud.normalize_email(login_data.email))
-    user = run_with_failure_rate_limit(
-        "auth.login",
-        key,
-        PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS,
-        PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-        lambda: crud.authenticate_user(login_data, db),
-    )
-
-    return create_token_for_user(user)
+    return authenticate_password_login(login_data, request, db)
 
 
 @router.post("/google", response_model=schemas.Token)
@@ -171,10 +214,7 @@ def change_current_user_email(
 ):
     updated_user = crud.change_current_user_email(current_user, email_data, db)
 
-    return {
-        **create_token_for_user(updated_user),
-        "user": updated_user,
-    }
+    return create_token_for_user(updated_user)
 
 
 def raise_avatar_storage_error(error: Exception):

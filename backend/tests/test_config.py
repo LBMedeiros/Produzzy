@@ -3,6 +3,7 @@ import pytest
 from app.config import (
     DEFAULT_ALLOWED_ORIGINS,
     DEFAULT_SECRET_KEY,
+    get_api_version,
     validate_security_settings,
 )
 
@@ -13,6 +14,20 @@ def test_development_allows_default_local_settings():
         DEFAULT_SECRET_KEY,
         ["*"],
     )
+
+
+def test_api_version_prefers_explicit_value(monkeypatch):
+    monkeypatch.setenv("PRODUZZY_API_VERSION", "build-2026-08-28")
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abcdef1234567890")
+
+    assert get_api_version() == "build-2026-08-28"
+
+
+def test_api_version_uses_short_render_commit(monkeypatch):
+    monkeypatch.delenv("PRODUZZY_API_VERSION", raising=False)
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abcdef1234567890")
+
+    assert get_api_version() == "abcdef123456"
 
 
 def test_production_rejects_default_secret_key():
