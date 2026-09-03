@@ -261,7 +261,7 @@ def test_category_restore_skips_conflicting_product_and_blocks_name_conflict(
     assert blocked_restore.status_code == 400
     assert (
         blocked_restore.json()["detail"]
-        == "Another active category with this name already exists in this workspace."
+        == "Já existe outra categoria ativa com esse nome neste workspace."
     )
 
 

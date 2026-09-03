@@ -26,13 +26,13 @@ INVITE_MANAGE_ROLES = {"owner", "admin"}
 AUDIT_LOG_READ_ROLES = {"owner", "admin"}
 ADMIN_MEMBER_TARGET_ROLES = {"employee", "viewer"}
 ACTIVE_PRODUCT_NAME_EXISTS = (
-    "An active product with this name already exists in this workspace."
+    "Já existe um produto ativo com esse nome neste workspace."
 )
 ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS = (
-    "Another active product with this name already exists in this workspace."
+    "Já existe outro produto ativo com esse nome neste workspace."
 )
 ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS = (
-    "Another active category with this name already exists in this workspace."
+    "Já existe outra categoria ativa com esse nome neste workspace."
 )
 ACTIVE_REPLENISHMENT_EXISTS = (
     "Já existe uma necessidade ativa para este produto."
@@ -604,7 +604,7 @@ def delete_workspace(
 
     if replenishment_ids:
         db.query(models.ReplenishmentAssignee).filter(
-            models.ReplenishmentAssignee.replenishment_request_id.in_(
+            models.ReplenishmentAssignee.replenishment_id.in_(
                 replenishment_ids,
             ),
         ).delete(synchronize_session=False)
@@ -1558,6 +1558,7 @@ def get_product_by_id(
     db: Session,
     workspace_id: int | None = None,
     include_deleted: bool = False,
+    for_update: bool = False,
 ):
     query = db.query(models.Product).filter(models.Product.id == product_id)
 
@@ -1568,6 +1569,9 @@ def get_product_by_id(
 
     if not include_deleted:
         query = query.filter(models.Product.is_active.is_(True))
+
+    if for_update and db.bind is not None and db.bind.dialect.name != "sqlite":
+        query = query.with_for_update()
 
     product = query.first()
 
@@ -1676,7 +1680,7 @@ def list_products(
     elif status_value != schemas.ProductStatus.all.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid product status.",
+            detail="Status de produto inválido.",
         )
 
     if category:
@@ -1821,7 +1825,7 @@ def restore_product(
     if product.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Product is already active.",
+            detail="O produto já está ativo.",
         )
 
     if product.deleted_by_category_id is not None:
@@ -1835,7 +1839,7 @@ def restore_product(
         if not deleted_category.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Restore the category before restoring this product.",
+                detail="Restaure a categoria antes de restaurar este produto.",
             )
 
     existing_product = get_product_by_name(
@@ -1891,12 +1895,13 @@ def create_stock_movement(
         db,
         workspace_id,
         include_deleted=True,
+        for_update=True,
     )
 
     if not product.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot move stock for an inactive product.",
+            detail="Não é possível movimentar estoque de um produto inativo.",
         )
 
     replenishment_request = None
@@ -1930,6 +1935,15 @@ def create_stock_movement(
             )
 
     quantity_before = product.quantity
+
+    if (
+        movement_data.movement_type != schemas.StockMovementType.ajuste
+        and movement_data.quantity <= 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A quantidade da movimentação precisa ser maior que zero.",
+        )
 
     if movement_data.movement_type == schemas.StockMovementType.entrada:
         quantity_after = quantity_before + movement_data.quantity
@@ -2787,7 +2801,7 @@ def list_categories(
     elif status_value != schemas.CategoryStatus.all.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid category status.",
+            detail="Status de categoria inválido.",
         )
 
     if search:

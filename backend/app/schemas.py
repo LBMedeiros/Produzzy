@@ -338,7 +338,9 @@ class ProductResponse(BaseModel):
 
 class StockMovementCreate(BaseModel):
     movement_type: StockMovementType
-    quantity: int = Field(gt=0)
+    # entrada/saída exigem > 0 (validado em crud.create_stock_movement);
+    # ajuste aceita 0 para corrigir o estoque para vazio.
+    quantity: int = Field(ge=0)
     reason: Optional[str] = Field(default=None, max_length=255)
     replenishment_request_id: Optional[int] = Field(default=None, gt=0)
 

@@ -85,6 +85,10 @@ class Product(Base):
             sqlite_where=text("is_active = 1"),
         ),
         Index("ix_products_workspace_is_active", "workspace_id", "is_active"),
+        CheckConstraint(
+            "quantity >= 0",
+            name="ck_products_quantity_non_negative",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
