@@ -13,9 +13,14 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy import UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+# JSONB on Postgres (indexable, faster), plain JSON elsewhere (e.g. SQLite).
+JSONColumn = JSON().with_variant(JSONB, "postgresql")
 
 
 def utc_now():
@@ -39,7 +44,7 @@ class Category(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -94,13 +99,21 @@ class Product(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
     name = Column(String(100), nullable=False, index=True)
+    # `category` is the denormalized category name, kept in sync from
+    # `category_id` on create/update/rename. `category_id` is the real link.
     category = Column(String(100), nullable=False, index=True)
+    category_id = Column(
+        Integer,
+        ForeignKey("categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     quantity = Column(Integer, nullable=False, default=0)
     minimum_quantity = Column(Integer, nullable=False, default=0)
@@ -115,7 +128,7 @@ class Product(Base):
     )
     deleted_by_category_id = Column(
         Integer,
-        ForeignKey("categories.id"),
+        ForeignKey("categories.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -132,6 +145,10 @@ class Product(Base):
         "Workspace",
         back_populates="products",
     )
+    category_record = relationship(
+        "Category",
+        foreign_keys=[category_id],
+    )
     deleted_by_user = relationship(
         "User",
         back_populates="deleted_products",
@@ -145,10 +162,13 @@ class Product(Base):
         "StockMovement",
         back_populates="product",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     replenishment_requests = relationship(
         "ReplenishmentRequest",
         back_populates="product",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
@@ -275,40 +295,57 @@ class Workspace(Base):
         back_populates="owned_workspaces",
         foreign_keys=[owner_id],
     )
+    # Deleting a workspace removes all of its data. The delete itself is done
+    # by the database via ON DELETE CASCADE (see migration 0014);
+    # passive_deletes=True tells the ORM to rely on that instead of loading
+    # and deleting every child row by hand.
     members = relationship(
         "WorkspaceMember",
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     invites = relationship(
         "WorkspaceInvite",
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     invite_links = relationship(
         "WorkspaceInviteLink",
         back_populates="workspace",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     products = relationship(
         "Product",
         back_populates="workspace",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     audit_logs = relationship(
         "AuditLog",
         back_populates="workspace",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     categories = relationship(
         "Category",
         back_populates="workspace",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     stock_movements = relationship(
         "StockMovement",
         back_populates="workspace",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     replenishment_requests = relationship(
         "ReplenishmentRequest",
         back_populates="workspace",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
@@ -325,7 +362,7 @@ class WorkspaceMember(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -383,7 +420,7 @@ class WorkspaceInvite(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -444,7 +481,7 @@ class WorkspaceInviteLink(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -474,6 +511,7 @@ class WorkspaceInviteLink(Base):
         "WorkspaceInviteLinkAcceptance",
         back_populates="invite_link",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     @property
@@ -498,7 +536,7 @@ class WorkspaceInviteLinkAcceptance(Base):
     id = Column(Integer, primary_key=True, index=True)
     invite_link_id = Column(
         Integer,
-        ForeignKey("workspace_invite_links.id"),
+        ForeignKey("workspace_invite_links.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -527,7 +565,7 @@ class AuditLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
@@ -540,8 +578,13 @@ class AuditLog(Base):
     action = Column(String(100), nullable=False, index=True)
     entity_type = Column(String(100), nullable=False, index=True)
     entity_id = Column(Integer, nullable=True, index=True)
-    metadata_json = Column("metadata", JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    metadata_json = Column("metadata", JSONColumn, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
 
     workspace = relationship(
         "Workspace",
@@ -560,13 +603,13 @@ class StockMovement(Base):
 
     product_id = Column(
         Integer,
-        ForeignKey("products.id"),
+        ForeignKey("products.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -662,13 +705,13 @@ class ReplenishmentRequest(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(
         Integer,
-        ForeignKey("workspaces.id"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     product_id = Column(
         Integer,
-        ForeignKey("products.id"),
+        ForeignKey("products.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -719,6 +762,7 @@ class ReplenishmentRequest(Base):
         "ReplenishmentAssignee",
         back_populates="replenishment",
         cascade="all, delete-orphan",
+        passive_deletes=True,
         order_by="ReplenishmentAssignee.created_at.asc()",
     )
 
@@ -760,7 +804,7 @@ class ReplenishmentAssignee(Base):
     id = Column(Integer, primary_key=True, index=True)
     replenishment_id = Column(
         Integer,
-        ForeignKey("replenishment_requests.id"),
+        ForeignKey("replenishment_requests.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

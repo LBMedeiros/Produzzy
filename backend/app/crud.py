@@ -593,62 +593,8 @@ def delete_workspace(
             detail="Apenas o owner principal pode excluir o workspace.",
         )
 
-    replenishment_ids = [
-        request_id
-        for (request_id,) in (
-            db.query(models.ReplenishmentRequest.id)
-            .filter(models.ReplenishmentRequest.workspace_id == workspace_id)
-            .all()
-        )
-    ]
-
-    if replenishment_ids:
-        db.query(models.ReplenishmentAssignee).filter(
-            models.ReplenishmentAssignee.replenishment_id.in_(
-                replenishment_ids,
-            ),
-        ).delete(synchronize_session=False)
-
-    invite_link_ids = [
-        invite_link_id
-        for (invite_link_id,) in (
-            db.query(models.WorkspaceInviteLink.id)
-            .filter(models.WorkspaceInviteLink.workspace_id == workspace_id)
-            .all()
-        )
-    ]
-
-    if invite_link_ids:
-        db.query(models.WorkspaceInviteLinkAcceptance).filter(
-            models.WorkspaceInviteLinkAcceptance.invite_link_id.in_(
-                invite_link_ids,
-            ),
-        ).delete(synchronize_session=False)
-
-    db.query(models.ReplenishmentRequest).filter(
-        models.ReplenishmentRequest.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
-    db.query(models.StockMovement).filter(
-        models.StockMovement.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
-    db.query(models.Product).filter(
-        models.Product.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
-    db.query(models.Category).filter(
-        models.Category.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
-    db.query(models.WorkspaceInvite).filter(
-        models.WorkspaceInvite.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
-    db.query(models.WorkspaceInviteLink).filter(
-        models.WorkspaceInviteLink.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
-    db.query(models.WorkspaceMember).filter(
-        models.WorkspaceMember.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
-    db.query(models.AuditLog).filter(
-        models.AuditLog.workspace_id == workspace_id,
-    ).delete(synchronize_session=False)
+    # Every table that belongs to a workspace has ON DELETE CASCADE on its
+    # workspace_id FK (migration 0014), so a single delete removes all of it.
     db.delete(workspace)
     db.commit()
 
@@ -1602,6 +1548,17 @@ def get_product_by_name(
     return query.first()
 
 
+def resolve_category_id(name: str, workspace_id: int, db: Session):
+    """Best-effort link of a product's category name to its Category row.
+
+    Returns None when no active category with that name exists in the
+    workspace (arbitrary strings from non-UI clients stay unlinked).
+    """
+    category = get_category_by_name(name, db, workspace_id, only_active=True)
+
+    return category.id if category else None
+
+
 def create_product(
     product_data: schemas.ProductCreate,
     db: Session,
@@ -1622,10 +1579,12 @@ def create_product(
             detail=ACTIVE_PRODUCT_NAME_EXISTS,
         )
 
+    category_name = product_data.category.strip()
     new_product = models.Product(
         workspace_id=workspace_id,
         name=name,
-        category=product_data.category.strip(),
+        category=category_name,
+        category_id=resolve_category_id(category_name, workspace_id, db),
         quantity=product_data.quantity,
         minimum_quantity=product_data.minimum_quantity,
     )
@@ -1742,6 +1701,11 @@ def update_product(
 
     if "category" in update_data:
         update_data["category"] = update_data["category"].strip()
+        product.category_id = resolve_category_id(
+            update_data["category"],
+            workspace_id,
+            db,
+        )
 
     for field, value in update_data.items():
         setattr(product, field, value)
@@ -2844,8 +2808,20 @@ def update_category(
 
         update_data["name"] = new_name
 
+    old_name = category.name
+
     for field, value in update_data.items():
         setattr(category, field, value)
+
+    if "name" in update_data and category.name != old_name:
+        # Keep the denormalized product.category in sync with the rename.
+        db.query(models.Product).filter(
+            models.Product.workspace_id == workspace_id,
+            models.Product.category_id == category.id,
+        ).update(
+            {models.Product.category: category.name},
+            synchronize_session=False,
+        )
 
     create_audit_log(
         db=db,
@@ -2897,8 +2873,16 @@ def delete_category(
     active_products = (
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
-        .filter(models.Product.category == category.name)
         .filter(models.Product.is_active.is_(True))
+        .filter(
+            or_(
+                models.Product.category_id == category.id,
+                and_(
+                    models.Product.category_id.is_(None),
+                    models.Product.category == category.name,
+                ),
+            )
+        )
         .all()
     )
 
@@ -3008,6 +2992,8 @@ def restore_category(
         product.deleted_at = None
         product.deleted_by_user_id = None
         product.deleted_by_category_id = None
+        product.category_id = category.id
+        product.category = category.name
         active_product_names.add(product.name)
         restored_products_count += 1
         create_audit_log(

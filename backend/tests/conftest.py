@@ -45,7 +45,7 @@ if test_database_url == development_database_url:
 
 os.environ["DATABASE_URL"] = test_database_url
 
-from app.database import SessionLocal  # noqa: E402
+from app.database import Base, SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -54,17 +54,14 @@ def unique_email(prefix: str = "user") -> str:
 
 
 def clean_database():
+    # Derived from the model metadata so new tables are covered automatically.
+    table_names = ", ".join(
+        table.name for table in reversed(Base.metadata.sorted_tables)
+    )
+
     with SessionLocal() as db:
         db.execute(
-            text(
-                "TRUNCATE TABLE "
-                "audit_logs, replenishment_assignees, "
-                "replenishment_requests, stock_movements, "
-                "workspace_invite_link_acceptances, "
-                "workspace_invite_links, workspace_invites, "
-                "workspace_members, products, categories, workspaces, users "
-                "RESTART IDENTITY CASCADE"
-            )
+            text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE")
         )
         db.commit()
 

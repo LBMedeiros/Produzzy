@@ -324,6 +324,7 @@ class ProductResponse(BaseModel):
     workspace_id: Optional[int] = None
     name: str
     category: str
+    category_id: Optional[int] = None
     quantity: int
     minimum_quantity: int
     is_active: bool
