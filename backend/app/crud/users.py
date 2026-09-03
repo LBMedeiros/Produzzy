@@ -10,7 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas
-from app.services.security_service import get_password_hash, verify_password
+from app.services.security_service import (
+    get_password_hash,
+    verify_and_maybe_rehash,
+    verify_password,
+)
 from app.crud.base import *  # noqa: F401,F403
 
 def get_user_by_email(email: str, db: Session):
@@ -81,7 +85,10 @@ def authenticate_user(
         raise invalid_credentials_error
 
     password_verify_started_at = perf_counter()
-    is_valid_password = verify_password(login_data.password, user.hashed_password)
+    is_valid_password, upgraded_hash = verify_and_maybe_rehash(
+        login_data.password,
+        user.hashed_password,
+    )
 
     if auth_timings is not None:
         auth_timings["password_verify_ms"] = elapsed_ms(password_verify_started_at)
@@ -91,6 +98,10 @@ def authenticate_user(
 
     if not user.is_active:
         raise invalid_credentials_error
+
+    if upgraded_hash:
+        user.hashed_password = upgraded_hash
+        db.commit()
 
     return user
 
