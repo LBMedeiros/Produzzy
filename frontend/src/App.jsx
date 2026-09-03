@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import AppLayout from './components/layout/AppLayout'
 import BrandIcon from './components/ui/BrandIcon'
+import ErrorBoundary from './components/ErrorBoundary'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext'
-import CreateWorkspacePage from './pages/CreateWorkspacePage'
-import DashboardPage from './pages/DashboardPage'
-import InviteAcceptancePage from './pages/InviteAcceptancePage'
-import LabelsPage from './pages/LabelsPage'
-import LoginPage from './pages/LoginPage'
-import ProductionPage from './pages/ProductionPage'
-import SettingsPage from './pages/SettingsPage'
-import StockPage from './pages/StockPage'
+
+// Each screen is its own bundle chunk, fetched only when first shown.
+const CreateWorkspacePage = lazy(() => import('./pages/CreateWorkspacePage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage'))
+const LabelsPage = lazy(() => import('./pages/LabelsPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const ProductionPage = lazy(() => import('./pages/ProductionPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const StockPage = lazy(() => import('./pages/StockPage'))
 
 const pageComponents = {
   dashboard: DashboardPage,
@@ -114,11 +117,13 @@ function ProtectedApp() {
 
   return (
     <AppLayout activePage={activePage} onNavigate={handleNavigate}>
-      <ActivePage
-        navigationIntent={navigationIntent}
-        onNavigate={handleNavigate}
-        onNavigationIntentHandled={() => setNavigationIntent(null)}
-      />
+      <Suspense fallback={<LoadingScreen message="Carregando..." />}>
+        <ActivePage
+          navigationIntent={navigationIntent}
+          onNavigate={handleNavigate}
+          onNavigationIntentHandled={() => setNavigationIntent(null)}
+        />
+      </Suspense>
     </AppLayout>
   )
 }
@@ -129,7 +134,11 @@ function WorkspaceScope() {
 
   return (
     <WorkspaceProvider key={workspaceKey}>
-      <ProtectedApp />
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingScreen message="Carregando..." />}>
+          <ProtectedApp />
+        </Suspense>
+      </ErrorBoundary>
     </WorkspaceProvider>
   )
 }
