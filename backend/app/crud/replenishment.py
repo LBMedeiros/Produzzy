@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -38,10 +37,7 @@ def get_replenishment_request_by_id(
     )
 
     if replenishment_request is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Necessidade de reposição não encontrada.",
-        )
+        raise NotFound("Necessidade de reposição não encontrada.")
 
     return replenishment_request
 
@@ -54,10 +50,7 @@ def validate_replenishment_assignee(
         return
 
     if get_workspace_member(workspace_id, assigned_to_user_id, db) is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="O responsável deve ser membro deste workspace.",
-        )
+        raise ValidationError("O responsável deve ser membro deste workspace.")
 
 def replenishment_metadata(replenishment_request):
     return {
@@ -119,10 +112,7 @@ def create_replenishment_request(
     )
 
     if active_request is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=ACTIVE_REPLENISHMENT_EXISTS,
-        )
+        raise Conflict(ACTIVE_REPLENISHMENT_EXISTS)
 
     replenishment_request = models.ReplenishmentRequest(
         workspace_id=workspace_id,
@@ -165,10 +155,7 @@ def create_replenishment_request(
         db.rollback()
 
         if is_active_replenishment_unique_violation(error):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=ACTIVE_REPLENISHMENT_EXISTS,
-            ) from error
+            raise Conflict(ACTIVE_REPLENISHMENT_EXISTS) from error
 
         raise
 
@@ -247,17 +234,11 @@ def update_replenishment_request(
     update_data = request_data.model_dump(exclude_unset=True)
 
     if not update_data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Informe ao menos um campo para atualizar.",
-        )
+        raise ValidationError("Informe ao menos um campo para atualizar.")
 
     if member.role == schemas.WorkspaceRole.employee.value:
         if set(update_data) != {"status"}:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Employee pode atualizar apenas o status.",
-            )
+            raise PermissionDenied("Employee pode atualizar apenas o status.")
 
         allowed_statuses = {
             schemas.ReplenishmentStatus.in_progress,
@@ -265,20 +246,14 @@ def update_replenishment_request(
         }
 
         if update_data["status"] not in allowed_statuses:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    "Employee pode marcar a necessidade como em andamento "
-                    "ou concluída."
-                ),
+            raise PermissionDenied(
+                "Employee pode marcar a necessidade como em andamento "
+                "ou concluída."
             )
 
     for required_field in ("type", "status", "quantity_needed"):
         if required_field in update_data and update_data[required_field] is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"O campo {required_field} não pode ser nulo.",
-            )
+            raise ValidationError(f"O campo {required_field} não pode ser nulo.")
 
     if "assigned_to_user_id" in update_data:
         ensure_replenishment_accepts_assignees(replenishment_request)
@@ -316,12 +291,9 @@ def update_replenishment_request(
         update_data.get("status") == schemas.ReplenishmentStatus.stocked
         and old_status != schemas.ReplenishmentStatus.completed.value
     ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "A necessidade precisa estar pronta para estocar antes de ser "
-                "marcada como estocada."
-            ),
+        raise ValidationError(
+            "A necessidade precisa estar pronta para estocar antes de ser "
+            "marcada como estocada."
         )
 
     for field, value in update_data.items():
@@ -391,12 +363,9 @@ def ensure_replenishment_accepts_assignees(replenishment_request):
         schemas.ReplenishmentStatus.stocked.value,
         schemas.ReplenishmentStatus.canceled.value,
     }:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Não é possível alterar responsáveis de uma necessidade "
-                "concluída, estocada ou cancelada."
-            ),
+        raise ValidationError(
+            "Não é possível alterar responsáveis de uma necessidade "
+            "concluída, estocada ou cancelada."
         )
 
 def assign_replenishment_user(
@@ -421,10 +390,7 @@ def assign_replenishment_user(
     )
 
     if existing_assignee is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este usuário já está atribuído à necessidade.",
-        )
+        raise ValidationError("Este usuário já está atribuído à necessidade.")
 
     assignment = models.ReplenishmentAssignee(
         replenishment_id=request_id,
@@ -453,10 +419,7 @@ def assign_replenishment_user(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este usuário já está atribuído à necessidade.",
-        )
+        raise ValidationError("Este usuário já está atribuído à necessidade.")
 
     return get_replenishment_request_by_id(workspace_id, request_id, db)
 
@@ -481,10 +444,7 @@ def remove_replenishment_user(
     )
 
     if assignment is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Este usuário não está atribuído à necessidade.",
-        )
+        raise NotFound("Este usuário não está atribuído à necessidade.")
 
     db.delete(assignment)
 

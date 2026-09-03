@@ -15,6 +15,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
+from app.errors import DomainError
 from app.config import (
     PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS,
     PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
@@ -104,7 +105,7 @@ def authenticate_password_login(
             lambda: crud.authenticate_user(login_data, db, auth_timings),
         )
         response = create_token_for_user(user, auth_timings)
-    except HTTPException:
+    except (HTTPException, DomainError):
         auth_timings["total_auth_ms"] = elapsed_ms(total_started_at)
         log_password_login_timing("failure", key, auth_timings)
         raise

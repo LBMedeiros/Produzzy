@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload

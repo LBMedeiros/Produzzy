@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -34,10 +33,7 @@ def create_stock_movement(
     )
 
     if not product.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível movimentar estoque de um produto inativo.",
-        )
+        raise ValidationError("Não é possível movimentar estoque de um produto inativo.")
 
     replenishment_request = None
 
@@ -49,25 +45,16 @@ def create_stock_movement(
         )
 
         if replenishment_request.product_id != product.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A necessidade de reposição não pertence a este produto.",
-            )
+            raise ValidationError("A necessidade de reposição não pertence a este produto.")
 
         if movement_data.movement_type != schemas.StockMovementType.entrada:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uma reposição só pode ser vinculada a uma entrada.",
-            )
+            raise ValidationError("Uma reposição só pode ser vinculada a uma entrada.")
 
         if (
             replenishment_request.status
             != schemas.ReplenishmentStatus.completed.value
         ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A necessidade não está pronta para estocar.",
-            )
+            raise ValidationError("A necessidade não está pronta para estocar.")
 
     quantity_before = product.quantity
 
@@ -75,20 +62,14 @@ def create_stock_movement(
         movement_data.movement_type != schemas.StockMovementType.ajuste
         and movement_data.quantity <= 0
     ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A quantidade da movimentação precisa ser maior que zero.",
-        )
+        raise ValidationError("A quantidade da movimentação precisa ser maior que zero.")
 
     if movement_data.movement_type == schemas.StockMovementType.entrada:
         quantity_after = quantity_before + movement_data.quantity
 
     elif movement_data.movement_type == schemas.StockMovementType.saida:
         if movement_data.quantity > quantity_before:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Quantidade de saída maior que o estoque atual.",
-            )
+            raise ValidationError("Quantidade de saída maior que o estoque atual.")
 
         quantity_after = quantity_before - movement_data.quantity
 
@@ -96,10 +77,7 @@ def create_stock_movement(
         quantity_after = movement_data.quantity
 
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tipo de movimentação inválido.",
-        )
+        raise ValidationError("Tipo de movimentação inválido.")
 
     product.quantity = quantity_after
 

@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -30,10 +29,7 @@ def expire_pending_invites_for_email(
 
     for pending_invite in pending_invites:
         if not is_expired(pending_invite.expires_at):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Já existe um convite pendente válido para este e-mail.",
-            )
+            raise ValidationError("Já existe um convite pendente válido para este e-mail.")
 
         expire_workspace_invite(pending_invite, current_user, db)
 
@@ -125,25 +121,16 @@ def create_workspace_invite(
             schemas.WorkspaceRole.viewer.value,
         }
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin só pode convidar employee ou viewer.",
-        )
+        raise PermissionDenied("Admin só pode convidar employee ou viewer.")
 
     if role == schemas.WorkspaceRole.owner.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Convites não podem criar novos owners.",
-        )
+        raise ValidationError("Convites não podem criar novos owners.")
 
     email = normalize_email(invite_data.email)
     existing_user = get_user_by_email(email, db)
 
     if existing_user and get_workspace_member(workspace_id, existing_user.id, db):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuário já é membro deste workspace.",
-        )
+        raise ValidationError("Usuário já é membro deste workspace.")
 
     expire_pending_invites_for_email(workspace_id, email, current_user, db)
 
@@ -172,10 +159,7 @@ def create_workspace_invite(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Já existe um convite pendente válido para este e-mail.",
-        )
+        raise ValidationError("Já existe um convite pendente válido para este e-mail.")
 
     db.refresh(invite)
 
@@ -196,10 +180,7 @@ def create_workspace_invite_link(
     role = normalize_role(invite_data.role)
 
     if role != schemas.WorkspaceRole.viewer.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Links de convite usam o cargo viewer por padrão.",
-        )
+        raise ValidationError("Links de convite usam o cargo viewer por padrão.")
 
     active_links = (
         db.query(models.WorkspaceInviteLink)
@@ -369,24 +350,15 @@ def accept_workspace_invite(
     )
 
     if invite is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Convite não encontrado.",
-        )
+        raise NotFound("Convite não encontrado.")
 
     if invite.status != schemas.InviteStatus.pending.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Convite não está pendente.",
-        )
+        raise ValidationError("Convite não está pendente.")
 
     if is_expired(invite.expires_at):
         expire_workspace_invite(invite, current_user, db)
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Convite expirado.",
-        )
+        raise ValidationError("Convite expirado.")
 
     is_invite_link = is_workspace_invite_link(invite)
 
@@ -394,24 +366,15 @@ def accept_workspace_invite(
         not is_invite_link
         and normalize_email(current_user.email) != normalize_email(invite.email)
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="O e-mail do usuário não corresponde ao convite.",
-        )
+        raise PermissionDenied("O e-mail do usuário não corresponde ao convite.")
 
     if invite.role == schemas.WorkspaceRole.owner.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Convites não podem criar novos owners.",
-        )
+        raise ValidationError("Convites não podem criar novos owners.")
 
     member = get_workspace_member(invite.workspace_id, current_user.id, db)
 
     if member is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuário já é membro deste workspace.",
-        )
+        raise ValidationError("Usuário já é membro deste workspace.")
 
     member = models.WorkspaceMember(
         workspace_id=invite.workspace_id,
@@ -453,30 +416,18 @@ def accept_workspace_invite_link(
     )
 
     if invite_link is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Link de convite não encontrado.",
-        )
+        raise NotFound("Link de convite não encontrado.")
 
     if invite_link.status == schemas.InviteLinkStatus.revoked.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Link de convite revogado.",
-        )
+        raise ValidationError("Link de convite revogado.")
 
     if invite_link.status == schemas.InviteLinkStatus.expired.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Link de convite expirado.",
-        )
+        raise ValidationError("Link de convite expirado.")
 
     if is_expired(invite_link.expires_at):
         expire_workspace_invite_link(invite_link, current_user, db)
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Link de convite expirado.",
-        )
+        raise ValidationError("Link de convite expirado.")
 
     member = get_workspace_member(invite_link.workspace_id, current_user.id, db)
     existing_acceptance = (
@@ -493,10 +444,7 @@ def accept_workspace_invite_link(
         return member
 
     if member is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuário já é membro deste workspace.",
-        )
+        raise ValidationError("Usuário já é membro deste workspace.")
 
     member = models.WorkspaceMember(
         workspace_id=invite_link.workspace_id,
@@ -561,10 +509,7 @@ def revoke_workspace_invite_link(
     )
 
     if invite_link is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Link de convite não encontrado.",
-        )
+        raise NotFound("Link de convite não encontrado.")
 
     if (
         invite_link.status == schemas.InviteLinkStatus.active.value
@@ -572,16 +517,10 @@ def revoke_workspace_invite_link(
     ):
         expire_workspace_invite_link(invite_link, current_user, db)
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Link de convite expirado.",
-        )
+        raise ValidationError("Link de convite expirado.")
 
     if invite_link.status != schemas.InviteLinkStatus.active.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Somente links ativos podem ser revogados.",
-        )
+        raise ValidationError("Somente links ativos podem ser revogados.")
 
     invite_link.status = schemas.InviteLinkStatus.revoked.value
     invite_link.revoked_at = aware_utc_now()
@@ -623,35 +562,23 @@ def revoke_workspace_invite(
     )
 
     if invite is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Convite não encontrado.",
-        )
+        raise NotFound("Convite não encontrado.")
 
     if (
         current_member.role == schemas.WorkspaceRole.admin.value
         and invite.role not in ADMIN_MEMBER_TARGET_ROLES
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin só pode revogar convites de employee ou viewer.",
-        )
+        raise PermissionDenied("Admin só pode revogar convites de employee ou viewer.")
 
     if invite.status == schemas.InviteStatus.pending.value and is_expired(
         invite.expires_at,
     ):
         expire_workspace_invite(invite, current_user, db)
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Convite expirado.",
-        )
+        raise ValidationError("Convite expirado.")
 
     if invite.status != schemas.InviteStatus.pending.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Somente convites pendentes podem ser revogados.",
-        )
+        raise ValidationError("Somente convites pendentes podem ser revogados.")
 
     invite.status = schemas.InviteStatus.revoked.value
     release_workspace_invite_link_email(invite)

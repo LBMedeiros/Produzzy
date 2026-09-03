@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import PRODUZZY_ALLOWED_ORIGINS, PRODUZZY_API_VERSION
 from app.database import engine
+from app.errors import DomainError
 from app.routers import (
     audit_logs,
     auth,
@@ -37,6 +38,17 @@ app = FastAPI(
     description="API para controle de estoque e produção.",
     version="1.0.0",
 )
+
+
+@app.exception_handler(DomainError)
+async def handle_domain_error(request: Request, exc: DomainError):
+    """Translate business-layer errors (app/crud) into HTTP responses.
+    The body matches FastAPI's HTTPException (`{"detail": ...}`)."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=exc.headers or None,
+    )
 
 
 app.add_middleware(

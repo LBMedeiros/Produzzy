@@ -5,6 +5,8 @@ from threading import Lock
 
 from fastapi import HTTPException, Request, status
 
+from app.errors import DomainError
+
 
 RATE_LIMIT_DETAIL = "Muitas tentativas. Tente novamente mais tarde."
 
@@ -104,7 +106,8 @@ def run_with_failure_rate_limit(
 
     try:
         result = operation()
-    except HTTPException:
+    except (HTTPException, DomainError):
+        # A failed auth/invite attempt (either error type) counts toward the limit.
         record_rate_limit_failure(scope, key, window_seconds)
         raise
 

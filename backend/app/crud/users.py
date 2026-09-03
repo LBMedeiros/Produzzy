@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -41,10 +40,7 @@ def create_user(user_data: schemas.UserCreate, db: Session):
     existing_user = get_user_by_email(email, db)
 
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Já existe um usuário com esse e-mail.",
-        )
+        raise ValidationError("Já existe um usuário com esse e-mail.")
 
     new_user = models.User(
         name=user_data.name.strip(),
@@ -73,9 +69,8 @@ def authenticate_user(
     if auth_timings is not None:
         auth_timings["user_lookup_ms"] = elapsed_ms(lookup_started_at)
 
-    invalid_credentials_error = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="E-mail ou senha inválidos.",
+    invalid_credentials_error = AuthError(
+        "E-mail ou senha inválidos.",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -116,10 +111,7 @@ def authenticate_google_user(google_claims: dict, db: Session):
     name = str(google_claims.get("name") or "").strip() or email.split("@")[0]
 
     if not provider_user_id or not email:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credencial do Google inválida.",
-        )
+        raise AuthError("Credencial do Google inválida.")
 
     existing_provider_user = get_user_by_provider_user_id(
         "google",
@@ -129,10 +121,7 @@ def authenticate_google_user(google_claims: dict, db: Session):
 
     if existing_provider_user:
         if not existing_provider_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credencial do Google inválida.",
-            )
+            raise AuthError("Credencial do Google inválida.")
 
         return existing_provider_user
 
@@ -140,24 +129,15 @@ def authenticate_google_user(google_claims: dict, db: Session):
 
     if existing_email_user:
         if not existing_email_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credencial do Google inválida.",
-            )
+            raise AuthError("Credencial do Google inválida.")
 
         if existing_email_user.provider_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Este e-mail já está vinculado a outra conta Google.",
-            )
+            raise Conflict("Este e-mail já está vinculado a outra conta Google.")
 
         if not is_google_authoritative_for_email(email, google_claims):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Entre com e-mail e senha para vincular este Google "
-                    "com segurança."
-                ),
+            raise Conflict(
+                "Entre com e-mail e senha para vincular este Google "
+                "com segurança."
             )
 
         existing_email_user.auth_provider = "google"
@@ -200,31 +180,22 @@ def change_current_user_email(
     db: Session,
 ):
     if current_user.auth_provider == "google" and not current_user.hashed_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "A alteração de email para contas Google será disponibilizada "
-                "após reautenticação com o provedor."
-            ),
+        raise ValidationError(
+            "A alteração de email para contas Google será disponibilizada "
+            "após reautenticação com o provedor."
         )
 
     if not current_user.hashed_password or not verify_password(
         email_data.current_password,
         current_user.hashed_password,
     ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Senha atual incorreta.",
-        )
+        raise ValidationError("Senha atual incorreta.")
 
     email = normalize_email(email_data.email)
     existing_user = get_user_by_email(email, db)
 
     if existing_user and existing_user.id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Este e-mail já está em uso.",
-        )
+        raise Conflict("Este e-mail já está em uso.")
 
     current_user.email = email
 

@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -41,10 +40,7 @@ def get_category_by_id(
     category = query.first()
 
     if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Categoria não encontrada.",
-        )
+        raise NotFound("Categoria não encontrada.")
 
     return category
 
@@ -83,10 +79,7 @@ def create_category(
     )
 
     if existing_category:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Já existe uma categoria com esse nome neste workspace.",
-        )
+        raise ValidationError("Já existe uma categoria com esse nome neste workspace.")
 
     new_category = models.Category(
         workspace_id=workspace_id,
@@ -110,12 +103,9 @@ def create_category(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Não foi possível criar a categoria com esse nome. "
-                "No SQLite atual ainda pode existir uma constraint global antiga."
-            ),
+        raise ValidationError(
+            "Não foi possível criar a categoria com esse nome. "
+            "No SQLite atual ainda pode existir uma constraint global antiga."
         )
 
     db.refresh(new_category)
@@ -140,10 +130,7 @@ def list_categories(
     elif status_value == schemas.CategoryStatus.deleted.value:
         query = query.filter(models.Category.is_active.is_(False))
     elif status_value != schemas.CategoryStatus.all.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Status de categoria inválido.",
-        )
+        raise ValidationError("Status de categoria inválido.")
 
     if search:
         query = query.filter(
@@ -177,10 +164,7 @@ def update_category(
         )
 
         if existing_category and existing_category.id != category.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Já existe uma categoria com esse nome neste workspace.",
-            )
+            raise ValidationError("Já existe uma categoria com esse nome neste workspace.")
 
         update_data["name"] = new_name
 
@@ -216,12 +200,9 @@ def update_category(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Não foi possível atualizar a categoria com esse nome. "
-                "No SQLite atual ainda pode existir uma constraint global antiga."
-            ),
+        raise ValidationError(
+            "Não foi possível atualizar a categoria com esse nome. "
+            "No SQLite atual ainda pode existir uma constraint global antiga."
         )
 
     db.refresh(category)
@@ -328,10 +309,7 @@ def restore_category(
     )
 
     if existing_category and existing_category.id != category.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS,
-        )
+        raise ValidationError(ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS)
 
     products_to_restore = (
         db.query(models.Product)
@@ -402,10 +380,7 @@ def restore_category(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS,
-        )
+        raise ValidationError(ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS)
 
     db.refresh(category)
 

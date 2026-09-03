@@ -4,12 +4,12 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas
+from app.errors import *  # noqa: F401,F403 -- re-exported to every crud module
 from app.services.security_service import get_password_hash, verify_password
 
 READ_ROLES = {"owner", "admin", "employee", "viewer"}
@@ -107,10 +107,7 @@ def get_workspace_by_id(workspace_id: int, db: Session):
     )
 
     if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace não encontrado.",
-        )
+        raise NotFound("Workspace não encontrado.")
 
     return workspace
 
@@ -140,10 +137,7 @@ def require_workspace_member(
     )
 
     if member is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Usuário não é membro deste workspace.",
-        )
+        raise PermissionDenied("Usuário não é membro deste workspace.")
 
     return member
 
@@ -156,9 +150,6 @@ def require_workspace_role(
     member = require_workspace_member(workspace_id, current_user, db)
 
     if member.role not in allowed_roles:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permissão insuficiente neste workspace.",
-        )
+        raise PermissionDenied("Permissão insuficiente neste workspace.")
 
     return member

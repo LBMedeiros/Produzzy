@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -43,10 +42,7 @@ def get_product_by_id(
     product = query.first()
 
     if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Produto não encontrado.",
-        )
+        raise NotFound("Produto não encontrado.")
 
     return product
 
@@ -92,10 +88,7 @@ def create_product(
     )
 
     if existing_product:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ACTIVE_PRODUCT_NAME_EXISTS,
-        )
+        raise ValidationError(ACTIVE_PRODUCT_NAME_EXISTS)
 
     category_name = product_data.category.strip()
     new_product = models.Product(
@@ -126,10 +119,7 @@ def create_product(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ACTIVE_PRODUCT_NAME_EXISTS,
-        )
+        raise ValidationError(ACTIVE_PRODUCT_NAME_EXISTS)
 
     db.refresh(new_product)
 
@@ -154,10 +144,7 @@ def list_products(
     elif status_value == schemas.ProductStatus.deleted.value:
         query = query.filter(models.Product.is_active.is_(False))
     elif status_value != schemas.ProductStatus.all.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Status de produto inválido.",
-        )
+        raise ValidationError("Status de produto inválido.")
 
     if category:
         query = query.filter(models.Product.category.ilike(f"%{category}%"))
@@ -207,10 +194,7 @@ def update_product(
         )
 
         if existing_product and existing_product.id != product.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
-            )
+            raise ValidationError(ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS)
 
         update_data["name"] = new_name
 
@@ -242,10 +226,7 @@ def update_product(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
-        )
+        raise ValidationError(ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS)
 
     db.refresh(product)
 
@@ -300,10 +281,7 @@ def restore_product(
     )
 
     if product.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="O produto já está ativo.",
-        )
+        raise ValidationError("O produto já está ativo.")
 
     if product.deleted_by_category_id is not None:
         deleted_category = get_category_by_id(
@@ -314,10 +292,7 @@ def restore_product(
         )
 
         if not deleted_category.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Restaure a categoria antes de restaurar este produto.",
-            )
+            raise ValidationError("Restaure a categoria antes de restaurar este produto.")
 
     existing_product = get_product_by_name(
         product.name,
@@ -327,10 +302,7 @@ def restore_product(
     )
 
     if existing_product and existing_product.id != product.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
-        )
+        raise ValidationError(ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS)
 
     product.is_active = True
     product.deleted_at = None
@@ -350,10 +322,7 @@ def restore_product(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS,
-        )
+        raise ValidationError(ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS)
 
     db.refresh(product)
 

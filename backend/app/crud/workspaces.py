@@ -4,7 +4,6 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
-from fastapi import HTTPException, status
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -159,10 +158,7 @@ def delete_workspace(
     workspace = get_workspace_by_id(workspace_id, db)
 
     if workspace.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Apenas o owner principal pode excluir o workspace.",
-        )
+        raise PermissionDenied("Apenas o owner principal pode excluir o workspace.")
 
     # Every table that belongs to a workspace has ON DELETE CASCADE on its
     # workspace_id FK (migration 0014), so a single delete removes all of it.
@@ -207,10 +203,7 @@ def get_member_by_id(
     )
 
     if member is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Membro não encontrado.",
-        )
+        raise NotFound("Membro não encontrado.")
 
     return member
 
@@ -240,22 +233,13 @@ def ensure_admin_can_manage_member_role(
         return
 
     if current_member.id == target_member.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin não pode alterar o próprio cargo.",
-        )
+        raise PermissionDenied("Admin não pode alterar o próprio cargo.")
 
     if target_member.role not in ADMIN_MEMBER_TARGET_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin só pode alterar membros employee ou viewer.",
-        )
+        raise PermissionDenied("Admin só pode alterar membros employee ou viewer.")
 
     if new_role not in ADMIN_MEMBER_TARGET_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin só pode alternar cargos entre employee e viewer.",
-        )
+        raise PermissionDenied("Admin só pode alternar cargos entre employee e viewer.")
 
 def update_workspace_member(
     workspace_id: int,
@@ -275,16 +259,10 @@ def update_workspace_member(
     new_role = normalize_role(member_data.role)
 
     if is_workspace_owner_member(member, workspace):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível alterar o cargo de um owner.",
-        )
+        raise ValidationError("Não é possível alterar o cargo de um owner.")
 
     if new_role == schemas.WorkspaceRole.owner.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é permitido atribuir o cargo owner por este endpoint.",
-        )
+        raise ValidationError("Não é permitido atribuir o cargo owner por este endpoint.")
 
     ensure_admin_can_manage_member_role(current_member, member, new_role)
 
@@ -326,24 +304,15 @@ def delete_workspace_member(
 
     if is_workspace_owner_member(member, workspace):
         if count_workspace_owners(workspace_id, db) <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Não é possível remover o último owner do workspace.",
-            )
+            raise ValidationError("Não é possível remover o último owner do workspace.")
 
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível remover um owner por este endpoint.",
-        )
+        raise ValidationError("Não é possível remover um owner por este endpoint.")
 
     if (
         current_member.role == schemas.WorkspaceRole.admin.value
         and member.role not in ADMIN_MEMBER_TARGET_ROLES
     ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin só pode remover membros employee ou viewer.",
-        )
+        raise PermissionDenied("Admin só pode remover membros employee ou viewer.")
 
     create_audit_log(
         db=db,
