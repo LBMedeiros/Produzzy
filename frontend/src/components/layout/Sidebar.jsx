@@ -1,3 +1,4 @@
+import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { getWorkspaceRole } from '../../lib/formatters'
@@ -13,14 +14,14 @@ import {
 } from './SidebarIcons'
 
 const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
-  { id: 'stock', label: 'Estoque', icon: StockIcon },
-  { id: 'production', label: 'Reposição', icon: ProductionIcon },
-  { id: 'labels', label: 'Etiquetas', icon: LabelsIcon },
-  { id: 'settings', label: 'Configurações', icon: SettingsIcon },
+  { to: '/dashboard', label: 'Dashboard', icon: DashboardIcon },
+  { to: '/stock', label: 'Estoque', icon: StockIcon },
+  { to: '/production', label: 'Reposição', icon: ProductionIcon },
+  { to: '/labels', label: 'Etiquetas', icon: LabelsIcon },
+  { to: '/settings', label: 'Configurações', icon: SettingsIcon },
 ]
 
-function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
+function Sidebar({ isCollapsed, onNavigate, onToggleCollapsed }) {
   const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const role = getWorkspaceRole(user, activeWorkspace)
@@ -54,20 +55,21 @@ function Sidebar({ activePage, isCollapsed, onNavigate, onToggleCollapsed }) {
           const Icon = item.icon
 
           return (
-            <button
-              className={`sidebar__item ${activePage === item.id ? 'is-active' : ''}`}
-              key={item.id}
-              type="button"
+            <NavLink
+              className={({ isActive }) =>
+                `sidebar__item ${isActive ? 'is-active' : ''}`
+              }
+              key={item.to}
+              to={item.to}
               aria-label={item.label}
-              aria-current={activePage === item.id ? 'page' : undefined}
-              onClick={() => onNavigate(item.id)}
+              onClick={onNavigate}
               title={item.label}
             >
               <span>
                 <Icon />
               </span>
               <strong>{item.label}</strong>
-            </button>
+            </NavLink>
           )
         })}
       </nav>

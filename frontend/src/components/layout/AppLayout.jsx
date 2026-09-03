@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './Sidebar'
 
-function AppLayout({ children, activePage, onNavigate }) {
+function AppLayout() {
   const [isSidebarDrawerOpen, setIsSidebarDrawerOpen] = useState(false)
   const isSidebarCollapsed = !isSidebarDrawerOpen
+  const location = useLocation()
 
   useEffect(() => {
     if (!isSidebarDrawerOpen) {
@@ -24,11 +26,6 @@ function AppLayout({ children, activePage, onNavigate }) {
     }
   }, [isSidebarDrawerOpen])
 
-  function handleNavigate(page, intent = null) {
-    onNavigate(page, intent)
-    setIsSidebarDrawerOpen(false)
-  }
-
   const shellClasses = [
     'app-shell',
     isSidebarCollapsed ? 'is-sidebar-collapsed' : '',
@@ -40,9 +37,8 @@ function AppLayout({ children, activePage, onNavigate }) {
   return (
     <div className={shellClasses}>
       <Sidebar
-        activePage={activePage}
         isCollapsed={isSidebarCollapsed}
-        onNavigate={handleNavigate}
+        onNavigate={() => setIsSidebarDrawerOpen(false)}
         onToggleCollapsed={() => setIsSidebarDrawerOpen((value) => !value)}
       />
       <button
@@ -54,10 +50,10 @@ function AppLayout({ children, activePage, onNavigate }) {
         onClick={() => setIsSidebarDrawerOpen(false)}
       />
       <div className="app-shell__main">
-        <Header onNavigate={handleNavigate} />
+        <Header onNavigated={() => setIsSidebarDrawerOpen(false)} />
         <main className="page-content">
-          <div className="page-transition" key={activePage}>
-            {children}
+          <div className="page-transition" key={location.pathname}>
+            <Outlet />
           </div>
         </main>
       </div>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Button from '../ui/Button'
 import UserAvatar from '../ui/UserAvatar'
 import CreateWorkspaceModal from './CreateWorkspaceModal'
@@ -144,7 +145,8 @@ function getSearchError(error) {
   return error?.message ?? 'Não foi possível concluir a busca.'
 }
 
-function Header({ onNavigate }) {
+function Header({ onNavigated }) {
+  const navigate = useNavigate()
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false)
   const [isMembersOpen, setIsMembersOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
@@ -735,29 +737,38 @@ function Header({ onNavigate }) {
     }
 
     if (result.type === 'navigation') {
-      onNavigate?.(result.page)
+      navigate(`/${result.page}`)
     }
 
     if (result.type === 'product') {
-      onNavigate?.('stock', {
-        productId: result.productId,
-        type: 'product-detail',
-        workspaceId,
+      navigate('/stock', {
+        state: {
+          intent: {
+            productId: result.productId,
+            type: 'product-detail',
+            workspaceId,
+          },
+        },
       })
     }
 
     if (result.type === 'replenishment') {
-      onNavigate?.('production', {
-        requestId: result.replenishmentId,
-        status: result.status,
-        type: 'replenishment-focus',
-        workspaceId,
+      navigate('/production', {
+        state: {
+          intent: {
+            requestId: result.replenishmentId,
+            status: result.status,
+            type: 'replenishment-focus',
+            workspaceId,
+          },
+        },
       })
     }
 
     setSearchTerm('')
     setSearchResults(EMPTY_SEARCH_RESULTS)
     closeSearchPanel()
+    onNavigated?.()
   }
 
   function handleSearchKeyDown(event) {

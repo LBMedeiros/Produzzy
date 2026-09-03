@@ -56,7 +56,6 @@ function InviteAcceptancePage({ onDone, token, type = 'individual' }) {
         selectWorkspace(acceptedWorkspace)
       }
 
-      window.history.replaceState(window.history.state, '', '/')
       setStatus('success')
       setMessage(
         isInviteLink
