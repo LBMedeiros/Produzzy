@@ -1,4 +1,5 @@
 import { createElement, lazy, Suspense, useCallback } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   BrowserRouter,
   Navigate,
@@ -24,6 +25,17 @@ const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ProductionPage = lazy(() => import('./pages/ProductionPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const StockPage = lazy(() => import('./pages/StockPage'))
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Data is considered fresh for 30s; after that a mount/focus refetches
+      // in the background while showing the cached value.
+      staleTime: 30_000,
+      retry: 1,
+    },
+  },
+})
 
 function LoadingScreen({ message }) {
   return (
@@ -210,13 +222,15 @@ function WorkspaceScope() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <WorkspaceScope />
-        </AuthProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <WorkspaceScope />
+          </AuthProvider>
+        </ThemeProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
 

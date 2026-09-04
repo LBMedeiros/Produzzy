@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -79,43 +80,25 @@ function formatAuditLog(log) {
 function DashboardPage({ onNavigate }) {
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
-  const [summary, setSummary] = useState(null)
-  const [attentionProducts, setAttentionProducts] = useState([])
-  const [recentActivity, setRecentActivity] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
 
-  const loadDashboard = useCallback(async () => {
-    if (!workspaceId) {
-      return
-    }
+  const {
+    data,
+    error,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['dashboard', workspaceId],
+    queryFn: () => getDashboard(workspaceId),
+    enabled: Boolean(workspaceId),
+  })
 
-    setIsLoading(true)
-    setError('')
-
-    try {
-      const dashboard = await getDashboard(workspaceId)
-
-      setSummary(dashboard.summary)
-      setAttentionProducts(dashboard.attention_products ?? [])
-      setRecentActivity((dashboard.recent_activity ?? []).map(formatAuditLog))
-    } catch (loadError) {
-      setSummary(null)
-      setAttentionProducts([])
-      setRecentActivity([])
-      setError(getFriendlyError(loadError))
-    } finally {
-      setIsLoading(false)
-    }
-  }, [workspaceId])
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      loadDashboard()
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [loadDashboard])
+  const summary = data?.summary ?? null
+  const attentionProducts = data?.attention_products ?? []
+  const recentActivity = useMemo(
+    () => (data?.recent_activity ?? []).map(formatAuditLog),
+    [data],
+  )
+  const errorMessage = error ? getFriendlyError(error) : ''
 
   const stats = useMemo(
     () => [
@@ -188,12 +171,14 @@ function DashboardPage({ onNavigate }) {
           <h1>Dashboard</h1>
           <p>Acompanhe estoque, movimentações e necessidades de reposição.</p>
         </div>
-        <Button onClick={loadDashboard} variant="secondary">
+        <Button onClick={() => refetch()} variant="secondary">
           Atualizar dados
         </Button>
       </div>
 
-      {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
+      {errorMessage ? (
+        <p className="stock-feedback stock-feedback--error">{errorMessage}</p>
+      ) : null}
 
       {isLoading ? (
         <div className="stock-loading">Carregando dashboard...</div>
