@@ -50,7 +50,7 @@ Request flow: `routers/<domain>.py` → `crud.py` → SQLAlchemy models.
 - **`crud.py` (~3k lines) is the business layer** — all permission checks, `workspace_id` filtering, stock-movement recording, soft delete, replenishment transitions, and audit logging. Role sets are module constants (`READ_ROLES`, `PRODUCT_WRITE_ROLES`, `STOCK_WRITE_ROLES`, etc.); reuse them, don't inline role lists.
 - **`main.py`** builds the app, CORS from `PRODUZZY_ALLOWED_ORIGINS`, an HTTP-timing middleware (`X-Process-Time-Ms`), and `/health` + `/ready` probes. Register every new router here.
 - **`config.py`** reads all `PRODUZZY_*` env vars (loaded from `backend/.env`). Never print or edit secrets; only touch `.env.example` when a documented public var actually changes.
-- **`database.py`** — `engine`, `SessionLocal`, `Base`. Contains a legacy SQLite-only dev path (`ensure_development_schema`, column back-fills). PostgreSQL is the real target; do not design around SQLite.
+- **`database.py`** — `engine`, `SessionLocal`, `Base`, plus Postgres connection-pool tuning from `DB_POOL_*` env vars. PostgreSQL is the real target; do not design around SQLite.
 - **Schema changes go through Alembic** (`backend/alembic/versions/`) and only when the schema genuinely changes. Revision ids must be ≤ 32 chars (`alembic_version.version_num` is `varchar(32)`); follow the `NNNN_short_slug` pattern of existing files.
 - `services/` — `security_service` (JWT/passwords), `google_auth_service`, `rate_limit_service`, `qrcode_service` (QR codes + printable labels), `avatar_storage_service` (Cloudinary).
 

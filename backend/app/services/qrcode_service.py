@@ -1,5 +1,6 @@
 from functools import lru_cache
 from io import BytesIO
+from math import ceil
 from pathlib import Path
 
 import barcode
@@ -620,19 +621,28 @@ def generate_products_labels_sheet_image(
         (sheet_height_px - (margin_px * 2) + gap_px)
         // (label_height_px + gap_px),
     )
-    max_labels_per_page = columns * rows
+    per_page = columns * rows
+    # Stack as many A4 pages as needed instead of silently dropping the
+    # overflow — the result is one tall PNG with page-sized sections.
+    page_count = max(1, ceil(len(labels_data) / per_page))
 
     sheet_image = Image.new(
         "RGB",
-        (sheet_width_px, sheet_height_px),
+        (sheet_width_px, sheet_height_px * page_count),
         "white",
     )
 
-    for index, label_data in enumerate(labels_data[:max_labels_per_page]):
-        row = index // columns
-        column = index % columns
+    for index, label_data in enumerate(labels_data):
+        page = index // per_page
+        position = index % per_page
+        row = position // columns
+        column = position % columns
         x = margin_px + column * (label_width_px + gap_px)
-        y = margin_px + row * (label_height_px + gap_px)
+        y = (
+            page * sheet_height_px
+            + margin_px
+            + row * (label_height_px + gap_px)
+        )
 
         label_image = generate_product_label_pil(
             data=label_data["data"],
@@ -745,18 +755,27 @@ def generate_products_qrcodes_sheet_image(
         (sheet_height_px - (margin_px * 2) + gap_px)
         // (card_height_px + gap_px),
     )
-    max_qrcodes_per_page = columns * rows
+    per_page = columns * rows
+    # Stack as many A4 pages as needed instead of silently dropping the
+    # overflow — the result is one tall PNG with page-sized sections.
+    page_count = max(1, ceil(len(qrcodes_data) / per_page))
     sheet_image = Image.new(
         "RGB",
-        (sheet_width_px, sheet_height_px),
+        (sheet_width_px, sheet_height_px * page_count),
         "white",
     )
 
-    for index, qrcode_data in enumerate(qrcodes_data[:max_qrcodes_per_page]):
-        row = index // columns
-        column = index % columns
+    for index, qrcode_data in enumerate(qrcodes_data):
+        page = index // per_page
+        position = index % per_page
+        row = position // columns
+        column = position % columns
         x = margin_px + column * (card_width_px + gap_px)
-        y = margin_px + row * (card_height_px + gap_px)
+        y = (
+            page * sheet_height_px
+            + margin_px
+            + row * (card_height_px + gap_px)
+        )
         card = generate_print_qrcode_card_pil(
             data=qrcode_data["data"],
             product_name=qrcode_data["product_name"],

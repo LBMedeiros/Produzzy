@@ -4,9 +4,12 @@ from PIL import Image, ImageChops, ImageDraw
 
 from app.routers import qrcode as qrcode_router
 from app.services.qrcode_service import (
+    generate_products_labels_sheet_image,
+    generate_products_qrcodes_sheet_image,
     generate_qrcode_pil,
     get_product_barcode_value,
     load_font,
+    mm_to_px,
     text_size,
     wrap_text_without_truncation,
 )
@@ -139,6 +142,45 @@ def test_individual_qrcode_has_product_name_above_scannable_area(
         assert image.height > raw_qrcode.height
         assert qrcode_top > 0
         assert ImageChops.difference(name_area, white_area).getbbox() is not None
+
+
+def test_labels_sheet_paginates_instead_of_truncating():
+    # More labels than fit on one A4 page must roll onto extra pages, not be
+    # dropped. One page fits ~12 labels at 70x42mm, so 30 needs 3 pages.
+    labels_data = [
+        {
+            "data": f"https://example.com/p/{index}",
+            "product_name": f"Produto {index}",
+            "product_category": "Categoria",
+            "product_id": index,
+        }
+        for index in range(1, 31)
+    ]
+
+    buffer = generate_products_labels_sheet_image(labels_data, dpi=72)
+
+    with Image.open(buffer) as image:
+        one_page = mm_to_px(297, 72)
+        # 30 labels / 12 per page -> 3 pages tall.
+        assert image.height >= one_page * 3
+        assert image.height < one_page * 4
+
+
+def test_qrcodes_sheet_paginates_instead_of_truncating():
+    qrcodes_data = [
+        {
+            "data": f"https://example.com/p/{index}",
+            "product_name": f"Produto {index}",
+            "product_id": index,
+        }
+        for index in range(1, 41)
+    ]
+
+    buffer = generate_products_qrcodes_sheet_image(qrcodes_data, dpi=72)
+
+    with Image.open(buffer) as image:
+        one_page = mm_to_px(297, 72)
+        assert image.height > one_page
 
 
 def test_print_sheets_only_receive_active_products(

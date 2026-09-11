@@ -35,12 +35,7 @@ def generate_products_labels_sheet(
         db,
         crud.READ_ROLES,
     )
-    products = crud.list_products(
-        db=db,
-        workspace_id=workspace_id,
-        page=1,
-        limit=100,
-    )
+    products = crud.list_active_products_for_export(db, workspace_id)
 
     if not products:
         raise HTTPException(
@@ -97,12 +92,7 @@ def generate_products_qrcodes_sheet(
         db,
         crud.READ_ROLES,
     )
-    products = crud.list_products(
-        db=db,
-        workspace_id=workspace_id,
-        page=1,
-        limit=100,
-    )
+    products = crud.list_active_products_for_export(db, workspace_id)
 
     if not products:
         raise HTTPException(

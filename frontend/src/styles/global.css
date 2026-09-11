@@ -3,6 +3,9 @@
   --navy-soft: #17223a;
   --blue: #2563eb;
   --blue-soft: #dbeafe;
+  /* Opaque highlight for native <option> lists — the browser composites those
+     against the OS panel, so a translucent token can't be used here. */
+  --option-active-bg: #dbeafe;
   --bg: #f8fafc;
   --card: #ffffff;
   --surface: #ffffff;
@@ -230,6 +233,7 @@
   --border: #e2e8f0;
   --blue: #2563eb;
   --blue-soft: #dbeafe;
+  --option-active-bg: #dbeafe;
   --shadow: 0 16px 34px rgba(15, 23, 42, 0.07);
   background: #f8fafc;
   color: #0f172a;
@@ -301,6 +305,7 @@
   --navy-soft: #cbd5e1;
   --blue: #60a5fa;
   --blue-soft: rgba(96, 165, 250, 0.16);
+  --option-active-bg: #1d2d45;
   --bg: #07111f;
   --card: #0f1b2d;
   --surface: #111c2e;
@@ -345,6 +350,32 @@ button,
 input,
 select {
   font: inherit;
+}
+
+/* Pinned so the closed control keeps the normal text colour — some browsers
+   otherwise paint it with the checked <option>'s colour set below. */
+select {
+  color: var(--text);
+}
+
+/* The popup list of a native <select> is drawn by the browser, so it ignores
+   most styling and falls back to the OS palette — which reads as a grey
+   system menu inside the dark theme. Background/colour on <option> are the
+   parts browsers do honour (Firefox and Chrome on Linux/Windows; macOS draws
+   these natively and ignores them). Tokens keep it aligned with the custom
+   dropdowns, e.g. .workspace-switcher__option. */
+select option {
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+select option:checked {
+  background-color: var(--option-active-bg);
+  color: var(--blue);
+}
+
+select option:disabled {
+  color: var(--muted);
 }
 
 input:-webkit-autofill,
@@ -4249,7 +4280,7 @@ a {
 }
 
 .replenishment-modal__metrics strong {
-  color: #334155;
+  color: var(--text);
   font-size: 13px;
 }
 
@@ -4277,7 +4308,7 @@ a {
   gap: 12px;
   border: 1px solid rgba(37, 99, 235, 0.16);
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--surface-elevated);
   padding: 14px;
   box-shadow: 0 3px 10px rgba(37, 99, 235, 0.06);
 }
@@ -4299,7 +4330,14 @@ a {
   white-space: nowrap;
 }
 
-.stock-ready-replenishment span,
+.stock-ready-replenishment span {
+  color: var(--muted);
+  font-size: 12px;
+  /* Same label weight as .replenishment-request-card__details span, so the
+     detail line stays legible against the card instead of washing out. */
+  font-weight: 750;
+}
+
 .stock-ready-replenishments__empty {
   color: var(--muted);
   font-size: 12px;

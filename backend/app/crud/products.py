@@ -156,6 +156,21 @@ def list_products(
 
     return paginate_query(query, page, limit).all()
 
+# Upper bound on how many products a single label/QR sheet renders. Each item
+# is a PIL render, so this caps CPU/memory per request; it is far above a
+# normal print run but well below "render the whole catalog".
+PRODUCT_EXPORT_LIMIT = 300
+
+def list_active_products_for_export(db: Session, workspace_id: int):
+    return (
+        db.query(models.Product)
+        .filter(models.Product.workspace_id == workspace_id)
+        .filter(models.Product.is_active.is_(True))
+        .order_by(models.Product.name.asc())
+        .limit(PRODUCT_EXPORT_LIMIT)
+        .all()
+    )
+
 def list_low_stock_products(
     db: Session,
     workspace_id: int,
