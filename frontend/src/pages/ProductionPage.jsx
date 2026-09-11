@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -42,7 +43,12 @@ const requestFilters = [
 
 const activeRequestStatuses = new Set(['open', 'in_progress', 'completed'])
 const REPLENISHMENT_REFRESH_INTERVAL_MS = 10000
-const BACKGROUND_REFRESH_DEDUPE_MS = 1000
+const PRODUCTS_QUERY_KEY = (workspaceId) => ['products', workspaceId, 'active']
+const REPLENISHMENTS_QUERY_KEY = (workspaceId) => [
+  'replenishments',
+  workspaceId,
+  'all',
+]
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -79,9 +85,7 @@ function ProductionPage({
   const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
-  const [products, setProducts] = useState([])
-  const [requests, setRequests] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [creationModal, setCreationModal] = useState(null)
@@ -89,135 +93,45 @@ function ProductionPage({
   const [isSaving, setIsSaving] = useState(false)
   const [updatingRequestId, setUpdatingRequestId] = useState(null)
   const [requestFilter, setRequestFilter] = useState('open')
-  const loadRequestIdRef = useRef(0)
-  const isLoadInFlightRef = useRef(false)
-  const lastBackgroundRefreshAtRef = useRef(0)
 
-  const loadReplenishment = useCallback(async (options = {}) => {
-    const {
-      background = false,
-      preserveError = false,
-      skipIfInFlight = false,
-    } = options
+  // refetchInterval + refetchOnWindowFocus (default on) replace the manual
+  // 10s poll + visibilitychange/focus listeners this page used to hand-roll;
+  // React Query also dedupes overlapping fetches on its own.
+  const productsQuery = useQuery({
+    queryKey: PRODUCTS_QUERY_KEY(workspaceId),
+    queryFn: () => listProducts(workspaceId, { limit: 100, status: 'active' }),
+    enabled: Boolean(workspaceId),
+    refetchInterval: REPLENISHMENT_REFRESH_INTERVAL_MS,
+  })
+  const requestsQuery = useQuery({
+    queryKey: REPLENISHMENTS_QUERY_KEY(workspaceId),
+    queryFn: () => listReplenishments(workspaceId, { limit: 100, status: 'all' }),
+    enabled: Boolean(workspaceId),
+    refetchInterval: REPLENISHMENT_REFRESH_INTERVAL_MS,
+  })
 
-    if (!workspaceId) {
-      loadRequestIdRef.current += 1
-      isLoadInFlightRef.current = false
-      setProducts([])
-      setRequests([])
-      setIsLoading(false)
-      return
-    }
+  const products = useMemo(
+    () => (productsQuery.data ?? []).filter(needsReplenishment),
+    [productsQuery.data],
+  )
+  const requests = useMemo(() => requestsQuery.data ?? [], [requestsQuery.data])
+  const isLoading = productsQuery.isLoading || requestsQuery.isLoading
+  const loadError = productsQuery.error ?? requestsQuery.error
+  const loadErrorMessage = loadError ? getFriendlyError(loadError) : ''
 
-    if (skipIfInFlight && isLoadInFlightRef.current) {
-      return
-    }
+  function refetchReplenishment() {
+    productsQuery.refetch()
+    requestsQuery.refetch()
+  }
 
-    const loadRequestId = loadRequestIdRef.current + 1
-    loadRequestIdRef.current = loadRequestId
-    isLoadInFlightRef.current = true
-
-    if (!background) {
-      setIsLoading(true)
-    }
-
-    if (!preserveError) {
-      setError('')
-    }
-
-    try {
-      const [activeProducts, requestItems] = await Promise.all([
-        listProducts(workspaceId, { limit: 100, status: 'active' }),
-        listReplenishments(workspaceId, { limit: 100, status: 'all' }),
-      ])
-
-      if (loadRequestIdRef.current === loadRequestId) {
-        setProducts(activeProducts.filter(needsReplenishment))
-        setRequests(requestItems)
-
-        if (!preserveError) {
-          setError('')
-        }
-      }
-    } catch (loadError) {
-      if (loadRequestIdRef.current === loadRequestId) {
-        if (!background) {
-          setProducts([])
-          setRequests([])
-        }
-
-        setError(getFriendlyError(loadError))
-      }
-    } finally {
-      if (loadRequestIdRef.current === loadRequestId) {
-        isLoadInFlightRef.current = false
-
-        if (!background) {
-          setIsLoading(false)
-        }
-      }
-    }
-  }, [workspaceId])
-
-  const refreshReplenishmentInBackground = useCallback(() => {
-    const now = Date.now()
-
-    if (
-      now - lastBackgroundRefreshAtRef.current <
-      BACKGROUND_REFRESH_DEDUPE_MS
-    ) {
-      return
-    }
-
-    lastBackgroundRefreshAtRef.current = now
-    loadReplenishment({ background: true, skipIfInFlight: true })
-  }, [loadReplenishment])
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      loadReplenishment()
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [loadReplenishment])
-
-  useEffect(() => {
-    if (!workspaceId) {
-      return undefined
-    }
-
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refreshReplenishmentInBackground()
-      }
-    }, REPLENISHMENT_REFRESH_INTERVAL_MS)
-
-    return () => window.clearInterval(intervalId)
-  }, [refreshReplenishmentInBackground, workspaceId])
-
-  useEffect(() => {
-    if (!workspaceId) {
-      return undefined
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        refreshReplenishmentInBackground()
-      }
-    }
-
-    function handleFocus() {
-      refreshReplenishmentInBackground()
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('focus', handleFocus)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('focus', handleFocus)
-    }
-  }, [refreshReplenishmentInBackground, workspaceId])
+  function invalidateReplenishment() {
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['products', workspaceId] }),
+      queryClient.invalidateQueries({
+        queryKey: ['replenishments', workspaceId],
+      }),
+    ])
+  }
 
   useEffect(() => {
     if (
@@ -334,9 +248,12 @@ function ProductionPage({
         product_id: creationModal.product.id,
         ...requestData,
       })
-      setRequests((currentRequests) => [createdRequest, ...currentRequests])
-      setProducts((currentProducts) =>
-        currentProducts.filter(
+      queryClient.setQueryData(
+        REPLENISHMENTS_QUERY_KEY(workspaceId),
+        (current) => [createdRequest, ...(current ?? [])],
+      )
+      queryClient.setQueryData(PRODUCTS_QUERY_KEY(workspaceId), (current) =>
+        (current ?? []).filter(
           (product) => product.id !== createdRequest.product_id,
         ),
       )
@@ -345,14 +262,14 @@ function ProductionPage({
       setSuccessMessage(
         `Necessidade de ${requestTypeLabels[createdRequest.type].toLowerCase()} criada com sucesso.`,
       )
-      await loadReplenishment({ background: true })
+      await invalidateReplenishment()
     } catch (createError) {
       const friendlyMessage = getFriendlyError(createError)
 
       if (createError?.status === 409) {
         setCreationModal(null)
         setRequestFilter('open')
-        await loadReplenishment({ background: true, preserveError: true })
+        await invalidateReplenishment()
         setError(friendlyMessage)
       } else {
         setFormError(friendlyMessage)
@@ -373,12 +290,16 @@ function ProductionPage({
         requestItem.id,
         { status },
       )
-      setRequests((currentRequests) =>
-        currentRequests.map((currentRequest) =>
-          currentRequest.id === requestItem.id ? updatedRequest : currentRequest,
-        ),
+      queryClient.setQueryData(
+        REPLENISHMENTS_QUERY_KEY(workspaceId),
+        (current) =>
+          (current ?? []).map((currentRequest) =>
+            currentRequest.id === requestItem.id
+              ? updatedRequest
+              : currentRequest,
+          ),
       )
-      await loadReplenishment({ background: true })
+      await invalidateReplenishment()
 
       if (status === 'completed') {
         setSuccessMessage(
@@ -405,12 +326,16 @@ function ProductionPage({
         ? await assignReplenishmentToMe(workspaceId, requestItem.id)
         : await unassignReplenishmentFromMe(workspaceId, requestItem.id)
 
-      setRequests((currentRequests) =>
-        currentRequests.map((currentRequest) =>
-          currentRequest.id === requestItem.id ? updatedRequest : currentRequest,
-        ),
+      queryClient.setQueryData(
+        REPLENISHMENTS_QUERY_KEY(workspaceId),
+        (current) =>
+          (current ?? []).map((currentRequest) =>
+            currentRequest.id === requestItem.id
+              ? updatedRequest
+              : currentRequest,
+          ),
       )
-      await loadReplenishment({ background: true })
+      await invalidateReplenishment()
       setSuccessMessage(
         shouldAssign
           ? 'Você assumiu esta necessidade de reposição.'
@@ -438,12 +363,7 @@ function ProductionPage({
           <h1>Reposição</h1>
           <p>Veja produtos que precisam ser comprados, produzidos ou repostos.</p>
         </div>
-        <Button
-          onClick={() =>
-            loadReplenishment({ background: true, skipIfInFlight: true })
-          }
-          variant="secondary"
-        >
+        <Button onClick={refetchReplenishment} variant="secondary">
           Atualizar dados
         </Button>
       </div>
@@ -451,7 +371,11 @@ function ProductionPage({
       {successMessage ? (
         <p className="stock-feedback stock-feedback--success">{successMessage}</p>
       ) : null}
-      {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
+      {error || loadErrorMessage ? (
+        <p className="stock-feedback stock-feedback--error">
+          {error || loadErrorMessage}
+        </p>
+      ) : null}
 
       {isLoading ? (
         <div className="stock-loading">Carregando necessidades de reposição...</div>
