@@ -3652,6 +3652,17 @@ a {
   margin-top: 5px;
 }
 
+.settings-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.settings-profile-actions .button {
+  margin-top: 0;
+}
+
 .settings-password-label {
   color: var(--text);
   font-size: 13px;
@@ -3980,14 +3991,13 @@ a {
 
 .settings-preference__select {
   flex: 0 0 auto;
+  min-width: 140px;
+}
+
+.settings-preference__select .select-menu__button {
   min-height: 36px;
-  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  padding: 0 12px;
   font-weight: 800;
-  outline: none;
 }
 
 .category-chips {
@@ -6163,4 +6173,76 @@ a {
   .app-shell {
     transform: none !important;
   }
+}
+
+/* Avatar crop editor */
+.avatar-crop-modal {
+  max-width: 380px;
+}
+
+.avatar-crop {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.avatar-crop__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.avatar-crop__stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #0f172a;
+  max-width: 100%;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.avatar-crop__stage:active {
+  cursor: grabbing;
+}
+
+.avatar-crop__canvas {
+  display: block;
+}
+
+.avatar-crop__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.avatar-crop__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.avatar-crop__zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.avatar-crop__zoom input {
+  flex: 1;
+  accent-color: var(--blue);
 }

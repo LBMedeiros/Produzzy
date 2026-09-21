@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import AvatarCropModal from '../components/settings/AvatarCropModal'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import SelectMenu from '../components/ui/SelectMenu'
 import UserAvatar from '../components/ui/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -239,6 +241,173 @@ function EmailChangeModal({ currentEmail, onClose, onSubmit }) {
   )
 }
 
+function PasswordChangeModal({ onClose, onSubmit }) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+  const visibilityLabel = isPasswordVisible ? 'Ocultar senhas' : 'Mostrar senhas'
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+
+    if (!currentPassword) {
+      setError('Informe sua senha atual.')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setError('A nova senha deve ter ao menos 8 caracteres.')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('A confirmação não corresponde à nova senha.')
+      return
+    }
+
+    if (newPassword === currentPassword) {
+      setError('A nova senha precisa ser diferente da atual.')
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+
+    try {
+      await onSubmit({
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+      onClose()
+    } catch (submitError) {
+      setError(submitError?.message ?? 'Não foi possível alterar a senha.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section
+        className="workspace-modal settings-email-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="change-password-title"
+      >
+        <div className="workspace-modal__header">
+          <div>
+            <span>Ação sensível</span>
+            <h2 id="change-password-title">Alterar senha</h2>
+          </div>
+          <button
+            aria-label="Fechar modal"
+            className="icon-button"
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            x
+          </button>
+        </div>
+
+        <form className="workspace-form" onSubmit={handleSubmit}>
+          <label
+            className="settings-password-label"
+            htmlFor="settings-change-current-password"
+          >
+            Senha atual
+          </label>
+          <span className="settings-password-field">
+            <input
+              autoComplete="current-password"
+              disabled={isSaving}
+              id="settings-change-current-password"
+              onChange={(event) => {
+                setCurrentPassword(event.target.value)
+                setError('')
+              }}
+              placeholder="Digite sua senha atual"
+              required
+              type={isPasswordVisible ? 'text' : 'password'}
+              value={currentPassword}
+            />
+            <button
+              aria-label={visibilityLabel}
+              aria-pressed={isPasswordVisible}
+              className="settings-password-field__toggle"
+              disabled={isSaving}
+              onClick={() => setIsPasswordVisible((value) => !value)}
+              type="button"
+            >
+              <PasswordVisibilityIcon isVisible={isPasswordVisible} />
+            </button>
+          </span>
+
+          <label
+            className="settings-password-label"
+            htmlFor="settings-change-new-password"
+          >
+            Nova senha
+          </label>
+          <span className="settings-password-field">
+            <input
+              autoComplete="new-password"
+              disabled={isSaving}
+              id="settings-change-new-password"
+              minLength={8}
+              onChange={(event) => {
+                setNewPassword(event.target.value)
+                setError('')
+              }}
+              placeholder="Ao menos 8 caracteres"
+              required
+              type={isPasswordVisible ? 'text' : 'password'}
+              value={newPassword}
+            />
+          </span>
+
+          <label
+            className="settings-password-label"
+            htmlFor="settings-change-confirm-password"
+          >
+            Confirmar nova senha
+          </label>
+          <span className="settings-password-field">
+            <input
+              autoComplete="new-password"
+              disabled={isSaving}
+              id="settings-change-confirm-password"
+              minLength={8}
+              onChange={(event) => {
+                setConfirmPassword(event.target.value)
+                setError('')
+              }}
+              placeholder="Repita a nova senha"
+              required
+              type={isPasswordVisible ? 'text' : 'password'}
+              value={confirmPassword}
+            />
+          </span>
+
+          {error ? <p className="form-error">{error}</p> : null}
+
+          <div className="workspace-form__actions">
+            <Button disabled={isSaving} type="submit">
+              {isSaving ? 'Alterando...' : 'Alterar senha'}
+            </Button>
+            <Button disabled={isSaving} onClick={onClose} variant="secondary">
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+
 function DeleteWorkspaceModal({
   activeWorkspace,
   deleteWorkspace,
@@ -333,6 +502,7 @@ function DeleteWorkspaceModal({
 function ProfilePhotoSection({ removeAvatar, uploadAvatar, user }) {
   const fileInputRef = useRef(null)
   const [previewUrl, setPreviewUrl] = useState('')
+  const [cropFile, setCropFile] = useState(null)
   const [avatarError, setAvatarError] = useState('')
   const [avatarFeedback, setAvatarFeedback] = useState('')
   const [isRemovingAvatar, setIsRemovingAvatar] = useState(false)
@@ -350,7 +520,9 @@ function ProfilePhotoSection({ removeAvatar, uploadAvatar, user }) {
     }
   }, [previewUrl])
 
-  async function handleAvatarFileChange(event) {
+  // Selecting a file no longer uploads immediately: it opens the crop editor,
+  // and only the framed result (handleCroppedUpload) is sent.
+  function handleAvatarFileChange(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
 
@@ -370,14 +542,30 @@ function ProfilePhotoSection({ removeAvatar, uploadAvatar, user }) {
       return
     }
 
-    const localPreviewUrl = URL.createObjectURL(file)
+    setAvatarError('')
+    setAvatarFeedback('')
+    setCropFile(file)
+  }
+
+  function closeCropEditor() {
+    if (!isUploadingAvatar) {
+      setCropFile(null)
+      setAvatarError('')
+    }
+  }
+
+  async function handleCroppedUpload(blob) {
+    const croppedFile = new File([blob], 'avatar.webp', { type: 'image/webp' })
+    const localPreviewUrl = URL.createObjectURL(blob)
+
     setPreviewUrl(localPreviewUrl)
     setIsUploadingAvatar(true)
     setAvatarError('')
     setAvatarFeedback('')
 
     try {
-      await uploadAvatar(file)
+      await uploadAvatar(croppedFile)
+      setCropFile(null)
       setAvatarFeedback('Foto de perfil atualizada com sucesso.')
     } catch (error) {
       setAvatarError(getAvatarError(error))
@@ -471,19 +659,30 @@ function ProfilePhotoSection({ removeAvatar, uploadAvatar, user }) {
           {avatarFeedback}
         </p>
       ) : null}
+
+      {cropFile ? (
+        <AvatarCropModal
+          error={avatarError}
+          file={cropFile}
+          isUploading={isUploadingAvatar}
+          onCancel={closeCropEditor}
+          onConfirm={handleCroppedUpload}
+        />
+      ) : null}
     </Card>
   )
 }
 
 function ProfileSettingsSection({
   changeEmail,
+  changePassword,
   isAuthenticated,
-  roleLabel,
   updateProfile,
   user,
 }) {
   const [profileName, setProfileName] = useState(user?.name ?? '')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [profileFeedback, setProfileFeedback] = useState('')
@@ -517,6 +716,12 @@ function ProfileSettingsSection({
   async function handleEmailChange(data) {
     await changeEmail(data)
     setProfileFeedback('Email atualizado com sucesso.')
+    setProfileError('')
+  }
+
+  async function handlePasswordChange(data) {
+    await changePassword(data)
+    setProfileFeedback('Senha alterada com sucesso.')
     setProfileError('')
   }
 
@@ -562,21 +767,34 @@ function ProfileSettingsSection({
         <div className="settings-profile-field">
           <span>Email</span>
           <strong>{user?.email ?? 'Não informado'}</strong>
-          <Button
-            onClick={() => {
-              setIsEmailModalOpen(true)
-              setProfileError('')
-              setProfileFeedback('')
-            }}
-            size="sm"
-            variant="secondary"
-          >
-            Alterar email
-          </Button>
+          <div className="settings-profile-actions">
+            <Button
+              onClick={() => {
+                setIsEmailModalOpen(true)
+                setProfileError('')
+                setProfileFeedback('')
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Alterar email
+            </Button>
+            <Button
+              onClick={() => {
+                setIsPasswordModalOpen(true)
+                setProfileError('')
+                setProfileFeedback('')
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Alterar senha
+            </Button>
+          </div>
         </div>
         <div className="settings-profile-field">
-          <span>Cargo atual</span>
-          <strong>{roleLabel}</strong>
+          <span>Membro desde</span>
+          <strong>{formatDate(user?.created_at)}</strong>
         </div>
         <div className="settings-profile-field">
           <span>Status da sessão</span>
@@ -609,6 +827,13 @@ function ProfileSettingsSection({
           currentEmail={user?.email}
           onClose={() => setIsEmailModalOpen(false)}
           onSubmit={handleEmailChange}
+        />
+      ) : null}
+
+      {isPasswordModalOpen ? (
+        <PasswordChangeModal
+          onClose={() => setIsPasswordModalOpen(false)}
+          onSubmit={handlePasswordChange}
         />
       ) : null}
     </Card>
@@ -725,16 +950,12 @@ function WorkspaceSettingsSection({
 
       <dl className="settings-details">
         <div>
-          <dt>ID do workspace</dt>
-          <dd>#{activeWorkspace?.id ?? '—'}</dd>
-        </div>
-        <div>
           <dt>Criado em</dt>
           <dd>{formatDate(activeWorkspace?.created_at)}</dd>
         </div>
         <div>
-          <dt>Seu cargo</dt>
-          <dd>{roleLabel}</dd>
+          <dt>Seu cargo atual</dt>
+          <dd>{activeWorkspace?.current_user_title || roleLabel}</dd>
         </div>
       </dl>
     </Card>
@@ -744,6 +965,7 @@ function WorkspaceSettingsSection({
 function SettingsPage() {
   const {
     changeEmail,
+    changePassword,
     isAuthenticated,
     removeAvatar,
     updateProfile,
@@ -829,9 +1051,9 @@ function SettingsPage() {
 
         <ProfileSettingsSection
           changeEmail={changeEmail}
+          changePassword={changePassword}
           isAuthenticated={isAuthenticated}
           key={user?.id ?? 'no-user'}
-          roleLabel={roleLabel}
           updateProfile={updateProfile}
           user={user}
         />
@@ -883,15 +1105,17 @@ function SettingsPage() {
                   Preferência atual: {resolvedTheme === 'dark' ? 'Escuro' : 'Claro'}.
                 </span>
               </div>
-              <select
+              <SelectMenu
+                ariaLabel="Tema da interface"
                 className="settings-preference__select"
-                onChange={(event) => setThemePreference(event.target.value)}
+                onChange={setThemePreference}
+                options={[
+                  { label: 'Sistema', value: 'system' },
+                  { label: 'Claro', value: 'light' },
+                  { label: 'Escuro', value: 'dark' },
+                ]}
                 value={themePreference}
-              >
-                <option value="system">Sistema</option>
-                <option value="light">Claro</option>
-                <option value="dark">Escuro</option>
-              </select>
+              />
             </div>
             <div className="settings-preference">
               <div>

@@ -77,6 +77,13 @@ export async function changeEmail(data) {
   return result
 }
 
+export function changePassword(data) {
+  return request('/auth/me/change-password', {
+    body: data,
+    method: 'POST',
+  })
+}
+
 export function uploadAvatar(file) {
   const formData = new FormData()
   formData.set('file', file)

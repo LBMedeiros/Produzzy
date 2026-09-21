@@ -204,6 +204,29 @@ def change_current_user_email(
 
     return current_user
 
+def change_current_user_password(
+    current_user: models.User,
+    password_data: schemas.UserPasswordChange,
+    db: Session,
+):
+    if not current_user.hashed_password:
+        raise ValidationError(
+            "Sua conta não usa senha. Contas Google acessam pelo provedor."
+        )
+
+    if not verify_password(
+        password_data.current_password,
+        current_user.hashed_password,
+    ):
+        raise ValidationError("Senha atual incorreta.")
+
+    current_user.hashed_password = get_password_hash(password_data.new_password)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
 def update_current_user_avatar(
     current_user: models.User,
     avatar_url: str,

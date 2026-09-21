@@ -218,6 +218,16 @@ def change_current_user_email(
     return create_token_for_user(updated_user)
 
 
+@router.post("/me/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_current_user_password(
+    password_data: schemas.UserPasswordChange,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.change_current_user_password(current_user, password_data, db)
+    return None
+
+
 def raise_avatar_storage_error(error: Exception):
     if isinstance(error, avatar_storage_service.AvatarStorageNotConfiguredError):
         raise HTTPException(
