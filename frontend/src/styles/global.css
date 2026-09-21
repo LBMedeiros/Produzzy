@@ -1940,12 +1940,9 @@ a {
   align-self: start;
 }
 
-.label-products-card {
-  grid-area: products;
-}
-
-.label-generator-card {
-  grid-area: generator;
+.labels-top-grid {
+  align-items: stretch;
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
 }
 
 .feature-grid {
@@ -3222,25 +3219,134 @@ a {
   gap: 13px;
 }
 
-.batch-export {
+/* Unified left card: a segmented control (Escanear | Imprimir) over an
+   illustration and a contextual panel, mirroring the generator's "Tipo"
+   switch. The card stretches to the generator's height and the illustration
+   fills the middle, so both top-row cards read as a matched pair. */
+.labels-actions-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 18px;
+  flex-direction: column;
 }
 
-.batch-export p {
-  max-width: 560px;
+.labels-actions {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.labels-actions__art {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 120px;
+  padding: 8px 0;
   color: var(--muted);
 }
 
-.batch-export__actions {
+.labels-actions__art svg {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  max-height: 170px;
+}
+
+.labels-actions__panel {
+  display: grid;
+  gap: 12px;
+}
+
+.labels-actions__panel p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.labels-actions__buttons {
   display: flex;
-  flex: 0 0 auto;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 10px;
+}
+
+.labels-actions__buttons .button {
+  flex: 1 1 140px;
+}
+
+.qr-scanner-modal {
+  width: min(440px, 100%);
+}
+
+.qr-scanner {
+  display: grid;
+  gap: 14px;
+}
+
+.qr-scanner__stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0f172a;
+}
+
+.qr-scanner__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qr-scanner__frame {
+  position: absolute;
+  inset: 16%;
+  border: 3px solid rgba(255, 255, 255, 0.92);
+  border-radius: 16px;
+  box-shadow: 0 0 0 100vmax rgba(15, 23, 42, 0.4);
+  pointer-events: none;
+}
+
+.qr-scanner__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.qr-scanner__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.qr-scanner__hint--warn {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.qr-scanner__error {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 18px;
+  text-align: center;
+}
+
+.qr-scanner__error strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.qr-scanner__error p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .label-type-field {
@@ -3314,7 +3420,7 @@ a {
 .real-preview-single .real-preview-card {
   min-width: 0;
   width: 100%;
-  max-width: 280px;
+  max-width: 240px;
 }
 
 .label-product-actions {
@@ -3388,7 +3494,7 @@ a {
   display: block;
   justify-self: center;
   height: auto;
-  max-height: 280px;
+  max-height: 220px;
   background: #ffffff;
   object-fit: contain;
   padding: 10px;
@@ -3421,7 +3527,7 @@ a {
 
 .real-preview-card--qr img {
   aspect-ratio: 1;
-  max-width: 260px;
+  max-width: 220px;
 }
 
 .real-preview-card--label img {
@@ -5507,6 +5613,7 @@ a {
 
   .content-grid--two,
   .content-grid--label,
+  .labels-top-grid,
   .feature-grid,
   .feature-grid--three,
   .feature-grid--four,
@@ -5886,13 +5993,8 @@ a {
     width: 100%;
   }
 
-  .batch-export {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .batch-export__actions,
-  .batch-export__actions .button {
+  .labels-actions__buttons,
+  .labels-actions__buttons .button {
     width: 100%;
   }
 

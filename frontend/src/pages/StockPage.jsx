@@ -4,6 +4,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
+import SelectMenu from '../components/ui/SelectMenu'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
@@ -587,6 +588,15 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     [activeFilter, loadProductMovements, workspaceId],
   )
 
+  // Stable opener for the edit form. An existing product carries its own
+  // category name, so the form value is correct even before the category list
+  // has loaded (the <select> options fill in from `categories` on render).
+  const openProductForEdit = useCallback((product) => {
+    setProductForm(normalizeProductForm(product, []))
+    setProductFormError('')
+    setProductModal({ mode: 'edit', product })
+  }, [])
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       loadStockData()
@@ -650,6 +660,50 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     loadProductDetail,
     navigationIntent,
     onNavigationIntentHandled,
+    workspaceId,
+  ])
+
+  useEffect(() => {
+    if (
+      navigationIntent?.type !== 'product-edit' ||
+      navigationIntent.workspaceId !== workspaceId ||
+      !navigationIntent.productId
+    ) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setActiveFilter('active')
+      setCategoryFilter('all')
+      setSearchTerm('')
+      setError('')
+      setSuccessMessage('')
+
+      try {
+        const product = await getProduct(workspaceId, navigationIntent.productId, {
+          includeDeleted: false,
+        })
+
+        // Read-only members can't edit, so surface the product detail instead.
+        if (canWriteProduct) {
+          openProductForEdit(product)
+        } else {
+          await loadProductDetail(product)
+        }
+      } catch (loadError) {
+        setError(getFriendlyError(loadError))
+      }
+
+      onNavigationIntentHandled?.()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    canWriteProduct,
+    loadProductDetail,
+    navigationIntent,
+    onNavigationIntentHandled,
+    openProductForEdit,
     workspaceId,
   ])
 
@@ -880,9 +934,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     loadDeletedCategories()
   }
 
-  function handleCategoryAction(event) {
-    const action = event.target.value
-
+  function handleCategoryAction(action) {
     setCategoryAction('')
 
     if (action === 'create') {
@@ -1617,18 +1669,17 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           <p>Gerencie produtos, categorias e quantidades do workspace</p>
         </div>
         <div className="page-heading__actions">
-          <select
-            aria-label="Ações de categorias"
+          <SelectMenu
+            ariaLabel="Ações de categorias"
             className="category-action-select"
             onChange={handleCategoryAction}
+            options={[
+              { disabled: true, label: 'Categorias', value: '' },
+              { label: 'Nova categoria', value: 'create' },
+              { label: 'Editar categorias', value: 'edit' },
+            ]}
             value={categoryAction}
-          >
-            <option disabled value="">
-              Categorias
-            </option>
-            <option value="create">Nova categoria</option>
-            <option value="edit">Editar categorias</option>
-          </select>
+          />
           <Button icon="+" onClick={openCreateProduct}>
             Novo produto
           </Button>
@@ -1690,18 +1741,19 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               value={searchTerm}
             />
           </label>
-          <select
+          <SelectMenu
+            ariaLabel="Filtrar por categoria"
             disabled={activeFilter === 'history'}
-            onChange={(event) => setCategoryFilter(event.target.value)}
+            onChange={setCategoryFilter}
+            options={[
+              { label: 'Todas as categorias', value: 'all' },
+              ...categories.map((category) => ({
+                label: category.name,
+                value: category.name,
+              })),
+            ]}
             value={categoryFilter}
-          >
-            <option value="all">Todas as categorias</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.name}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div className="filters-row" aria-label="Filtros de estoque">
