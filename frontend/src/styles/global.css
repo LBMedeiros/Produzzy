@@ -717,7 +717,7 @@ a {
 }
 
 .brand span,
-.sidebar__user span {
+.sidebar__user-text span {
   display: block;
   overflow: hidden;
   color: #94a3b8;
