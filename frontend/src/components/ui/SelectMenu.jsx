@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 function SelectMenu({
   ariaLabel,
@@ -6,12 +7,15 @@ function SelectMenu({
   disabled = false,
   onChange,
   options,
+  portal = false,
   value,
 }) {
   const menuId = useId()
   const containerRef = useRef(null)
+  const menuRef = useRef(null)
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [portalPosition, setPortalPosition] = useState(null)
   const selectedIndex = options.findIndex(
     (option) => String(option.value) === String(value),
   )
@@ -19,7 +23,10 @@ function SelectMenu({
 
   useEffect(() => {
     function handlePointerDown(event) {
-      if (!containerRef.current?.contains(event.target)) {
+      if (
+        !containerRef.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
+      ) {
         setIsOpen(false)
       }
     }
@@ -28,8 +35,45 @@ function SelectMenu({
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [])
 
+  useEffect(() => {
+    if (!isOpen || !portal) return undefined
+
+    function updatePortalPosition() {
+      const rect = containerRef.current?.getBoundingClientRect()
+
+      if (rect) {
+        setPortalPosition({
+          left: rect.left,
+          top: rect.bottom + 6,
+          width: rect.width,
+        })
+      }
+    }
+
+    updatePortalPosition()
+    window.addEventListener('resize', updatePortalPosition)
+    window.addEventListener('scroll', updatePortalPosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updatePortalPosition)
+      window.removeEventListener('scroll', updatePortalPosition, true)
+    }
+  }, [isOpen, portal])
+
   function openMenu() {
     if (disabled) return
+
+    if (portal) {
+      const rect = containerRef.current?.getBoundingClientRect()
+
+      if (rect) {
+        setPortalPosition({
+          left: rect.left,
+          top: rect.bottom + 6,
+          width: rect.width,
+        })
+      }
+    }
 
     const firstEnabledIndex = options.findIndex((option) => !option.disabled)
     setActiveIndex(
@@ -83,6 +127,45 @@ function SelectMenu({
     }
   }
 
+  const menu = isOpen ? (
+    <div
+      className={`select-menu__menu ${portal ? 'select-menu__menu--portal' : ''}`}
+      id={menuId}
+      ref={menuRef}
+      role="listbox"
+      style={
+        portal && portalPosition
+          ? {
+              left: portalPosition.left,
+              right: 'auto',
+              top: portalPosition.top,
+              width: portalPosition.width,
+            }
+          : undefined
+      }
+    >
+      {options.map((option, index) => (
+        <button
+          aria-disabled={option.disabled || undefined}
+          aria-selected={String(option.value) === String(value)}
+          className={`select-menu__option ${
+            index === activeIndex ? 'is-active' : ''
+          } ${String(option.value) === String(value) ? 'is-selected' : ''}`}
+          disabled={option.disabled}
+          key={String(option.value)}
+          role="option"
+          type="button"
+          onClick={() => selectOption(option)}
+          onMouseEnter={() => {
+            if (!option.disabled) setActiveIndex(index)
+          }}
+        >
+          <span>{option.label}</span>
+        </button>
+      ))}
+    </div>
+  ) : null
+
   return (
     <div
       className={`select-menu ${className}`.trim()}
@@ -103,29 +186,7 @@ function SelectMenu({
         <span className="select-chevron" aria-hidden="true" />
       </button>
 
-      {isOpen ? (
-        <div className="select-menu__menu" id={menuId} role="listbox">
-          {options.map((option, index) => (
-            <button
-              aria-disabled={option.disabled || undefined}
-              aria-selected={String(option.value) === String(value)}
-              className={`select-menu__option ${
-                index === activeIndex ? 'is-active' : ''
-              } ${String(option.value) === String(value) ? 'is-selected' : ''}`}
-              disabled={option.disabled}
-              key={String(option.value)}
-              role="option"
-              type="button"
-              onClick={() => selectOption(option)}
-              onMouseEnter={() => {
-                if (!option.disabled) setActiveIndex(index)
-              }}
-            >
-              <span>{option.label}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {portal && menu ? createPortal(menu, document.body) : menu}
     </div>
   )
 }

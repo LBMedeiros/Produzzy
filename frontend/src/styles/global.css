@@ -1597,20 +1597,19 @@ a {
 
 .member-row__title-select {
   margin-top: 6px;
+  width: min(170px, 100%);
   max-width: 170px;
-  min-height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  padding: 0 8px;
+}
+
+.member-row__title-select .select-menu__button {
+  min-height: 30px;
+  padding-inline: 10px;
   font-size: 12px;
   font-weight: 700;
 }
 
-.member-row__title-select:focus {
-  border-color: rgba(37, 99, 235, 0.5);
-  outline: 3px solid rgba(37, 99, 235, 0.14);
+.member-row__title-select .select-menu__menu {
+  min-width: 170px;
 }
 
 .member-row__title {
@@ -1764,6 +1763,11 @@ a {
   box-shadow: var(--shadow);
   padding: 6px;
   animation: surface-popover-enter var(--motion-fast) var(--motion-ease) both;
+}
+
+.select-menu__menu--portal {
+  position: fixed;
+  z-index: 100;
 }
 
 .select-menu__option {

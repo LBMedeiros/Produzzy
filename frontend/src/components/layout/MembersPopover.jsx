@@ -1,12 +1,8 @@
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
-import { formatWorkspaceRole, memberTitleOptions } from '../../lib/formatters'
+import SelectMenu from '../ui/SelectMenu'
+import { memberTitleOptions } from '../../lib/formatters'
 
-const ROLE_OPTIONS = [
-  { label: 'Admin', value: 'admin' },
-  { label: 'Funcionário', value: 'employee' },
-  { label: 'Visualizador', value: 'viewer' },
-]
 const ADMIN_MANAGED_ROLES = new Set(['employee', 'viewer'])
 
 function formatMembersCount(count) {
@@ -24,7 +20,6 @@ function MembersPopover({
   members,
   onInviteRevoke,
   onMemberRemove,
-  onRoleChange,
   onTitleChange,
   ownerUserId,
   removingMemberId,
@@ -32,11 +27,6 @@ function MembersPopover({
   savingMemberId,
   savingTitleMemberId,
 }) {
-  const roleOptions =
-    currentMemberRole === 'admin'
-      ? ROLE_OPTIONS.filter((option) => ADMIN_MANAGED_ROLES.has(option.value))
-      : ROLE_OPTIONS
-
   return (
     <div className="members-popover" role="dialog" aria-label="Membros do workspace">
       <div className="members-popover__header">
@@ -60,13 +50,6 @@ function MembersPopover({
         {members.map((member) => {
           const adminCanManageRole =
             currentMemberRole !== 'admin' || ADMIN_MANAGED_ROLES.has(member.role)
-          const canChangeMemberRole =
-            canManageRoles &&
-            !member.isInvite &&
-            member.role !== 'owner' &&
-            member.user_id !== ownerUserId &&
-            member.user_id !== currentUserId &&
-            adminCanManageRole
           const canRevokeInvite =
             canManageRoles &&
             member.isInvite &&
@@ -86,46 +69,26 @@ function MembersPopover({
                 <strong>{member.name}</strong>
                 <small>{member.email}</small>
                 {!member.isInvite && canManageTitles ? (
-                  <select
-                    aria-label={`Cargo de ${member.name}`}
+                  <SelectMenu
+                    ariaLabel={`Cargo de ${member.name}`}
                     className="member-row__title-select"
                     disabled={savingTitleMemberId !== null}
-                    onChange={(event) =>
-                      onTitleChange(member.id, event.target.value)
-                    }
+                    onChange={(value) => onTitleChange(member.id, value)}
+                    options={[
+                      { label: 'Sem cargo', value: '' },
+                      ...memberTitleOptions.map((title) => ({
+                        label: title,
+                        value: title,
+                      })),
+                    ]}
+                    portal
                     value={member.title || ''}
-                  >
-                    <option value="">Sem cargo</option>
-                    {memberTitleOptions.map((title) => (
-                      <option key={title} value={title}>
-                        {title}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 ) : !member.isInvite && member.title ? (
                   <span className="member-row__title">{member.title}</span>
                 ) : null}
               </div>
               <div className="member-row__meta">
-                {canChangeMemberRole ? (
-                  <select
-                    aria-label={`Cargo de ${member.name}`}
-                    className="member-row__role-select"
-                    disabled={savingMemberId !== null}
-                    onChange={(event) => onRoleChange(member.id, event.target.value)}
-                    value={member.role}
-                  >
-                    {roleOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="member-row__role">
-                    {formatWorkspaceRole(member.role)}
-                  </span>
-                )}
                 <Badge tone={member.status === 'Ativo' ? 'success' : 'warning'}>
                   {savingMemberId === member.id ? 'Salvando...' : member.status}
                 </Badge>
