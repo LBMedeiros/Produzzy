@@ -88,6 +88,13 @@ export function updateWorkspaceMember(workspaceId, memberId, data) {
   })
 }
 
+export function updateWorkspaceMemberTitle(workspaceId, memberId, title) {
+  return request(`/workspaces/${workspaceId}/members/${memberId}/title`, {
+    body: { title: title || null },
+    method: 'PATCH',
+  })
+}
+
 export function deleteWorkspaceMember(workspaceId, memberId) {
   return request(`/workspaces/${workspaceId}/members/${memberId}`, {
     method: 'DELETE',

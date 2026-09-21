@@ -1,6 +1,6 @@
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
-import { formatWorkspaceRole } from '../../lib/formatters'
+import { formatWorkspaceRole, memberTitleOptions } from '../../lib/formatters'
 
 const ROLE_OPTIONS = [
   { label: 'Admin', value: 'admin' },
@@ -15,6 +15,7 @@ function formatMembersCount(count) {
 
 function MembersPopover({
   canManageRoles,
+  canManageTitles,
   currentMemberRole,
   currentUserId,
   error,
@@ -24,10 +25,12 @@ function MembersPopover({
   onInviteRevoke,
   onMemberRemove,
   onRoleChange,
+  onTitleChange,
   ownerUserId,
   removingMemberId,
   revokingInviteId,
   savingMemberId,
+  savingTitleMemberId,
 }) {
   const roleOptions =
     currentMemberRole === 'admin'
@@ -82,6 +85,26 @@ function MembersPopover({
               <div className="member-row__identity">
                 <strong>{member.name}</strong>
                 <small>{member.email}</small>
+                {!member.isInvite && canManageTitles ? (
+                  <select
+                    aria-label={`Cargo de ${member.name}`}
+                    className="member-row__title-select"
+                    disabled={savingTitleMemberId !== null}
+                    onChange={(event) =>
+                      onTitleChange(member.id, event.target.value)
+                    }
+                    value={member.title || ''}
+                  >
+                    <option value="">Sem cargo</option>
+                    {memberTitleOptions.map((title) => (
+                      <option key={title} value={title}>
+                        {title}
+                      </option>
+                    ))}
+                  </select>
+                ) : !member.isInvite && member.title ? (
+                  <span className="member-row__title">{member.title}</span>
+                ) : null}
               </div>
               <div className="member-row__meta">
                 {canChangeMemberRole ? (

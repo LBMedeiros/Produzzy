@@ -1484,6 +1484,32 @@ a {
   outline: 3px solid rgba(37, 99, 235, 0.14);
 }
 
+.member-row__title-select {
+  margin-top: 6px;
+  max-width: 170px;
+  min-height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.member-row__title-select:focus {
+  border-color: rgba(37, 99, 235, 0.5);
+  outline: 3px solid rgba(37, 99, 235, 0.14);
+}
+
+.member-row__title {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .member-row__action.button {
   min-width: 92px;
   min-height: 30px;

@@ -19,6 +19,7 @@ import {
   getWorkspaceTeam,
   revokeWorkspaceInvite,
   updateWorkspaceMember,
+  updateWorkspaceMemberTitle,
 } from '../../services/workspaceService'
 import { searchWorkspace } from '../../services/searchService'
 
@@ -168,6 +169,7 @@ function Header({ onNavigated }) {
   const [removingMemberId, setRemovingMemberId] = useState(null)
   const [revokingInviteId, setRevokingInviteId] = useState(null)
   const [savingMemberId, setSavingMemberId] = useState(null)
+  const [savingTitleMemberId, setSavingTitleMemberId] = useState(null)
   const searchContainerRef = useRef(null)
   const searchInputRef = useRef(null)
   const membersContainerRef = useRef(null)
@@ -177,7 +179,8 @@ function Header({ onNavigated }) {
   const searchRequestIdRef = useRef(0)
   const workspaceMenuTimeoutRef = useRef(null)
   const { user } = useAuth()
-  const { activeWorkspace, selectWorkspace, workspaces } = useWorkspace()
+  const { activeWorkspace, loadWorkspaces, selectWorkspace, workspaces } =
+    useWorkspace()
   const workspaceId = activeWorkspace?.id
   const activeWorkspaceIdRef = useRef(workspaceId)
   const workspaceRole = getWorkspaceRoleValue(user, activeWorkspace)
@@ -188,6 +191,9 @@ function Header({ onNavigated }) {
     activeWorkspace?.owner_id === user?.id ||
     currentMemberRole === 'owner' ||
     currentMemberRole === 'admin'
+  // Only the owner assigns display titles ("dono define de todos").
+  const isWorkspaceOwner =
+    activeWorkspace?.owner_id === user?.id || currentMemberRole === 'owner'
 
   const openWorkspaceMenu = useCallback(() => {
     const activeWorkspaceIndex = workspaces.findIndex(
@@ -524,6 +530,56 @@ function Header({ onNavigated }) {
     isUserMenuOpen,
     isWorkspaceMenuMounted,
   ])
+
+  async function handleMemberTitleChange(memberId, title) {
+    if (!isWorkspaceOwner) {
+      setMembersError('Apenas o dono pode definir cargos.')
+      return
+    }
+
+    if (!workspaceId) {
+      return
+    }
+
+    setSavingTitleMemberId(memberId)
+    setMembersError('')
+    setMembersFeedback('')
+
+    try {
+      const updatedMember = await updateWorkspaceMemberTitle(
+        workspaceId,
+        memberId,
+        title || null,
+      )
+
+      if (activeWorkspaceIdRef.current !== workspaceId) {
+        return
+      }
+
+      const normalizedMember = normalizeMember(updatedMember)
+
+      setWorkspaceMembers((currentMembers) =>
+        currentMembers.map((currentMember) =>
+          currentMember.id === memberId ? normalizedMember : currentMember,
+        ),
+      )
+      setMembersFeedback('Cargo atualizado com sucesso.')
+
+      // If the owner retitled themselves, refresh workspaces so the user menu
+      // (which reads current_user_title) reflects it.
+      if (updatedMember.user_id === user?.id) {
+        loadWorkspaces().catch(() => undefined)
+      }
+    } catch (error) {
+      if (activeWorkspaceIdRef.current === workspaceId) {
+        setMembersError(error?.message ?? 'Não foi possível atualizar o cargo.')
+      }
+    } finally {
+      if (activeWorkspaceIdRef.current === workspaceId) {
+        setSavingTitleMemberId(null)
+      }
+    }
+  }
 
   async function handleMemberRoleChange(memberId, role) {
     if (!canManageRoles) {
@@ -997,6 +1053,7 @@ function Header({ onNavigated }) {
             {isMembersOpen ? (
               <MembersPopover
                 canManageRoles={canManageRoles}
+                canManageTitles={isWorkspaceOwner}
                 currentMemberRole={currentMemberRole}
                 error={membersError}
                 feedback={membersFeedback}
@@ -1005,11 +1062,13 @@ function Header({ onNavigated }) {
                 onInviteRevoke={handleInviteRevoke}
                 onMemberRemove={handleMemberRemove}
                 onRoleChange={handleMemberRoleChange}
+                onTitleChange={handleMemberTitleChange}
                 currentUserId={user?.id}
                 ownerUserId={activeWorkspace?.owner_id}
                 removingMemberId={removingMemberId}
                 revokingInviteId={revokingInviteId}
                 savingMemberId={savingMemberId}
+                savingTitleMemberId={savingTitleMemberId}
               />
             ) : null}
           </div>

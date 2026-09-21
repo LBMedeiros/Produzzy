@@ -373,6 +373,9 @@ class WorkspaceMember(Base):
         index=True,
     )
     role = Column(String(20), nullable=False)
+    # Cosmetic display title assigned by the workspace owner. Does NOT affect
+    # permissions (those stay on `role`). One of crud WORKSPACE_MEMBER_TITLES.
+    title = Column(String(50), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(

@@ -24,6 +24,7 @@ def attach_current_user_role(
         .first()
     )
     workspace.current_user_role = membership.role if membership else None
+    workspace.current_user_title = membership.title if membership else None
 
     return workspace
 
@@ -46,9 +47,13 @@ def attach_current_user_roles(
     roles_by_workspace_id = {
         membership.workspace_id: membership.role for membership in memberships
     }
+    titles_by_workspace_id = {
+        membership.workspace_id: membership.title for membership in memberships
+    }
 
     for workspace in workspaces:
         workspace.current_user_role = roles_by_workspace_id.get(workspace.id)
+        workspace.current_user_title = titles_by_workspace_id.get(workspace.id)
 
     return workspaces
 
@@ -279,6 +284,57 @@ def update_workspace_member(
             "member_user_id": member.user_id,
             "old_role": old_role,
             "new_role": member.role,
+        },
+    )
+
+    db.commit()
+    db.refresh(member)
+
+    return member
+
+def normalize_member_title(title):
+    if title is None:
+        return None
+
+    normalized = str(title).strip()
+
+    if not normalized:
+        return None
+
+    if normalized not in WORKSPACE_MEMBER_TITLES:
+        raise ValidationError("Cargo inválido.")
+
+    return normalized
+
+def update_workspace_member_title(
+    workspace_id: int,
+    member_id: int,
+    title,
+    current_user: models.User,
+    db: Session,
+):
+    require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        MEMBER_TITLE_MANAGE_ROLES,
+    )
+    member = get_member_by_id(workspace_id, member_id, db)
+    normalized_title = normalize_member_title(title)
+
+    old_title = member.title
+    member.title = normalized_title
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        action="member.title_updated",
+        entity_type="workspace_member",
+        entity_id=member.id,
+        metadata={
+            "member_user_id": member.user_id,
+            "old_title": old_title,
+            "new_title": member.title,
         },
     )
 

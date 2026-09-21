@@ -49,3 +49,18 @@ export function getWorkspaceRoleValue(user, workspace) {
 export function getWorkspaceRole(user, workspace) {
   return formatWorkspaceRole(getWorkspaceRoleValue(user, workspace))
 }
+
+// Fixed catalog of cosmetic member titles the workspace owner can assign.
+// Mirror of the backend WORKSPACE_MEMBER_TITLES (crud/base.py) — keep in sync.
+export const memberTitleOptions = [
+  'Sócio',
+  'Gerente',
+  'Supervisor',
+  'Coordenador',
+  'Financeiro',
+  'Comprador',
+  'Estoquista',
+  'Vendedor',
+  'Produção',
+  'Assistente',
+]

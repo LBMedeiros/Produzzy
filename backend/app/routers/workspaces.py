@@ -168,6 +168,26 @@ def update_workspace_member(
     )
 
 
+@router.patch(
+    "/workspaces/{workspace_id}/members/{member_id}/title",
+    response_model=schemas.WorkspaceMemberResponse,
+)
+def update_workspace_member_title(
+    workspace_id: int,
+    member_id: int,
+    payload: schemas.WorkspaceMemberTitleUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.update_workspace_member_title(
+        workspace_id,
+        member_id,
+        payload.title,
+        current_user,
+        db,
+    )
+
+
 @router.delete(
     "/workspaces/{workspace_id}/members/{member_id}",
     status_code=status.HTTP_204_NO_CONTENT,

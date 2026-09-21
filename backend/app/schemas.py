@@ -202,6 +202,7 @@ class WorkspaceResponse(BaseModel):
     name: str
     owner_id: int
     current_user_role: Optional[str] = None
+    current_user_title: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -213,6 +214,7 @@ class WorkspaceMemberResponse(BaseModel):
     workspace_id: int
     user_id: int
     role: str
+    title: Optional[str] = None
     user_name: Optional[str] = None
     user_email: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -223,6 +225,10 @@ class WorkspaceMemberResponse(BaseModel):
 
 class WorkspaceMemberUpdate(BaseModel):
     role: WorkspaceRole
+
+
+class WorkspaceMemberTitleUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=50)
 
 
 class WorkspaceInviteCreate(BaseModel):

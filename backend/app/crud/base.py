@@ -25,6 +25,24 @@ MEMBER_ROLE_UPDATE_ROLES = {"owner", "admin"}
 INVITE_MANAGE_ROLES = {"owner", "admin"}
 AUDIT_LOG_READ_ROLES = {"owner", "admin"}
 ADMIN_MEMBER_TARGET_ROLES = {"employee", "viewer"}
+# Only the workspace owner assigns display titles ("dono define de todos").
+MEMBER_TITLE_MANAGE_ROLES = {"owner"}
+
+# Fixed catalog of cosmetic display titles the owner can assign to members.
+# Purely a label — no effect on permissions (those stay on `role`).
+# Mirrored in the frontend (lib/formatters.js: memberTitleOptions); keep in sync.
+WORKSPACE_MEMBER_TITLES = (
+    "Sócio",
+    "Gerente",
+    "Supervisor",
+    "Coordenador",
+    "Financeiro",
+    "Comprador",
+    "Estoquista",
+    "Vendedor",
+    "Produção",
+    "Assistente",
+)
 ACTIVE_PRODUCT_NAME_EXISTS = (
     "Já existe um produto ativo com esse nome neste workspace."
 )
