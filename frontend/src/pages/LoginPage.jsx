@@ -176,7 +176,7 @@ function BenefitIcon({ type }) {
 
 function getFriendlyError(error) {
   if (error?.status === 401) {
-    return 'Email ou senha inválidos.'
+    return 'E-mail ou senha inválidos.'
   }
 
   if (error?.status === 409) {

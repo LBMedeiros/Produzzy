@@ -42,7 +42,7 @@ const requestFilters = [
 ]
 
 const activeRequestStatuses = new Set(['open', 'in_progress', 'completed'])
-const REPLENISHMENT_REFRESH_INTERVAL_MS = 10000
+const REPLENISHMENT_REFRESH_INTERVAL_MS = 30000
 const PRODUCTS_QUERY_KEY = (workspaceId) => ['products', workspaceId, 'active']
 const REPLENISHMENTS_QUERY_KEY = (workspaceId) => [
   'replenishments',

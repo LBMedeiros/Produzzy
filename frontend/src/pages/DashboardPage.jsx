@@ -116,7 +116,7 @@ function DashboardPage({ onNavigate }) {
       },
       {
         label: 'Sem estoque',
-        tone: 'green',
+        tone: 'red',
         trend: 'Produtos com quantidade zerada',
         value: formatNumber(summary?.out_of_stock_products),
       },

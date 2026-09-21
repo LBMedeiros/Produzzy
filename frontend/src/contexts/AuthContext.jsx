@@ -26,7 +26,7 @@ const AuthContext = createContext(null)
 
 function normalizeError(error) {
   if (error?.status === 401) {
-    return 'Email ou senha inválidos.'
+    return 'E-mail ou senha inválidos.'
   }
 
   return error?.message ?? 'Não foi possível concluir a ação.'

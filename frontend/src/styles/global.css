@@ -1620,6 +1620,12 @@ a {
   --stat-shadow: rgba(22, 163, 74, 0.18);
 }
 
+.stat-card--red {
+  --stat-bg: #dc2626;
+  --stat-border: rgba(254, 202, 202, 0.34);
+  --stat-shadow: rgba(220, 38, 38, 0.2);
+}
+
 .stat-card--slate {
   --stat-bg: #475569;
   --stat-border: rgba(203, 213, 225, 0.3);
@@ -1662,6 +1668,12 @@ a {
 :root[data-theme="dark"] .stat-card--green {
   --stat-bg: #15803d;
   --stat-border: rgba(134, 239, 172, 0.2);
+  --stat-shadow: rgba(0, 0, 0, 0.26);
+}
+
+:root[data-theme="dark"] .stat-card--red {
+  --stat-bg: #b91c1c;
+  --stat-border: rgba(252, 165, 165, 0.22);
   --stat-shadow: rgba(0, 0, 0, 0.26);
 }
 
@@ -4331,7 +4343,7 @@ a {
 }
 
 .stock-ready-replenishment span {
-  color: var(--muted);
+  color: #fff;
   font-size: 12px;
   /* Same label weight as .replenishment-request-card__details span, so the
      detail line stays legible against the card instead of washing out. */
