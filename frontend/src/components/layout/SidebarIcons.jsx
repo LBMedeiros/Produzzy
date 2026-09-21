@@ -56,6 +56,16 @@ export function SettingsIcon() {
   )
 }
 
+export function LogoutIcon() {
+  return (
+    <IconBase>
+      <path d="M9 4H6a2 2 0 00-2 2v12a2 2 0 002 2h3" />
+      <path d="M16 8l4 4-4 4" />
+      <path d="M20 12H9" />
+    </IconBase>
+  )
+}
+
 export function ChevronIcon({ direction }) {
   return (
     <svg

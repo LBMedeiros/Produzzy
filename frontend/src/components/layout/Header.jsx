@@ -1092,7 +1092,9 @@ function Header({ onNavigated }) {
               <strong>{getFirstName(user?.name)}</strong>
               <span className="select-chevron" aria-hidden="true"></span>
             </button>
-            {isUserMenuOpen ? <UserMenu user={user} /> : null}
+            {isUserMenuOpen ? (
+              <UserMenu user={user} onClose={() => setIsUserMenuOpen(false)} />
+            ) : null}
           </div>
         </div>
       </header>
