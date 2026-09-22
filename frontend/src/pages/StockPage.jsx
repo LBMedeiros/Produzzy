@@ -588,13 +588,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     [activeFilter, loadProductMovements, workspaceId],
   )
 
-  // Stable opener for the edit form. An existing product carries its own
-  // category name, so the form value is correct even before the category list
-  // has loaded (the <select> options fill in from `categories` on render).
-  const openProductForEdit = useCallback((product) => {
-    setProductForm(normalizeProductForm(product, []))
-    setProductFormError('')
-    setProductModal({ mode: 'edit', product })
+  // Stable opener for the stock-movement modal (used by the scanner intent).
+  const openProductMovement = useCallback((product) => {
+    setMovementProduct(product)
+    setMovementForm(emptyMovementForm)
+    setMovementError('')
   }, [])
 
   useEffect(() => {
@@ -665,7 +663,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
   useEffect(() => {
     if (
-      navigationIntent?.type !== 'product-edit' ||
+      navigationIntent?.type !== 'product-movement' ||
       navigationIntent.workspaceId !== workspaceId ||
       !navigationIntent.productId
     ) {
@@ -684,9 +682,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           includeDeleted: false,
         })
 
-        // Read-only members can't edit, so surface the product detail instead.
-        if (canWriteProduct) {
-          openProductForEdit(product)
+        // Members who can't move stock only get the product detail.
+        if (canMoveStock) {
+          openProductMovement(product)
         } else {
           await loadProductDetail(product)
         }
@@ -699,11 +697,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
     return () => window.clearTimeout(timeoutId)
   }, [
-    canWriteProduct,
+    canMoveStock,
     loadProductDetail,
     navigationIntent,
     onNavigationIntentHandled,
-    openProductForEdit,
+    openProductMovement,
     workspaceId,
   ])
 

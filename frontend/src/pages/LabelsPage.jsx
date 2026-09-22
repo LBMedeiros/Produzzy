@@ -585,7 +585,7 @@ function LabelsPage({ onNavigate }) {
       setError('')
       setSuccessMessage('')
       onNavigate?.('stock', {
-        type: 'product-edit',
+        type: 'product-movement',
         workspaceId: numericWorkspaceId,
         productId: productRef.productId,
       })
@@ -711,8 +711,8 @@ function LabelsPage({ onNavigate }) {
             {utilityTab === 'scan' ? (
               <div className="labels-actions__panel">
                 <p>
-                  Leia o código de um produto para abrir sua edição direto no
-                  estoque.
+                  Leia o código de um produto para movimentar o estoque
+                  (entrada/saída) direto por aqui.
                 </p>
                 <div className="labels-actions__buttons">
                   <Button icon={<QrIcon />} onClick={() => setScannerMode('qr')}>
