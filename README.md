@@ -184,7 +184,7 @@ The application follows a workspace-scoped architecture, ensuring that products,
 ## Project Structure
 
 ```text
-produzzy/
+Produzzy/
 ├── backend/
 │   ├── alembic/                 # database migrations
 │   ├── app/
@@ -244,8 +244,8 @@ Make sure you have installed:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/LBMedeiros/produzzy.git
-cd produzzy
+git clone https://github.com/LBMedeiros/Produzzy.git
+cd Produzzy
 ```
 
 ---
