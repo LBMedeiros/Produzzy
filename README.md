@@ -21,69 +21,63 @@ With Produzzy, teams can:
 - record stock entries and withdrawals;
 - identify low-stock and out-of-stock products;
 - manage replenishment workflows;
-- track who performed stock movements;
-- collaborate through shared workspaces;
-- generate QR Codes and printable product labels.
+- track who performed each stock movement;
+- collaborate through shared workspaces with custom member titles;
+- generate QR Codes, barcodes, and printable product labels;
+- scan a product's QR Code or barcode with the camera to jump straight to its stock movement.
 
 ---
 
 ## Features
 
-### Authentication
+### Authentication & Account
 
 - User registration and login with email and password
-- JWT-based authentication
-- Protected routes
-- Session handling
-- Google OAuth support
-- Login rate limiting
+- JWT-based authentication with protected routes and session handling
+- Google OAuth (Sign in with Google)
+- Change email and change password from the account settings
+- Profile photo upload with an in-app crop/framing editor (stored on Cloudinary)
+- Login and registration rate limiting
 - Input validation
 
-> Google authentication requires OAuth credentials to be configured through environment variables.
+> Google authentication requires OAuth credentials to be configured through environment variables. See [`DEPLOY.md`](./DEPLOY.md) for the full setup.
 
-### Workspaces
+### Workspaces & Collaboration
 
-- Create multiple workspaces
-- Isolated data between workspaces
-- Workspace switching
-- Invite users through invitation links
-- Member management
-- Role-based permissions
+- Create and switch between multiple workspaces
+- Fully isolated data between workspaces
+- Invite users through individual invitations or shareable invite links
+- Member management with role-based permissions (owner, admin, employee, viewer)
+- Custom member titles (e.g. "Sócio", "Gerente") — cosmetic labels the owner assigns, independent from access roles
 - Workspace deletion with confirmation
 
 ### Product Management
 
-- Create products
-- Edit product information
-- Organize products by category
+- Create and edit products
+- Organize products by category (with a trash/restore workflow for categories)
 - Search and filter inventory
-- Soft delete products
-- Trash and restore workflow
-- Product status based on inventory levels
+- Soft delete products with a trash and restore workflow
+- Product status derived from inventory levels
 
 ### Inventory Control
 
-- Stock entries
-- Stock withdrawals
+- Stock entries and withdrawals
 - Negative stock prevention
 - Minimum stock configuration
-- Low-stock detection
-- Out-of-stock detection
+- Low-stock and out-of-stock detection
 - Persistent stock movement history
 
-### Audit Trail
+### Audit Trail & Activity
 
-Stock movements include operational information such as:
+Stock movements and workspace actions are recorded with operational context such as:
 
 - responsible user;
 - movement type;
-- previous quantity;
-- new quantity;
-- quantity difference;
+- previous quantity, new quantity, and difference;
 - reason;
 - date and time.
 
-This allows teams to identify who performed a stock operation when reviewing inventory inconsistencies.
+The dashboard surfaces a recent-activity feed (products, categories, replenishments, members, invites, and stock movements), so teams can see who did what and quickly review inventory inconsistencies.
 
 ### Replenishment Workflow
 
@@ -97,25 +91,21 @@ Current workflow stages include:
 - Stocked
 - Cancelled
 
-The system calculates replenishment needs based on the product's current and minimum quantities.
+The system calculates replenishment needs based on the product's current and minimum quantities, and assignees can be attached to a replenishment.
 
-### QR Codes & Labels
+### QR Codes, Barcodes & Labels
 
-- Individual QR Code generation
-- Individual product labels
-- Product identification codes
-- Batch QR Code export
-- Batch label export
+- Individual QR Code and Code 128 barcode generation
+- Individual product labels and identification codes
+- Batch QR Code and label export (paginated, print-ready sheets)
 - Printable previews
+- **Camera scanner**: read a product's QR Code or barcode with the device camera to open its stock-movement flow directly
 
-### Interface
+### Interface & UX
 
-- Responsive web interface
-- Light mode
-- Dark mode
-- Persistent theme preference
-- Responsive sidebar
-- Workspace navigation
+- Responsive web interface, tuned for mobile (phone-friendly cards and layouts)
+- Light and dark modes with a persistent theme preference and an in-menu toggle
+- Responsive sidebar and workspace navigation
 - Accessible dropdowns and menus
 - Loading, empty, error, and confirmation states
 - Subtle interface transitions and motion
@@ -126,11 +116,13 @@ The system calculates replenishment needs based on the product's current and min
 
 ### Frontend
 
-- React
+- React 19
 - Vite
-- JavaScript
-- React Router
-- CSS
+- JavaScript (JSX)
+- React Router (`react-router-dom`)
+- TanStack Query (React Query) for server-state
+- ZXing (`@zxing/browser`) for QR / barcode scanning
+- Plain CSS
 - Context API
 
 ### Backend
@@ -139,23 +131,22 @@ The system calculates replenishment needs based on the product's current and min
 - FastAPI
 - SQLAlchemy
 - Pydantic
-- JWT authentication
-- Alembic
+- Alembic (migrations)
+- python-jose (JWT) · passlib + bcrypt (password hashing)
+- Pillow, `qrcode`, and `python-barcode` (QR/barcode/label generation)
+- Cloudinary (avatar/media storage)
 
 ### Database
 
 - PostgreSQL
 
-### Authentication
+### Deployment
 
-- Email & password
-- JWT
-- Google Identity / OAuth
+- Render (managed PostgreSQL, API web service, and static frontend)
 
 ### Development Tools
 
-- Git
-- GitHub
+- Git & GitHub
 - Swagger / OpenAPI
 - Pytest
 - ESLint
@@ -165,26 +156,25 @@ The system calculates replenishment needs based on the product's current and min
 ## Architecture
 
 ```text
-                       ┌─────────────────────┐
-                       │      React App      │
-                       │        Vite         │
-                       └──────────┬──────────┘
-                                  │
-                                  │ REST API
-                                  ▼
-                       ┌─────────────────────┐
-                       │       FastAPI       │
-                       │ Authentication      │
-                       │ Business Rules      │
-                       │ Workspace Access    │
-                       └──────────┬──────────┘
-                                  │
-                              SQLAlchemy
-                                  │
-                                  ▼
-                       ┌─────────────────────┐
-                       │     PostgreSQL      │
-                       └─────────────────────┘
+                    ┌─────────────────────────┐
+                    │     React + Vite SPA     │
+                    │  React Query · ZXing     │
+                    └────────────┬────────────┘
+                                 │ REST API (JWT)
+                                 ▼
+      ┌────────────────────────────────────────────────┐
+      │                    FastAPI                       │
+      │  Authentication · Workspace-scoped access        │
+      │  Business rules · Audit logging                  │
+      │  QR / barcode / label generation                 │
+      └───────┬─────────────────┬──────────────────┬─────┘
+              │                 │                  │
+         SQLAlchemy      Cloudinary (media)   Google OAuth
+              │                                (sign-in)
+              ▼
+      ┌─────────────────────┐
+      │     PostgreSQL      │
+      └─────────────────────┘
 ```
 
 The application follows a workspace-scoped architecture, ensuring that products, inventory operations, replenishments, and members remain isolated between workspaces.
@@ -194,33 +184,43 @@ The application follows a workspace-scoped architecture, ensuring that products,
 ## Project Structure
 
 ```text
-Produzzy/
+produzzy/
 ├── backend/
-│   ├── alembic/
+│   ├── alembic/                 # database migrations
 │   ├── app/
-│   │   ├── routers/
-│   │   ├── services/
+│   │   ├── routers/             # thin HTTP layer (auth, products, stock_movements,
+│   │   │                        #   replenishment, categories, workspaces, qrcode,
+│   │   │                        #   dashboard, search, audit_logs)
+│   │   ├── crud/                # business layer (base, users, products, stock,
+│   │   │                        #   categories, workspaces, invites, replenishment,
+│   │   │                        #   dashboard, search, audit)
+│   │   ├── services/            # security, google_auth, rate_limit,
+│   │   │                        #   qrcode, avatar_storage
 │   │   ├── config.py
-│   │   ├── crud.py
 │   │   ├── database.py
 │   │   ├── dependencies.py
+│   │   ├── errors.py
 │   │   ├── main.py
 │   │   ├── models.py
 │   │   └── schemas.py
 │   ├── tests/
 │   ├── .env.example
+│   ├── Procfile
 │   └── requirements.txt
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── contexts/
+│   │   ├── components/          # ui, layout, replenishment, settings, labels
+│   │   ├── contexts/            # Auth, Workspace, Theme
 │   │   ├── pages/
-│   │   ├── services/
+│   │   ├── services/            # API layer per domain
+│   │   ├── lib/                 # api client, formatters, replenishment helpers
 │   │   └── styles/
 │   ├── .env.example
 │   └── package.json
 │
+├── render.yaml                  # Render Blueprint
+├── DEPLOY.md                    # deployment checklist
 ├── .gitignore
 └── README.md
 ```
@@ -244,8 +244,8 @@ Make sure you have installed:
 ### 1. Clone the repository
 
 ```bash
-git clone git@github.com:LBMedeiros/Produzzy.git
-cd Produzzy
+git clone https://github.com/LBMedeiros/produzzy.git
+cd produzzy
 ```
 
 ---
@@ -348,13 +348,12 @@ http://localhost:5173
 
 ### Backend
 
-Example:
+Example (see [`backend/.env.example`](./backend/.env.example) for the full list):
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/produzzy
 
 PRODUZZY_ENV=development
-
 PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173
 
 PRODUZZY_SECRET_KEY=replace-with-a-long-random-secret-key
@@ -363,12 +362,24 @@ PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS=5
 PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS=300
-
 PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS=5
 PRODUZZY_REGISTER_RATE_LIMIT_WINDOW_SECONDS=300
+PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS=300
 
+# Optional — Sign in with Google
 PRODUZZY_GOOGLE_CLIENT_ID=
 PRODUZZY_GOOGLE_CLIENT_SECRET=
+
+# Optional — profile photo upload (all three required together)
+PRODUZZY_CLOUDINARY_CLOUD_NAME=
+PRODUZZY_CLOUDINARY_API_KEY=
+PRODUZZY_CLOUDINARY_API_SECRET=
+
+# Optional — PostgreSQL connection pool tuning
+# DB_POOL_RECYCLE_SECONDS=1800
+# DB_POOL_SIZE=5
+# DB_MAX_OVERFLOW=10
 ```
 
 ### Frontend
@@ -424,7 +435,7 @@ npm run build
 
 ### Backend
 
-Run the test suite:
+Run the test suite (integration tests against a real PostgreSQL database; requires `DATABASE_URL_TEST`):
 
 ```bash
 python -m pytest
@@ -438,16 +449,29 @@ python -m compileall app alembic tests
 
 ---
 
+## Deployment
+
+Produzzy is deployed on **Render** using the [`render.yaml`](./render.yaml) Blueprint, which provisions a managed PostgreSQL database, the FastAPI API, and the static React frontend.
+
+- Migrations run automatically as a pre-deploy step (`alembic upgrade head`).
+- The API exposes `/health` and `/ready` probes.
+- The frontend is served as an SPA with a `/* → /index.html` rewrite.
+
+The full operational checklist (required environment variables, Google OAuth, Cloudinary, and post-deploy smoke tests) lives in [`DEPLOY.md`](./DEPLOY.md).
+
+---
+
 ## Screenshots
 
-> Screenshots and live demo will be added as the public release is finalized.
+> Screenshots and a live demo will be added as the public release is finalized.
 
 Suggested showcase:
 
 - Dashboard
 - Inventory
 - Replenishment workflow
-- QR Code & Labels
+- QR Code, barcode & labels
+- Camera scanner
 - Workspace settings
 - Dark mode
 - Mobile experience
@@ -456,17 +480,16 @@ Suggested showcase:
 
 ## Current Status
 
-**Produzzy is under active development.**
+**Produzzy is under active development and deployed to production.**
 
-The core SaaS architecture and inventory workflow are already implemented. The current development stage is focused on:
+The core SaaS architecture and inventory workflow are implemented, and the app is live on Render. Current work focuses on:
 
 - end-to-end quality assurance;
 - permission and workspace isolation testing;
 - concurrent inventory operation testing;
-- deployment;
-- production configuration;
-- mobile UX improvements;
-- automated test coverage.
+- expanded automated test coverage;
+- production monitoring and backups;
+- account recovery flows.
 
 ---
 
@@ -474,23 +497,26 @@ The core SaaS architecture and inventory workflow are already implemented. The c
 
 - [x] Email/password authentication
 - [x] JWT authentication
+- [x] Google OAuth
 - [x] Multi-workspace architecture
-- [x] Workspace invitations
+- [x] Workspace invitations (individual and link-based)
 - [x] Role-based access
+- [x] Custom member titles
 - [x] Product and category management
 - [x] Stock movements
 - [x] Negative stock validation
 - [x] Low-stock monitoring
 - [x] Replenishment workflow
-- [x] Stock movement audit trail
+- [x] Activity & stock movement audit trail
 - [x] Product soft delete
-- [x] QR Code generation
-- [x] Product label generation
-- [x] Light and Dark themes
+- [x] QR Code, barcode, and label generation
+- [x] Camera QR / barcode scanner
+- [x] Profile photo upload with crop editor
+- [x] Light and dark themes
+- [x] Mobile-responsive interface
+- [x] Production deployment (Render)
 - [ ] Complete end-to-end QA
-- [ ] Production deployment
 - [ ] Expanded automated test coverage
-- [ ] Dedicated mobile UX
 - [ ] Production monitoring and backups
 - [ ] Password recovery and email verification
 
