@@ -628,6 +628,7 @@ function LabelsPage({ onNavigate }) {
     {
       key: 'name',
       label: 'Produto',
+      mobilePrimary: true,
       render: (product) => (
         <button
           className="product-cell product-cell--button"

@@ -41,7 +41,19 @@ function formatDate(value) {
 const auditActionLabels = {
   'category.created': 'Categoria criada',
   'category.deleted': 'Categoria removida',
+  'category.restored': 'Categoria restaurada',
   'category.updated': 'Categoria atualizada',
+  'invite.accepted': 'Convite aceito',
+  'invite.created': 'Convite enviado',
+  'invite.expired': 'Convite expirado',
+  'invite.revoked': 'Convite revogado',
+  'invite_link.accepted': 'Convite por link aceito',
+  'invite_link.created': 'Link de convite criado',
+  'invite_link.expired': 'Link de convite expirado',
+  'invite_link.revoked': 'Link de convite revogado',
+  'member.removed': 'Membro removido',
+  'member.role_updated': 'Papel de membro atualizado',
+  'member.title_updated': 'Cargo de membro atualizado',
   'product.created': 'Produto criado',
   'product.deleted': 'Produto enviado para lixeira',
   'product.restored': 'Produto restaurado',
@@ -58,8 +70,33 @@ const auditActionLabels = {
   'workspace.updated': 'Workspace atualizado',
 }
 
+const auditEntityLabels = {
+  category: 'Categoria',
+  product: 'Produto',
+  replenishment_request: 'Reposição',
+  stock_movement: 'Movimento de estoque',
+  workspace: 'Workspace',
+  workspace_invite: 'Convite',
+  workspace_invite_link: 'Link de convite',
+  workspace_member: 'Membro',
+}
+
+function humanizeAuditAction(action) {
+  if (auditActionLabels[action]) {
+    return auditActionLabels[action]
+  }
+
+  // Fallback for any unmapped action: strip the "domain." prefix and de-snake.
+  const readable = String(action ?? '')
+    .split('.')
+    .pop()
+    .replace(/_/g, ' ')
+    .trim()
+
+  return readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : 'Atividade'
+}
+
 function formatAuditLog(log) {
-  const title = auditActionLabels[log.action] ?? log.action
   const metadata = log.metadata ?? {}
   const detail =
     metadata.name ??
@@ -67,15 +104,18 @@ function formatAuditLog(log) {
     metadata.product_id ??
     metadata.category_id ??
     metadata.movement_type ??
+    auditEntityLabels[log.entity_type] ??
     log.entity_type
 
   return {
     detail: `Item relacionado: ${detail}`,
     id: log.id,
     time: formatDate(log.created_at),
-    title,
+    title: humanizeAuditAction(log.action),
   }
 }
+
+const RECENT_ACTIVITY_LIMIT = 3
 
 function DashboardPage({ onNavigate }) {
   const { activeWorkspace } = useWorkspace()
@@ -131,7 +171,7 @@ function DashboardPage({ onNavigate }) {
   )
 
   const attentionColumns = [
-    { key: 'name', label: 'Produto' },
+    { key: 'name', label: 'Produto', mobilePrimary: true },
     { key: 'category', label: 'Categoria' },
     { key: 'quantity', label: 'Quantidade' },
     {
@@ -160,7 +200,7 @@ function DashboardPage({ onNavigate }) {
   ]
 
   const activityColumns = [
-    { key: 'title', label: 'Atividade' },
+    { key: 'title', label: 'Atividade', mobilePrimary: true },
     { key: 'detail', label: 'Detalhe' },
     { key: 'time', label: 'Quando' },
   ]
@@ -203,7 +243,26 @@ function DashboardPage({ onNavigate }) {
             </Card>
             <Card title="Atividades recentes" eyebrow="Recent activity">
               {recentActivity.length ? (
-                <DataTable columns={activityColumns} rows={recentActivity} />
+                <div className="dashboard-activity">
+                  <DataTable
+                    columns={activityColumns}
+                    rows={recentActivity.slice(0, RECENT_ACTIVITY_LIMIT)}
+                  />
+                  <div className="dashboard-activity__footer">
+                    <Button
+                      onClick={() =>
+                        onNavigate('stock', {
+                          type: 'stock-history',
+                          workspaceId,
+                        })
+                      }
+                      size="sm"
+                      variant="secondary"
+                    >
+                      Ver histórico de estoque
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <div className="stock-empty">
                   <h2>Nenhuma atividade recente</h2>

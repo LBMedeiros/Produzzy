@@ -705,6 +705,24 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     workspaceId,
   ])
 
+  useEffect(() => {
+    if (
+      navigationIntent?.type !== 'stock-history' ||
+      navigationIntent.workspaceId !== workspaceId
+    ) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setActiveFilter('history')
+      setCategoryFilter('all')
+      setSearchTerm('')
+      onNavigationIntentHandled?.()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [navigationIntent, onNavigationIntentHandled, workspaceId])
+
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase()
 

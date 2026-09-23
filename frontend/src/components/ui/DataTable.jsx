@@ -17,7 +17,13 @@ function DataTable({ columns, rows, emptyMessage = 'Nenhum registro encontrado.'
           {rows.map((row) => (
             <tr key={row.id}>
               {columns.map((column) => (
-                <td key={column.key}>{column.render ? column.render(row) : row[column.key]}</td>
+                <td
+                  key={column.key}
+                  data-label={column.label}
+                  className={column.mobilePrimary ? 'data-cell--primary' : undefined}
+                >
+                  {column.render ? column.render(row) : row[column.key]}
+                </td>
               ))}
             </tr>
           ))}

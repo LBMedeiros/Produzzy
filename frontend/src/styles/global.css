@@ -2197,6 +2197,81 @@ a {
   border-bottom: 0;
 }
 
+/* Mobile: turn every DataTable into a stack of cards (one per row) so nothing
+   needs horizontal scrolling. Scoped to `.table-wrap .data-table` so it wins
+   over the per-context min-width overrides. The <thead> is kept for screen
+   readers but hidden; each cell shows its column label via `data-label`. */
+@media (max-width: 560px) {
+  .table-wrap {
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .table-wrap .data-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .table-wrap .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .table-wrap .data-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .table-wrap .data-table tr {
+    display: grid;
+    gap: 9px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 14px;
+  }
+
+  .table-wrap .data-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border: 0;
+    padding: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .table-wrap .data-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 750;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .table-wrap .data-table td.data-cell--primary {
+    display: block;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 9px;
+    color: var(--text);
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .table-wrap .data-table td.data-cell--primary::before {
+    display: none;
+  }
+}
+
 .product-cell {
   display: grid;
   gap: 2px;
@@ -2561,6 +2636,7 @@ a {
 }
 
 .stock-product-card {
+  position: relative;
   display: grid;
   gap: 14px;
   border: 1px solid var(--border);
@@ -2571,9 +2647,11 @@ a {
 
 .stock-product-card__header {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
+  /* Leave room for the actions menu pinned to the top-right corner. */
+  padding-right: 36px;
 }
 
 .stock-product-card__header > div {
@@ -2591,16 +2669,20 @@ a {
 .stock-product-card__metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated);
 }
 
 .stock-product-card__metrics > div {
   display: grid;
   gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-elevated);
-  padding: 10px;
+  padding: 10px 12px;
+}
+
+.stock-product-card__metrics > div + div {
+  border-left: 1px solid var(--border);
 }
 
 .stock-product-card__metrics span {
@@ -2615,6 +2697,10 @@ a {
 }
 
 .stock-product-card__actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
   min-width: 0;
 }
 
@@ -5893,7 +5979,18 @@ a {
   }
 
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .stat-card {
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .stat-card strong {
+    margin: 8px 0 6px;
+    font-size: 28px;
   }
 
   .topbar__actions {
@@ -5997,22 +6094,18 @@ a {
     width: 100%;
   }
 
-  .labels-actions__buttons,
+  /* Stack side-by-side buttons: flex-direction beats the `flex-basis: 140px`
+     that a plain `width: 100%` can't override, so labels never overflow. */
+  .labels-actions__buttons {
+    flex-direction: column;
+  }
+
   .labels-actions__buttons .button {
     width: 100%;
   }
 
   .segmented-control {
     width: 100%;
-  }
-
-  .stock-product-card__header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .stock-product-card__metrics {
-    grid-template-columns: 1fr;
   }
 
   .replenishment-modal__metrics {
@@ -6351,4 +6444,32 @@ a {
 .avatar-crop__zoom input {
   flex: 1;
   accent-color: var(--blue);
+}
+
+/* Placed at the end so it wins (equal specificity, later source) over the
+   per-context `.X .data-table { min-width: … }` rules — without this the
+   mobile card layout would still be forced to the table's desktop width and
+   overflow the screen (e.g. the Etiquetas catalog). */
+@media (max-width: 560px) {
+  .table-wrap .data-table {
+    min-width: 0;
+  }
+}
+
+/* Dashboard "Atividades recentes": show only the latest few, with a footer
+   link to the full history so the card never grows unbounded on mobile. */
+.dashboard-activity {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-activity__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .dashboard-activity__footer .button {
+    width: 100%;
+  }
 }
