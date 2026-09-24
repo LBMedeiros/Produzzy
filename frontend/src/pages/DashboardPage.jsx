@@ -236,7 +236,7 @@ function DashboardPage({ onNavigate }) {
                 <DataTable columns={attentionColumns} rows={attentionProducts} />
               ) : (
                 <div className="stock-empty">
-                  <h2>Estoque saudável</h2>
+                  <h2>Estoque vazio</h2>
                   <p>Nenhum produto ativo está zerado ou abaixo do mínimo cadastrado.</p>
                 </div>
               )}

@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
-from jose import jwt
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config import (
     PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES,
     PRODUZZY_JWT_ALGORITHM,
+    PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
     PRODUZZY_SECRET_KEY,
 )
 
@@ -13,6 +14,7 @@ from app.config import (
 SECRET_KEY = PRODUZZY_SECRET_KEY
 ALGORITHM = PRODUZZY_JWT_ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
 
 # bcrypt cost 10 (OWASP minimum) — cost 12 on shared CPU (e.g. Render free)
 # adds ~1s to every login. Existing cost-12 hashes still verify fine and get
@@ -53,3 +55,25 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
 def decode_access_token(token: str):
     return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+
+def create_password_reset_token(subject: str, fingerprint: str):
+    """Short-lived, single-use token for the "forgot password" flow.
+
+    The ``fingerprint`` is derived from the user's current password hash, so the
+    token becomes invalid as soon as the password changes (single use)."""
+    expires_delta = timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+
+    return create_access_token(
+        data={"sub": subject, "type": "password_reset", "fp": fingerprint},
+        expires_delta=expires_delta,
+    )
+
+
+def decode_password_reset_token(token: str):
+    payload = decode_access_token(token)
+
+    if payload.get("type") != "password_reset":
+        raise JWTError("Tipo de token inválido.")
+
+    return payload

@@ -17,6 +17,10 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.errors import DomainError
 from app.config import (
+    PRODUZZY_APP_BASE_URL,
+    PRODUZZY_ENV,
+    PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS,
+    PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
     PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS,
     PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS,
@@ -25,9 +29,15 @@ from app.config import (
 from app.dependencies import get_current_user, get_db
 from app.services.rate_limit_service import (
     build_rate_limit_key,
+    ensure_rate_limit_allowed,
+    record_rate_limit_failure,
     run_with_failure_rate_limit,
 )
-from app.services import avatar_storage_service, google_auth_service
+from app.services import (
+    avatar_storage_service,
+    email_service,
+    google_auth_service,
+)
 from app.services.security_service import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
@@ -174,21 +184,108 @@ def login_with_google(
 
     key = build_rate_limit_key(request, "google")
 
-    user = run_with_failure_rate_limit(
-        "auth.google",
-        key,
-        PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS,
-        PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-        lambda: crud.authenticate_google_user(
-            google_auth_service.verify_google_auth_code(
-                google_data.code,
-                google_data.redirect_uri,
+    try:
+        user = run_with_failure_rate_limit(
+            "auth.google",
+            key,
+            PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS,
+            PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+            lambda: crud.authenticate_google_user(
+                google_auth_service.verify_google_auth_code(
+                    google_data.code,
+                    google_data.redirect_uri,
+                ),
+                db,
             ),
+        )
+    except (HTTPException, DomainError) as exc:
+        auth_logger.warning(
+            "auth.google failed redirect_uri=%s detail=%s",
+            google_data.redirect_uri,
+            getattr(exc, "detail", None) or str(exc),
+        )
+        raise
+
+    return create_token_for_user(user)
+
+
+GENERIC_PASSWORD_RESET_MESSAGE = (
+    "Se existir uma conta com esse e-mail, enviamos um link para "
+    "redefinir a senha."
+)
+
+
+@router.post("/forgot-password", response_model=schemas.MessageResponse)
+def forgot_password(
+    reset_request: schemas.PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    # Every request counts toward the limit (not only failures), so this
+    # endpoint can't be abused to spam a victim's inbox or probe accounts.
+    key = build_rate_limit_key(request, crud.normalize_email(reset_request.email))
+    ensure_rate_limit_allowed(
+        "auth.forgot_password",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    record_rate_limit_failure(
+        "auth.forgot_password",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    user, token = crud.create_password_reset(reset_request.email, db)
+
+    if user and token:
+        reset_link = f"{PRODUZZY_APP_BASE_URL.rstrip('/')}/reset-password/{token}"
+
+        try:
+            email_service.send_password_reset_email(user.email, reset_link)
+        except email_service.EmailNotConfiguredError:
+            if PRODUZZY_ENV in {"production", "prod"}:
+                auth_logger.warning(
+                    "auth.forgot_password reset link generated but SMTP is not "
+                    "configured; e-mail was not sent"
+                )
+            else:
+                # Dev convenience: no SMTP configured, so surface the link in
+                # the server log to allow local testing. Never in production.
+                auth_logger.warning(
+                    "auth.forgot_password DEV reset link (SMTP off): %s",
+                    reset_link,
+                )
+        except email_service.EmailSendError:
+            auth_logger.exception("auth.forgot_password failed to send e-mail")
+
+    # Always the same response, regardless of whether the account exists.
+    return schemas.MessageResponse(message=GENERIC_PASSWORD_RESET_MESSAGE)
+
+
+@router.post("/reset-password", response_model=schemas.MessageResponse)
+def reset_password(
+    reset_data: schemas.PasswordResetConfirm,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    key = build_rate_limit_key(request, "reset-password")
+
+    run_with_failure_rate_limit(
+        "auth.reset_password",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+        lambda: crud.reset_password_with_token(
+            reset_data.token,
+            reset_data.new_password,
             db,
         ),
     )
 
-    return create_token_for_user(user)
+    return schemas.MessageResponse(
+        message="Senha redefinida com sucesso. Agora é só entrar."
+    )
 
 
 @router.get("/me", response_model=schemas.UserResponse)

@@ -19,10 +19,12 @@ import { WorkspaceProvider, useWorkspace } from './contexts/WorkspaceContext'
 // Each screen is its own bundle chunk, fetched only when first shown.
 const CreateWorkspacePage = lazy(() => import('./pages/CreateWorkspacePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage'))
 const LabelsPage = lazy(() => import('./pages/LabelsPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ProductionPage = lazy(() => import('./pages/ProductionPage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const StockPage = lazy(() => import('./pages/StockPage'))
 
@@ -159,6 +161,15 @@ function AppRoutes() {
             </GuestOnly>
           }
         />
+        <Route
+          path="/forgot-password"
+          element={
+            <GuestOnly>
+              <ForgotPasswordPage />
+            </GuestOnly>
+          }
+        />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route
           path="/invites/:token/accept"
           element={

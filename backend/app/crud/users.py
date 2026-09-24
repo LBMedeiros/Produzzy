@@ -1,15 +1,19 @@
 """crud.users — split from the former monolithic crud.py."""
+import hashlib
 import secrets
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 
+from jose import JWTError
 from sqlalchemy import Float, String, and_, case, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas
 from app.services.security_service import (
+    create_password_reset_token,
+    decode_password_reset_token,
     get_password_hash,
     verify_and_maybe_rehash,
     verify_password,
@@ -226,6 +230,58 @@ def change_current_user_password(
     db.refresh(current_user)
 
     return current_user
+
+def password_reset_fingerprint(hashed_password: str) -> str:
+    """Short digest of the current password hash. Embedded in the reset token so
+    it is invalidated the moment the password changes (single use)."""
+    return hashlib.sha256(hashed_password.encode("utf-8")).hexdigest()[:16]
+
+def create_password_reset(email: str, db: Session):
+    """Return (user, token) when a reset e-mail should be sent, else
+    (None, None). Never reveals whether the account exists — the caller always
+    responds the same way."""
+    user = get_user_by_email(email, db)
+
+    if not user or not user.is_active or not user.hashed_password:
+        return None, None
+
+    fingerprint = password_reset_fingerprint(user.hashed_password)
+    token = create_password_reset_token(user.email, fingerprint)
+
+    return user, token
+
+def reset_password_with_token(token: str, new_password: str, db: Session):
+    invalid_token_error = ValidationError(
+        "Link de redefinição inválido ou expirado. Solicite um novo."
+    )
+
+    try:
+        payload = decode_password_reset_token(token)
+    except JWTError as error:
+        raise invalid_token_error from error
+
+    email = normalize_email(str(payload.get("sub") or ""))
+    fingerprint = str(payload.get("fp") or "")
+
+    if not email or not fingerprint:
+        raise invalid_token_error
+
+    user = get_user_by_email(email, db)
+
+    if (
+        not user
+        or not user.is_active
+        or not user.hashed_password
+        or password_reset_fingerprint(user.hashed_password) != fingerprint
+    ):
+        raise invalid_token_error
+
+    user.hashed_password = get_password_hash(new_password)
+
+    db.commit()
+    db.refresh(user)
+
+    return user
 
 def update_current_user_avatar(
     current_user: models.User,

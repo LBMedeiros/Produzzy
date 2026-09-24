@@ -170,6 +170,28 @@ class UserPasswordChange(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class PasswordResetRequest(BaseModel):
+    email: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return normalize_email_input(value)
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=1, max_length=2000)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str

@@ -55,6 +55,22 @@ export function register(data) {
   })
 }
 
+export function requestPasswordReset(email) {
+  return request('/auth/forgot-password', {
+    body: { email: email.trim() },
+    method: 'POST',
+    skipAuth: true,
+  })
+}
+
+export function resetPassword(token, newPassword) {
+  return request('/auth/reset-password', {
+    body: { new_password: newPassword, token },
+    method: 'POST',
+    skipAuth: true,
+  })
+}
+
 export function getMe(token) {
   return request('/auth/me', token ? { token } : undefined)
 }

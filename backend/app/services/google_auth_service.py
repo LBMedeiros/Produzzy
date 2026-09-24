@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from urllib import error as urllib_error
 from urllib import parse, request
@@ -13,7 +14,10 @@ from app.config import (
 )
 
 
+logger = logging.getLogger("produzzy.auth")
+
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 GOOGLE_SCOPES = "openid email profile"
@@ -25,6 +29,7 @@ _jwks_cache = {
 
 
 def _google_auth_error(detail: str, status_code=status.HTTP_401_UNAUTHORIZED):
+    logger.warning("google.auth_error status=%s detail=%s", status_code, detail)
     raise HTTPException(status_code=status_code, detail=detail)
 
 
@@ -95,6 +100,13 @@ def fetch_json(url: str, data: bytes | None = None, headers: dict | None = None)
 
             return payload, response.headers
     except urllib_error.HTTPError as exc:
+        try:
+            error_body = exc.read().decode("utf-8")
+        except Exception:
+            error_body = "<sem corpo>"
+
+        logger.warning("google.http_error status=%s body=%s", exc.code, error_body)
+
         if 400 <= exc.code < 500:
             _google_auth_error("Credencial do Google inválida.")
 
@@ -151,14 +163,27 @@ def exchange_google_code_for_tokens(code: str, redirect_uri: str):
             status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
-    origin = validate_google_redirect_uri(redirect_uri)
+    # O frontend usa o fluxo de "authorization code" em popup do Google Identity
+    # Services (ux_mode: 'popup'). O code desse fluxo precisa ser trocado no
+    # servidor com redirect_uri "postmessage" — não com a origem da página.
+    # Ainda validamos a origem contra a allowlist como defesa em profundidade.
+    validate_google_redirect_uri(redirect_uri)
+    # Diagnóstico seguro: o client_id é público e o secret aparece só como
+    # comprimento (nunca o valor). Ajuda a confirmar que as credenciais foram
+    # carregadas no ambiente (Render) e qual origem o frontend enviou.
+    logger.info(
+        "google.exchange client_id_tail=%s secret_len=%s redirect_uri=%s",
+        PRODUZZY_GOOGLE_CLIENT_ID[-12:] if PRODUZZY_GOOGLE_CLIENT_ID else "",
+        len(PRODUZZY_GOOGLE_CLIENT_SECRET),
+        redirect_uri,
+    )
     payload = parse.urlencode(
         {
             "client_id": PRODUZZY_GOOGLE_CLIENT_ID,
             "client_secret": PRODUZZY_GOOGLE_CLIENT_SECRET,
             "code": code,
             "grant_type": "authorization_code",
-            "redirect_uri": origin,
+            "redirect_uri": "postmessage",
         }
     ).encode("utf-8")
 
@@ -168,28 +193,38 @@ def exchange_google_code_for_tokens(code: str, redirect_uri: str):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
 
-    if not tokens.get("id_token"):
-        _google_auth_error("Credencial do Google inválida.")
+    logger.info("google.token_exchange ok keys=%s", sorted(tokens.keys()))
 
     return tokens
 
 
-def verify_google_id_token(id_token: str):
-    if not PRODUZZY_GOOGLE_CLIENT_ID:
-        _google_auth_error(
-            "Login com Google não configurado.",
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
+def try_verify_google_id_token(id_token: str):
+    """Verifica um id_token do Google localmente. Retorna os claims em caso de
+    sucesso, ou None quando há qualquer problema de verificação (registrando o
+    motivo), para o chamador cair no fallback via userinfo.
 
+    A verificação local depende do relógio do servidor (exp/iat) — se o horário
+    estiver fora de sincronia, um token válido pode parecer expirado; por isso o
+    fallback existe."""
     try:
         header = jwt.get_unverified_header(id_token)
-    except JWTError:
-        _google_auth_error("Credencial do Google inválida.")
+    except JWTError as error:
+        logger.warning("google.id_token bad_header error=%s", error)
+        return None
 
     if header.get("alg") != "RS256" or not header.get("kid"):
-        _google_auth_error("Credencial do Google inválida.")
+        logger.warning(
+            "google.id_token unexpected_header alg=%s has_kid=%s",
+            header.get("alg"),
+            bool(header.get("kid")),
+        )
+        return None
 
-    key = find_google_key(header["kid"])
+    try:
+        key = find_google_key(header["kid"])
+    except HTTPException:
+        logger.warning("google.id_token key_unavailable")
+        return None
 
     try:
         claims = jwt.decode(
@@ -197,13 +232,42 @@ def verify_google_id_token(id_token: str):
             key,
             algorithms=["RS256"],
             audience=PRODUZZY_GOOGLE_CLIENT_ID,
-            options={"verify_iss": False},
+            # verify_at_hash: o id_token do Google traz o claim at_hash, que só
+            # pode ser checado com o access_token em mãos. Como validamos o
+            # token via assinatura/aud/exp, dispensamos essa checagem extra.
+            options={"verify_iss": False, "verify_at_hash": False},
         )
-    except JWTError:
-        _google_auth_error("Credencial do Google inválida.")
+    except JWTError as error:
+        logger.warning("google.id_token decode_failed error=%s", error)
+        return None
 
     if claims.get("iss") not in GOOGLE_ISSUERS:
-        _google_auth_error("Credencial do Google inválida.")
+        logger.warning("google.id_token bad_iss iss=%s", claims.get("iss"))
+        return None
+
+    if not claims.get("sub") or not claims.get("email"):
+        logger.warning("google.id_token missing_sub_or_email")
+        return None
+
+    if not is_truthy_claim(claims.get("email_verified")):
+        _google_auth_error("Confirme seu e-mail no Google antes de entrar.")
+
+    return claims
+
+
+def fetch_google_userinfo(access_token: str):
+    """OpenID userinfo — usado quando a troca do código não devolve id_token
+    (comum no fluxo initCodeClient, que é voltado a acesso de APIs)."""
+    claims, _headers = fetch_json(
+        GOOGLE_USERINFO_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    return claims
+
+
+def verify_google_userinfo(access_token: str):
+    claims = fetch_google_userinfo(access_token)
 
     if not claims.get("sub") or not claims.get("email"):
         _google_auth_error("Credencial do Google inválida.")
@@ -216,5 +280,26 @@ def verify_google_id_token(id_token: str):
 
 def verify_google_auth_code(code: str, redirect_uri: str):
     tokens = exchange_google_code_for_tokens(code, redirect_uri)
+    id_token = tokens.get("id_token")
 
-    return verify_google_id_token(tokens["id_token"])
+    # Caminho preferido: id_token assinado (verificação local, rápida).
+    if id_token:
+        claims = try_verify_google_id_token(id_token)
+
+        if claims:
+            logger.info("google.claims via=id_token")
+
+            return claims
+
+        logger.warning("google.id_token unusable; falling back to userinfo")
+
+    # Fallback robusto (não depende do relógio local): busca os dados do usuário
+    # no endpoint userinfo usando o access_token recém-obtido na troca.
+    access_token = tokens.get("access_token")
+
+    if not access_token:
+        _google_auth_error("Credencial do Google inválida.")
+
+    logger.info("google.claims via=userinfo")
+
+    return verify_google_userinfo(access_token)

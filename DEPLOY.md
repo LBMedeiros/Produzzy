@@ -60,11 +60,42 @@ aplique só os ajustes de configuração descritos aqui.
       `PRODUZZY_ALLOWED_ORIGINS` invertido: a origem do frontend precisa estar
       liberada na API (passo 2).
 
-## 6. Google OAuth (se aplicável)
+## 6. Login com Google (se aplicável)
 
-- [ ] No Google Cloud Console, "Authorized JavaScript origins" e "redirect URIs"
-      incluem a origem do frontend (a mesma de `PRODUZZY_ALLOWED_ORIGINS`).
-- [ ] `PRODUZZY_GOOGLE_CLIENT_ID` na API == `VITE_GOOGLE_CLIENT_ID` no frontend.
+O código já está pronto; falta só criar as credenciais e preencher as variáveis.
+O fluxo é *authorization code* em popup (Google Identity Services): o frontend
+obtém um `code` e o envia à API junto com a origem, e a API troca esse code por
+token no Google.
+
+**No Google Cloud Console (uma vez):**
+
+- [ ] APIs & Services → **OAuth consent screen**: tipo *External*, nome do app,
+      e-mail de suporte, escopos `openid`, `email`, `profile`. Enquanto ficar em
+      *Testing*, só os *test users* cadastrados conseguem entrar — **Publish**
+      (In production) para liberar qualquer conta.
+- [ ] Credentials → **Create credentials → OAuth client ID → Web application**.
+- [ ] **Authorized JavaScript origins**: a origem exata do frontend
+      (ex. `https://produzzy.onrender.com`) e, para dev, `http://localhost:5173`.
+- [ ] **Authorized redirect URIs**: as **mesmas origens puras** (sem caminho nem
+      barra final). O backend troca o code usando a origem como `redirect_uri`,
+      então ela precisa estar registrada aqui — senão dá `redirect_uri_mismatch`.
+- [ ] Copie o **Client ID** e o **Client Secret**.
+
+**No Render:**
+
+- [ ] `produzzy-api`: `PRODUZZY_GOOGLE_CLIENT_ID` e `PRODUZZY_GOOGLE_CLIENT_SECRET`.
+- [ ] `produzzy-api`: `PRODUZZY_ALLOWED_ORIGINS` contém a origem do frontend.
+- [ ] `produzzy-web`: `VITE_GOOGLE_CLIENT_ID` = **o mesmo** Client ID. É lido em
+      build time → **rebuild** depois de setar.
+
+Regras: o Client ID é idêntico nos dois lados; o Secret fica só na API (nunca no
+frontend nem em commit). Erros comuns:
+
+- `redirect_uri_mismatch` → a origem pura não está em *Authorized redirect URIs*.
+- Botão "Login com Google ainda não configurado" → `VITE_GOOGLE_CLIENT_ID` vazio
+  ou frontend não foi rebuildado após setar.
+- 400 "Origem do login com Google não permitida" → origem do frontend fora de
+  `PRODUZZY_ALLOWED_ORIGINS` na API.
 
 ## 7. Smoke test pós-deploy
 

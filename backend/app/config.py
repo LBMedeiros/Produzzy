@@ -15,6 +15,15 @@ def get_int_env(name: str, default: int) -> int:
     return int(value)
 
 
+def get_bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+
+    if value is None:
+        return default
+
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 DEFAULT_DATABASE_URL = (
     "postgresql://produzzy_user:produzzy_password@localhost:5432/produzzy_db"
 )
@@ -159,6 +168,36 @@ PRODUZZY_CLOUDINARY_API_SECRET = os.getenv(
     "PRODUZZY_CLOUDINARY_API_SECRET",
     "",
 ).strip()
+
+# Password reset (forgot password) --------------------------------------------
+PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = get_int_env(
+    "PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",
+    30,
+)
+PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS = get_int_env(
+    "PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS",
+    5,
+)
+PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS = get_int_env(
+    "PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS",
+    900,
+)
+# Public URL of the frontend, used to build the reset link in the e-mail.
+# Falls back to the first allowed origin so it works without extra config.
+PRODUZZY_APP_BASE_URL = os.getenv("PRODUZZY_APP_BASE_URL", "").strip() or (
+    PRODUZZY_ALLOWED_ORIGINS[0]
+    if PRODUZZY_ALLOWED_ORIGINS
+    else "http://localhost:5173"
+)
+
+# SMTP (e-mail sending) — provider-agnostic (Gmail, Brevo, SendGrid, ...) ------
+PRODUZZY_SMTP_HOST = os.getenv("PRODUZZY_SMTP_HOST", "").strip()
+PRODUZZY_SMTP_PORT = get_int_env("PRODUZZY_SMTP_PORT", 587)
+PRODUZZY_SMTP_USER = os.getenv("PRODUZZY_SMTP_USER", "").strip()
+PRODUZZY_SMTP_PASSWORD = os.getenv("PRODUZZY_SMTP_PASSWORD", "")
+PRODUZZY_SMTP_FROM = os.getenv("PRODUZZY_SMTP_FROM", "").strip()
+PRODUZZY_SMTP_FROM_NAME = os.getenv("PRODUZZY_SMTP_FROM_NAME", "Produzzy").strip()
+PRODUZZY_SMTP_USE_TLS = get_bool_env("PRODUZZY_SMTP_USE_TLS", True)
 
 validate_security_settings(
     PRODUZZY_ENV,

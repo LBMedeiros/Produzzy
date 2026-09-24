@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import AuthHero from '../components/auth/AuthHero'
+import PasswordField from '../components/auth/PasswordField'
 import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
@@ -12,27 +15,6 @@ const initialForm = {
   name: '',
   password: '',
 }
-
-const benefits = [
-  {
-    description:
-      'Cadastre produtos, categorias e acompanhe movimentações em tempo real.',
-    icon: 'stock',
-    title: 'Estoque organizado',
-  },
-  {
-    description:
-      'Identifique o que precisa comprar ou produzir antes de faltar.',
-    icon: 'restock',
-    title: 'Reposição inteligente',
-  },
-  {
-    description:
-      'Gere QR Codes, códigos de barras e etiquetas prontas para impressão.',
-    icon: 'labels',
-    title: 'Etiquetas prontas',
-  },
-]
 
 let googleScriptPromise = null
 
@@ -96,84 +78,6 @@ function GoogleIcon() {
   )
 }
 
-function PasswordVisibilityIcon({ isVisible }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path d="M2.5 12s3.6-6.5 9.5-6.5S21.5 12 21.5 12 17.9 18.5 12 18.5 2.5 12 2.5 12Z" />
-      <path d="M12 9.25a2.75 2.75 0 1 1 0 5.5 2.75 2.75 0 0 1 0-5.5Z" />
-      {isVisible ? <path d="M4.5 4.5 19.5 19.5" /> : null}
-    </svg>
-  )
-}
-
-function PasswordField({
-  autoComplete,
-  id,
-  isVisible,
-  label,
-  minLength,
-  onChange,
-  onToggle,
-  placeholder,
-  value,
-}) {
-  const visibilityLabel = isVisible ? 'Ocultar senha' : 'Mostrar senha'
-
-  return (
-    <div className="login-field">
-      <label htmlFor={id}>{label}</label>
-      <span className="login-password-field">
-        <input
-          autoComplete={autoComplete}
-          id={id}
-          minLength={minLength}
-          onChange={onChange}
-          placeholder={placeholder}
-          required
-          type={isVisible ? 'text' : 'password'}
-          value={value}
-        />
-        <button
-          aria-label={visibilityLabel}
-          aria-pressed={isVisible}
-          className="login-password-field__toggle"
-          type="button"
-          onClick={onToggle}
-        >
-          <PasswordVisibilityIcon isVisible={isVisible} />
-        </button>
-      </span>
-    </div>
-  )
-}
-
-function BenefitIcon({ type }) {
-  if (type === 'stock') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        <path d="m4 7 8-4 8 4-8 4-8-4Z" />
-        <path d="m4 7 8 4 8-4M4 12l8 4 8-4M4 17l8 4 8-4" />
-      </svg>
-    )
-  }
-
-  if (type === 'restock') {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        <path d="M20 7v5h-5" />
-        <path d="M18.5 16a8 8 0 1 1 .8-8.1L20 12" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path d="M4 5a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z" />
-      <path d="M14 3v6h6M8 14h8M8 17h5" />
-    </svg>
-  )
-}
-
 function getFriendlyError(error) {
   if (error?.status === 401) {
     return 'E-mail ou senha inválidos.'
@@ -204,6 +108,22 @@ function getGoogleResponseError(error) {
   }
 
   return 'Não foi possível continuar com Google.'
+}
+
+// Diferente do login por senha: aqui NÃO mapeamos 401 para "e-mail ou senha
+// inválidos". Mostramos o detalhe real vindo do backend (ex.: "Credencial do
+// Google inválida.", "Origem do login com Google não permitida.") para ajudar
+// no diagnóstico.
+function getGoogleLoginError(error) {
+  if (error?.status === 0) {
+    return 'Não foi possível conectar ao servidor.'
+  }
+
+  if (typeof error?.status === 'number' && error.status > 0) {
+    return error?.message ?? 'Não foi possível continuar com Google.'
+  }
+
+  return error?.message ?? 'Não foi possível continuar com Google.'
 }
 
 function LoginPage() {
@@ -326,7 +246,7 @@ function LoginPage() {
         client.requestCode()
       })
     } catch (googleError) {
-      setError(getFriendlyError(googleError))
+      setError(getGoogleLoginError(googleError))
     } finally {
       setIsGoogleSubmitting(false)
     }
@@ -461,36 +381,15 @@ function LoginPage() {
             {isRegisterMode ? 'Entrar agora' : 'Criar conta'}
           </button>
         </p>
+
+        {!isRegisterMode ? (
+          <p className="login-panel__footer login-panel__footer--forgot">
+            <Link to="/forgot-password">Esqueceu sua senha?</Link>
+          </p>
+        ) : null}
       </section>
 
-      <section className="login-hero" aria-labelledby="login-hero-title">
-        <div className="login-hero__content">
-          <div className="login-hero__header">
-            <span>Gestão simples, do cadastro à reposição</span>
-            <h2 id="login-hero-title">
-              Estoque, etiquetas e reposição no mesmo fluxo
-            </h2>
-            <p>
-              Controle produtos, acompanhe o baixo estoque, gere QR Codes e
-              códigos de barras e saiba quando precisa repor.
-            </p>
-          </div>
-
-          <div className="login-benefits">
-            {benefits.map((benefit) => (
-              <article className="login-benefit" key={benefit.title}>
-                <span className="login-benefit__icon">
-                  <BenefitIcon type={benefit.icon} />
-                </span>
-                <div>
-                  <h3>{benefit.title}</h3>
-                  <p>{benefit.description}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+      <AuthHero />
     </main>
   )
 }
