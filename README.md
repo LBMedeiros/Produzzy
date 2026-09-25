@@ -36,11 +36,12 @@ With Produzzy, teams can:
 - JWT-based authentication with protected routes and session handling
 - Google OAuth (Sign in with Google)
 - Change email and change password from the account settings
+- Password recovery ("forgot password") via a single-use e-mail reset link
 - Profile photo upload with an in-app crop/framing editor (stored on Cloudinary)
-- Login and registration rate limiting
+- Login, registration and password-reset rate limiting
 - Input validation
 
-> Google authentication requires OAuth credentials to be configured through environment variables. See [`DEPLOY.md`](./DEPLOY.md) for the full setup.
+> Google authentication requires OAuth credentials, and password recovery requires SMTP e-mail settings, both configured through environment variables. See [`DEPLOY.md`](./DEPLOY.md) for the full setup.
 
 ### Workspaces & Collaboration
 
@@ -375,6 +376,16 @@ PRODUZZY_GOOGLE_CLIENT_SECRET=
 PRODUZZY_CLOUDINARY_CLOUD_NAME=
 PRODUZZY_CLOUDINARY_API_KEY=
 PRODUZZY_CLOUDINARY_API_SECRET=
+
+# Optional — SMTP e-mail, required for password recovery to send the reset link
+PRODUZZY_SMTP_HOST=
+PRODUZZY_SMTP_PORT=587
+PRODUZZY_SMTP_USER=
+PRODUZZY_SMTP_PASSWORD=
+PRODUZZY_SMTP_FROM=
+PRODUZZY_SMTP_FROM_NAME=Produzzy
+# Public frontend URL used in the reset link (defaults to first allowed origin)
+PRODUZZY_APP_BASE_URL=
 
 # Optional — PostgreSQL connection pool tuning
 # DB_POOL_RECYCLE_SECONDS=1800

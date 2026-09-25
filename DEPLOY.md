@@ -8,9 +8,12 @@ aplique só os ajustes de configuração descritos aqui.
 
 ## 1. Banco de dados
 
-- [ ] Um Postgres gerenciado (Render Postgres) dedicado à API.
-- [ ] `DATABASE_URL` da API aponta para ele (no Blueprint isso é automático via
-      `fromDatabase`).
+- [ ] Um Postgres gerenciado dedicado à API. Este projeto usa o **Neon** (plano
+      free permanente). `DATABASE_URL` da API recebe a connection string dele —
+      use a **pooled** (com `-pooler`) e mantenha `?sslmode=require`.
+      _(Alternativa: usar o Render Postgres via `fromDatabase` no Blueprint.)_
+- [ ] Rode as migrations uma vez apontando para o banco novo, de dentro de
+      `backend/`: `DATABASE_URL='<connection-string>' alembic upgrade head`.
 - [ ] **Nunca** apontar `DATABASE_URL` para o banco de testes. O banco de testes
       (`DATABASE_URL_TEST`) só existe em ambiente local/CI.
 
@@ -27,6 +30,7 @@ aplique só os ajustes de configuração descritos aqui.
 | `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `5` / `10` | Opcional. Ajuste conforme o limite de conexões do plano do banco. |
 | `PRODUZZY_GOOGLE_CLIENT_ID` / `_SECRET` | credenciais OAuth | Só se usar login com Google. |
 | `PRODUZZY_CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | credenciais Cloudinary | **As três juntas** para o upload de foto de perfil funcionar (Configurações → Foto de perfil). Pegue em cloudinary.com → Dashboard. Faltando qualquer uma, o upload responde **503 "Upload de foto de perfil ainda não configurado."** e o botão não funciona. O disco do Render é efêmero, por isso a foto vai para o Cloudinary, não para o servidor. |
+| `PRODUZZY_SMTP_*` + `PRODUZZY_APP_BASE_URL` | credenciais de e-mail | Só para a **recuperação de senha** ("esqueci minha senha") enviar o link. Ver **seção 7**. Sem isso o app funciona, mas o e-mail de reset não sai. |
 
 > `RENDER_GIT_COMMIT` é injetado pelo Render automaticamente e vira o
 > `api_version` em `/health` — não precisa configurar.
@@ -97,7 +101,33 @@ frontend nem em commit). Erros comuns:
 - 400 "Origem do login com Google não permitida" → origem do frontend fora de
   `PRODUZZY_ALLOWED_ORIGINS` na API.
 
-## 7. Smoke test pós-deploy
+## 7. Recuperação de senha por e-mail (SMTP)
+
+O "esqueci minha senha" gera um link seguro (token de uso único, expira em
+~30 min) e o envia por e-mail. Precisa de um servidor SMTP. A opção grátis mais
+simples é uma **senha de app do Gmail**.
+
+**No Gmail (uma vez):** com a verificação em 2 etapas ativa, gere uma
+**Senha de app** em myaccount.google.com → Segurança → Senhas de app (16 chars).
+
+**No Render (`produzzy-api`):**
+
+| Variável | Valor |
+|---|---|
+| `PRODUZZY_SMTP_HOST` | `smtp.gmail.com` |
+| `PRODUZZY_SMTP_PORT` | `587` |
+| `PRODUZZY_SMTP_USER` | seu-email@gmail.com |
+| `PRODUZZY_SMTP_PASSWORD` | a senha de app (16 chars) |
+| `PRODUZZY_SMTP_FROM` | seu-email@gmail.com |
+| `PRODUZZY_SMTP_FROM_NAME` | `Produzzy` (opcional) |
+| `PRODUZZY_APP_BASE_URL` | URL pública do **frontend** (para montar o link do e-mail) |
+
+- Funciona com qualquer SMTP (Brevo, SendGrid, Mailgun...), não só Gmail.
+- Endpoints: `POST /auth/forgot-password` e `POST /auth/reset-password`.
+- Em **dev sem SMTP**, o link de reset é escrito no log do servidor (para teste
+  local); em produção isso nunca acontece.
+
+## 8. Smoke test pós-deploy
 
 ```bash
 API=https://produzzy-api.onrender.com
@@ -116,7 +146,7 @@ curl -s -X POST $API/auth/login -H 'content-type: application/json' \
 - [ ] Se configurou o Cloudinary: em Configurações → Foto de perfil, enviar uma
       imagem (JPG/PNG/WebP), confirmar que aparece, e depois "Remover foto".
 
-## 8. Limitações conhecidas (aceitáveis para teste, revisar antes de "produção real")
+## 9. Limitações conhecidas (aceitáveis para teste, revisar antes de "produção real")
 
 - **Rate limiting é por processo/instância** (memória local). Com mais de 1
   worker/instância o limite efetivo multiplica, e zera a cada deploy. Para valer

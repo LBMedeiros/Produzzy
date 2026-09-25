@@ -10,11 +10,17 @@
 # Depois de subir, preencha no painel os valores marcados com `sync: false`
 # (segredos) e confira o checklist em DEPLOY.md.
 
-databases:
-  - name: produzzy-db
-    databaseName: produzzy
-    plan: free
-    postgresMajorVersion: "16"
+# Banco de dados: este projeto usa um Postgres gerenciado EXTERNO (Neon, plano
+# free permanente). Configure `DATABASE_URL` na API (abaixo) com a connection
+# string do Neon — use a "pooled" (com `-pooler`) e mantenha `?sslmode=require`.
+#
+# Se preferir o Postgres do próprio Render, descomente o bloco abaixo e troque o
+# env `DATABASE_URL` da API de volta para `fromDatabase` (ver comentário lá).
+# databases:
+#   - name: produzzy-db
+#     databaseName: produzzy
+#     plan: free
+#     postgresMajorVersion: "16"
 
 services:
   # ----------------------------------------------------------------------------
@@ -32,10 +38,13 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      # Connection string do Postgres externo (Neon). Cole no painel do Render.
+      # Se usar o banco do Render (bloco `databases` acima), troque por:
+      #   fromDatabase:
+      #     name: produzzy-db
+      #     property: connectionString
       - key: DATABASE_URL
-        fromDatabase:
-          name: produzzy-db
-          property: connectionString
+        sync: false
       - key: PRODUZZY_ENV
         value: production
       - key: PRODUZZY_SECRET_KEY
@@ -59,6 +68,24 @@ services:
       - key: PRODUZZY_CLOUDINARY_API_KEY
         sync: false
       - key: PRODUZZY_CLOUDINARY_API_SECRET
+        sync: false
+      # E-mail (SMTP) — necessário para o "esqueci minha senha" enviar o link.
+      # Sem isso o app funciona, mas o e-mail de reset não é enviado.
+      - key: PRODUZZY_SMTP_HOST
+        sync: false
+      - key: PRODUZZY_SMTP_PORT
+        value: "587"
+      - key: PRODUZZY_SMTP_USER
+        sync: false
+      - key: PRODUZZY_SMTP_PASSWORD
+        sync: false
+      - key: PRODUZZY_SMTP_FROM
+        sync: false
+      - key: PRODUZZY_SMTP_FROM_NAME
+        value: Produzzy
+      # URL pública do frontend, usada no link do e-mail de reset. Se vazio,
+      # usa a primeira origem de PRODUZZY_ALLOWED_ORIGINS.
+      - key: PRODUZZY_APP_BASE_URL
         sync: false
 
   # ----------------------------------------------------------------------------
