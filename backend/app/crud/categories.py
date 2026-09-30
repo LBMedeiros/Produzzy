@@ -55,7 +55,8 @@ def get_category_by_name(
     query = (
         db.query(models.Category)
         .filter(models.Category.workspace_id == workspace_id)
-        .filter(models.Category.name == normalized_name)
+        # Case-insensitive: "Limpeza" and "limpeza" are the same category.
+        .filter(func.lower(models.Category.name) == normalized_name.lower())
     )
 
     if only_active:

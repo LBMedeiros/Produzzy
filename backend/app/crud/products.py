@@ -55,7 +55,8 @@ def get_product_by_name(
     query = (
         db.query(models.Product)
         .filter(models.Product.workspace_id == workspace_id)
-        .filter(models.Product.name == name)
+        # Case-insensitive: "Café" and "café" count as the same product name.
+        .filter(func.lower(models.Product.name) == name.lower())
     )
 
     if only_active:

@@ -79,6 +79,12 @@ def create_stock_movement(
     else:
         raise ValidationError("Tipo de movimentação inválido.")
 
+    if quantity_after > schemas.MAX_QUANTITY:
+        raise ValidationError(
+            "Quantidade resultante muito alta. O máximo por produto é "
+            "1 bilhão de unidades."
+        )
+
     product.quantity = quantity_after
 
     movement = models.StockMovement(

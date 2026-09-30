@@ -5,6 +5,12 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
+# Upper bound for stored quantities. Well below PostgreSQL's 32-bit integer
+# limit (2,147,483,647) so accumulation never overflows the column — and a
+# billion units is already far beyond any realistic inventory.
+MAX_QUANTITY = 1_000_000_000
+
+
 class StockMovementType(str, Enum):
     entrada = "entrada"
     saida = "saida"
@@ -368,8 +374,8 @@ class WorkspaceTeamResponse(BaseModel):
 class ProductCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     category: str = Field(min_length=1, max_length=100)
-    quantity: int = Field(ge=0)
-    minimum_quantity: int = Field(ge=0)
+    quantity: int = Field(ge=0, le=MAX_QUANTITY)
+    minimum_quantity: int = Field(ge=0, le=MAX_QUANTITY)
 
     @field_validator("name", "category", mode="before")
     @classmethod
@@ -380,8 +386,8 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     category: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    quantity: Optional[int] = Field(default=None, ge=0)
-    minimum_quantity: Optional[int] = Field(default=None, ge=0)
+    quantity: Optional[int] = Field(default=None, ge=0, le=MAX_QUANTITY)
+    minimum_quantity: Optional[int] = Field(default=None, ge=0, le=MAX_QUANTITY)
 
     @field_validator("name", "category", mode="before")
     @classmethod
@@ -411,7 +417,7 @@ class StockMovementCreate(BaseModel):
     movement_type: StockMovementType
     # entrada/saída exigem > 0 (validado em crud.create_stock_movement);
     # ajuste aceita 0 para corrigir o estoque para vazio.
-    quantity: int = Field(ge=0)
+    quantity: int = Field(ge=0, le=MAX_QUANTITY)
     reason: Optional[str] = Field(default=None, max_length=255)
     replenishment_request_id: Optional[int] = Field(default=None, gt=0)
 
@@ -437,7 +443,7 @@ class StockMovementResponse(BaseModel):
 class ReplenishmentRequestCreate(BaseModel):
     product_id: int
     type: ReplenishmentType
-    quantity_needed: int = Field(gt=0)
+    quantity_needed: int = Field(gt=0, le=MAX_QUANTITY)
     notes: Optional[str] = None
     assigned_to_user_id: Optional[int] = None
 
@@ -445,7 +451,7 @@ class ReplenishmentRequestCreate(BaseModel):
 class ReplenishmentRequestUpdate(BaseModel):
     type: Optional[ReplenishmentType] = None
     status: Optional[ReplenishmentStatus] = None
-    quantity_needed: Optional[int] = Field(default=None, gt=0)
+    quantity_needed: Optional[int] = Field(default=None, gt=0, le=MAX_QUANTITY)
     notes: Optional[str] = None
     assigned_to_user_id: Optional[int] = None
 
