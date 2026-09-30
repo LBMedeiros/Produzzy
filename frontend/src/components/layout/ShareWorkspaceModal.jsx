@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../ui/Button'
+import ModalPortal from '../ui/ModalPortal'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import {
   createWorkspaceInvite,
@@ -249,7 +250,8 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
       <section
         className="workspace-modal"
         role="dialog"
@@ -426,7 +428,8 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
           )}
         </div>
       </section>
-    </div>
+      </div>
+    </ModalPortal>
   )
 }
 

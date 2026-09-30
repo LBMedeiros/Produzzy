@@ -107,7 +107,9 @@
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    /* `none` (not translateY(0)) so no containing block persists after the
+       animation — otherwise fixed modals get trapped inside this element. */
+    transform: none;
   }
 }
 
@@ -275,6 +277,32 @@
   font-size: 14px;
   line-height: 1.6;
   color: #475569;
+}
+
+.form-success {
+  color: #16a34a;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.recovery-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.recovery-badge--ok {
+  color: #166534;
+  background: rgba(22, 163, 74, 0.14);
+}
+
+.recovery-badge--pending {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.16);
 }
 
 .login-form input {
@@ -1172,7 +1200,8 @@ a {
   text-transform: uppercase;
 }
 
-.global-search__panel button {
+.global-search__panel button,
+.mobile-search__results button {
   display: grid;
   width: 100%;
   min-width: 0;
@@ -1192,27 +1221,125 @@ a {
 }
 
 .global-search__panel button:hover,
-.global-search__panel button.is-active {
+.global-search__panel button.is-active,
+.mobile-search__results button:hover,
+.mobile-search__results button.is-active {
   border-color: rgba(37, 99, 235, 0.24);
   background: var(--surface-elevated);
 }
 
 .global-search__panel strong,
-.global-search__panel small {
+.global-search__panel small,
+.mobile-search__results strong,
+.mobile-search__results small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.global-search__panel strong {
+.global-search__panel strong,
+.mobile-search__results strong {
   color: var(--text);
   font-size: 13px;
 }
 
-.global-search__panel small {
+.global-search__panel small,
+.mobile-search__results small {
   color: var(--muted);
   font-size: 12px;
+}
+
+.topbar__search-trigger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.topbar__search-trigger svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Full-screen mobile search overlay (portaled to <body>). */
+.mobile-search {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.mobile-search__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.mobile-search__icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.mobile-search__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.mobile-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  outline: none;
+}
+
+.mobile-search__close {
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+
+.mobile-search__results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+@media (max-width: 860px) {
+  .topbar__search-trigger {
+    display: inline-flex;
+  }
 }
 
 .topbar__actions {
@@ -1369,6 +1496,25 @@ a {
   box-shadow: 0 24px 50px rgba(15, 23, 42, 0.16);
   animation: surface-popover-enter var(--motion-fast) var(--motion-ease) both;
   padding: 14px;
+}
+
+/* "Convidar / compartilhar" inside the members popover — shown only on mobile,
+   where the topbar's "Compartilhar" button is hidden to save space. */
+.members-popover__invite {
+  display: none;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.members-popover__invite .button {
+  width: 100%;
+}
+
+@media (max-width: 860px) {
+  .members-popover__invite {
+    display: block;
+  }
 }
 
 .user-menu {
@@ -1687,7 +1833,11 @@ a {
   width: 100%;
   min-width: 0;
   animation: page-enter var(--motion-normal) var(--motion-ease) both;
-  will-change: opacity, transform;
+  /* NOTE: no `transform`/`will-change: transform` here on purpose. A persistent
+     transform turns this element into the containing block for descendant
+     `position: fixed` modals, breaking their viewport centering/scroll. The
+     page-enter animation ends on `transform: none` for the same reason. */
+  will-change: opacity;
 }
 
 .page-stack {
@@ -5928,7 +6078,11 @@ a {
   }
 
   .topbar {
-    position: static;
+    /* `relative` (not `static`) so its z-index takes effect: this makes the
+       topbar a stacking context above the page content, so its member/user
+       popovers float on top instead of being painted behind the Dashboard. */
+    position: relative;
+    z-index: 50;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -5955,10 +6109,26 @@ a {
   }
 
   .topbar__actions {
+    /* becomes the positioning anchor for the members popover (below), since it
+       spans the full row width — so the popover aligns to the viewport edge and
+       fits on screen instead of overflowing off the left. */
+    position: relative;
     width: 100%;
     justify-content: flex-start;
     gap: 8px;
     margin-left: 0;
+  }
+
+  /* Anchor the members popover to the full-width actions row (not the small
+     members button, which sits mid-row and pushes the popover off-screen). */
+  .topbar__members {
+    position: static;
+  }
+
+  .members-popover {
+    left: 0;
+    right: 0;
+    width: auto;
   }
 
   .topbar__create {

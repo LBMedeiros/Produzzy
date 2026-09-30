@@ -18,6 +18,7 @@ function MembersPopover({
   feedback,
   isLoading,
   members,
+  onInvite,
   onInviteRevoke,
   onMemberRemove,
   onTitleChange,
@@ -33,6 +34,13 @@ function MembersPopover({
         <strong>Equipe do workspace</strong>
         <span>{formatMembersCount(members.length)}</span>
       </div>
+      {canManageRoles && onInvite ? (
+        <div className="members-popover__invite">
+          <Button onClick={onInvite} size="sm" variant="secondary">
+            Convidar membro
+          </Button>
+        </div>
+      ) : null}
       {error ? (
         <p className="members-popover__feedback members-popover__feedback--error">
           {error}

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../ui/Button'
+import ModalPortal from '../ui/ModalPortal'
 import UserAvatar from '../ui/UserAvatar'
 import CreateWorkspaceModal from './CreateWorkspaceModal'
+import GlobalSearchResults from './GlobalSearchResults'
 import MemberAvatars from './MemberAvatars'
 import MembersPopover from './MembersPopover'
 import ShareWorkspaceModal from './ShareWorkspaceModal'
@@ -158,6 +160,7 @@ function Header({ onNavigated }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState(EMPTY_SEARCH_RESULTS)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [activeSearchIndex, setActiveSearchIndex] = useState(0)
@@ -172,6 +175,7 @@ function Header({ onNavigated }) {
   const [savingTitleMemberId, setSavingTitleMemberId] = useState(null)
   const searchContainerRef = useRef(null)
   const searchInputRef = useRef(null)
+  const mobileSearchInputRef = useRef(null)
   const membersContainerRef = useRef(null)
   const userMenuContainerRef = useRef(null)
   const workspaceSwitcherRef = useRef(null)
@@ -218,6 +222,21 @@ function Header({ onNavigated }) {
   }, [])
 
   const closeSearchPanel = useCallback(() => {
+    setIsSearchOpen(false)
+    setActiveSearchIndex(0)
+  }, [])
+
+  const openMobileSearch = useCallback(() => {
+    setIsMobileSearchOpen(true)
+    setIsSearchOpen(true)
+    setIsMembersOpen(false)
+    setIsUserMenuOpen(false)
+  }, [])
+
+  const closeMobileSearch = useCallback(() => {
+    setIsMobileSearchOpen(false)
+    setSearchTerm('')
+    setSearchResults(EMPTY_SEARCH_RESULTS)
     setIsSearchOpen(false)
     setActiveSearchIndex(0)
   }, [])
@@ -465,6 +484,18 @@ function Header({ onNavigated }) {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isMobileSearchOpen) {
+      return undefined
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      mobileSearchInputRef.current?.focus()
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [isMobileSearchOpen])
 
   useEffect(() => {
     if (
@@ -824,7 +855,18 @@ function Header({ onNavigated }) {
     setSearchTerm('')
     setSearchResults(EMPTY_SEARCH_RESULTS)
     closeSearchPanel()
+    setIsMobileSearchOpen(false)
     onNavigated?.()
+  }
+
+  function handleSearchHover(item) {
+    const nextIndex = flatSearchResults.findIndex(
+      (result) => result.id === item.id,
+    )
+
+    if (nextIndex >= 0) {
+      setActiveSearchIndex(nextIndex)
+    }
   }
 
   function handleSearchKeyDown(event) {
@@ -954,62 +996,32 @@ function Header({ onNavigated }) {
               id="global-search-results"
               role="listbox"
             >
-              {isSearchLoading ? (
-                <p className="global-search__state" role="status">
-                  Buscando...
-                </p>
-              ) : null}
-              {!isSearchLoading && searchError ? (
-                <p className="global-search__state global-search__state--error">
-                  {searchError}
-                </p>
-              ) : null}
-              {!isSearchLoading &&
-              !searchError &&
-              !flatSearchResults.length ? (
-                <p className="global-search__state">
-                  Nenhum resultado encontrado.
-                </p>
-              ) : null}
-              {!isSearchLoading && !searchError && flatSearchResults.length
-                ? groupedSearchResults.map((group) => (
-                    <div className="global-search__group" key={group.name}>
-                      <span>{group.name}</span>
-                      {group.items.map((item) => (
-                        <button
-                          aria-selected={activeSearchResult?.id === item.id}
-                          className={
-                            activeSearchResult?.id === item.id
-                              ? 'is-active'
-                              : ''
-                          }
-                          id={item.id}
-                          key={item.id}
-                          role="option"
-                          type="button"
-                          onClick={() => handleSearchResultSelect(item)}
-                          onMouseEnter={() => {
-                            const nextIndex = flatSearchResults.findIndex(
-                              (result) => result.id === item.id,
-                            )
-
-                            if (nextIndex >= 0) {
-                              setActiveSearchIndex(nextIndex)
-                            }
-                          }}
-                        >
-                          <strong>{item.label}</strong>
-                          <small>{item.description}</small>
-                        </button>
-                      ))}
-                    </div>
-                  ))
-                : null}
+              <GlobalSearchResults
+                activeId={activeSearchResult?.id}
+                error={searchError}
+                flatResults={flatSearchResults}
+                groups={groupedSearchResults}
+                isLoading={isSearchLoading}
+                onHover={handleSearchHover}
+                onSelect={handleSearchResultSelect}
+              />
             </div>
           ) : null}
         </div>
 
         <div className="topbar__actions">
+          <button
+            aria-label="Buscar no workspace"
+            className="topbar__search-trigger"
+            onClick={openMobileSearch}
+            type="button"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+          </button>
+
           <Button
             className="topbar__create"
             icon="+"
@@ -1059,6 +1071,11 @@ function Header({ onNavigated }) {
                 feedback={membersFeedback}
                 isLoading={isMembersLoading}
                 members={workspaceMembers}
+                onInvite={() => {
+                  setIsShareOpen(true)
+                  setIsMembersOpen(false)
+                  setIsUserMenuOpen(false)
+                }}
                 onInviteRevoke={handleInviteRevoke}
                 onMemberRemove={handleMemberRemove}
                 onRoleChange={handleMemberRoleChange}
@@ -1108,6 +1125,68 @@ function Header({ onNavigated }) {
           onClose={() => setIsShareOpen(false)}
           onInviteCreated={() => loadMembers({ force: true })}
         />
+      ) : null}
+      {isMobileSearchOpen ? (
+        <ModalPortal>
+          <div
+            className="mobile-search"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Busca"
+          >
+            <div className="mobile-search__bar">
+              <span className="mobile-search__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+              </span>
+              <input
+                aria-label="Busca global"
+                className="mobile-search__input"
+                onChange={(event) => setSearchTerm(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    closeMobileSearch()
+                  }
+                }}
+                placeholder="Buscar no workspace"
+                ref={mobileSearchInputRef}
+                type="search"
+                value={searchTerm}
+              />
+              <button
+                className="mobile-search__close"
+                onClick={closeMobileSearch}
+                type="button"
+              >
+                Cancelar
+              </button>
+            </div>
+            <div
+              aria-label="Resultados da busca"
+              className="mobile-search__results"
+              role="listbox"
+            >
+              {canSearch ? (
+                <GlobalSearchResults
+                  activeId={activeSearchResult?.id}
+                  error={searchError}
+                  flatResults={flatSearchResults}
+                  groups={groupedSearchResults}
+                  isLoading={isSearchLoading}
+                  onHover={handleSearchHover}
+                  onSelect={handleSearchResultSelect}
+                />
+              ) : (
+                <p className="global-search__state">
+                  Digite pelo menos {GLOBAL_SEARCH_MIN_LENGTH} caracteres para
+                  buscar.
+                </p>
+              )}
+            </div>
+          </div>
+        </ModalPortal>
       ) : null}
     </>
   )

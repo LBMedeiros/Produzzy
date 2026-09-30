@@ -4,6 +4,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
+import ModalPortal from '../components/ui/ModalPortal'
 import SelectMenu from '../components/ui/SelectMenu'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
@@ -2086,6 +2087,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       ) : null}
 
       {productModal ? (
+        <ModalPortal>
         <div className="modal-backdrop" role="presentation">
           <section className="workspace-modal stock-modal" role="dialog" aria-modal="true">
             <div className="workspace-modal__header">
@@ -2188,6 +2190,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             </form>
           </section>
         </div>
+        </ModalPortal>
       ) : null}
 
       {replenishmentProduct ? (
@@ -2201,6 +2204,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       ) : null}
 
       {movementProduct ? (
+        <ModalPortal>
         <div className="modal-backdrop" role="presentation">
           <section className="workspace-modal stock-modal" role="dialog" aria-modal="true">
             <div className="workspace-modal__header">
@@ -2282,9 +2286,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             </form>
           </section>
         </div>
+        </ModalPortal>
       ) : null}
 
       {isCategoryModalOpen ? (
+        <ModalPortal>
         <div className="modal-backdrop" role="presentation">
           <section className="workspace-modal stock-modal" role="dialog" aria-modal="true">
             <div className="workspace-modal__header">
@@ -2350,9 +2356,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             </form>
           </section>
         </div>
+        </ModalPortal>
       ) : null}
 
       {isEditCategoriesOpen ? (
+        <ModalPortal>
         <div className="modal-backdrop" role="presentation">
           <section
             aria-labelledby="category-manager-title"
@@ -2642,6 +2650,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             )}
           </section>
         </div>
+        </ModalPortal>
       ) : null}
     </div>
   )

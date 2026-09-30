@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../ui/Button'
+import ModalPortal from '../ui/ModalPortal'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 
 function CreateWorkspaceModal({ onClose }) {
@@ -21,7 +22,8 @@ function CreateWorkspaceModal({ onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
       <section className="workspace-modal" role="dialog" aria-modal="true">
         <div className="workspace-modal__header">
           <div>
@@ -63,7 +65,8 @@ function CreateWorkspaceModal({ onClose }) {
           </div>
         </form>
       </section>
-    </div>
+      </div>
+    </ModalPortal>
   )
 }
 
