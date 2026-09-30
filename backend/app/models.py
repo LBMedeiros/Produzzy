@@ -196,6 +196,10 @@ class User(Base):
     avatar_public_id = Column(String(255), nullable=True)
 
     is_active = Column(Boolean, default=True, nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    # Optional backup e-mail for password recovery. Only used once confirmed.
+    recovery_email = Column(String(255), nullable=True)
+    recovery_email_verified = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(

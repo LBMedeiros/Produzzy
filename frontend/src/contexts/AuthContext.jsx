@@ -19,6 +19,8 @@ import {
   changePassword as changePasswordRequest,
   removeAvatar as removeAvatarRequest,
   register as registerRequest,
+  removeRecoveryEmail as removeRecoveryEmailRequest,
+  setRecoveryEmail as setRecoveryEmailRequest,
   updateProfile as updateProfileRequest,
   uploadAvatar as uploadAvatarRequest,
 } from '../services/authService'
@@ -253,6 +255,25 @@ export function AuthProvider({ children }) {
     return changePasswordRequest(data)
   }, [])
 
+  const setRecoveryEmail = useCallback(async (recoveryEmail, currentPassword) => {
+    const updatedUser = await setRecoveryEmailRequest(
+      recoveryEmail,
+      currentPassword,
+    )
+
+    setUser(updatedUser)
+
+    return updatedUser
+  }, [])
+
+  const removeRecoveryEmail = useCallback(async () => {
+    const updatedUser = await removeRecoveryEmailRequest()
+
+    setUser(updatedUser)
+
+    return updatedUser
+  }, [])
+
   const uploadAvatar = useCallback(async (file) => {
     const updatedUser = await uploadAvatarRequest(file)
 
@@ -284,8 +305,10 @@ export function AuthProvider({ children }) {
       changeEmail,
       changePassword,
       removeAvatar,
+      removeRecoveryEmail,
       refreshMe,
       register,
+      setRecoveryEmail,
       token,
       updateProfile,
       uploadAvatar,
@@ -300,8 +323,10 @@ export function AuthProvider({ children }) {
       loginWithGoogle,
       logout,
       removeAvatar,
+      removeRecoveryEmail,
       refreshMe,
       register,
+      setRecoveryEmail,
       token,
       updateProfile,
       uploadAvatar,

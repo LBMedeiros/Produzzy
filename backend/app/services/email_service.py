@@ -111,3 +111,80 @@ def send_password_reset_email(to_email: str, reset_link: str):
 </div>"""
 
     send_email(to_email, subject, text_body, html_body)
+
+
+def send_email_verification_email(to_email: str, verify_link: str):
+    subject = "Confirme seu e-mail • Produzzy"
+
+    text_body = (
+        "Bem-vindo(a) ao Produzzy!\n\n"
+        "Confirme seu e-mail para ativar sua conta abrindo o link abaixo:\n\n"
+        f"{verify_link}\n\n"
+        "Se você não criou esta conta, pode ignorar este e-mail.\n\n"
+        "Equipe Produzzy"
+    )
+
+    html_body = f"""\
+<div style="font-family:Arial,Helvetica,sans-serif;background:#0f172a;padding:32px">
+  <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;padding:32px">
+    <h1 style="margin:0 0 8px;font-size:20px;color:#0f172a">Confirme seu e-mail</h1>
+    <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6">
+      Bem-vindo(a) ao <strong>Produzzy</strong>! Clique no botão abaixo para
+      confirmar seu e-mail e ativar sua conta.
+    </p>
+    <a href="{verify_link}"
+       style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;
+              font-weight:700;font-size:14px;padding:12px 22px;border-radius:10px">
+      Confirmar e-mail
+    </a>
+    <p style="margin:22px 0 0;font-size:12px;color:#94a3b8;line-height:1.6">
+      Se você não criou esta conta, pode ignorar este e-mail.
+    </p>
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;word-break:break-all">
+      Se o botão não funcionar, copie e cole este endereço no navegador:<br>
+      {verify_link}
+    </p>
+  </div>
+</div>"""
+
+    send_email(to_email, subject, text_body, html_body)
+
+
+def send_recovery_email_verification_email(to_email: str, verify_link: str):
+    subject = "Confirme seu e-mail de recuperação • Produzzy"
+
+    text_body = (
+        "Você cadastrou este endereço como e-mail de recuperação da sua conta "
+        "Produzzy.\n\n"
+        "Confirme abrindo o link abaixo. Depois de confirmado, ele também "
+        "poderá receber o link de redefinição de senha:\n\n"
+        f"{verify_link}\n\n"
+        "Se você não fez esse pedido, ignore este e-mail.\n\n"
+        "Equipe Produzzy"
+    )
+
+    html_body = f"""\
+<div style="font-family:Arial,Helvetica,sans-serif;background:#0f172a;padding:32px">
+  <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:16px;padding:32px">
+    <h1 style="margin:0 0 8px;font-size:20px;color:#0f172a">E-mail de recuperação</h1>
+    <p style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.6">
+      Você cadastrou este endereço como e-mail de recuperação da sua conta
+      <strong>Produzzy</strong>. Confirme para ativá-lo — depois ele também
+      poderá receber o link de redefinição de senha.
+    </p>
+    <a href="{verify_link}"
+       style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;
+              font-weight:700;font-size:14px;padding:12px 22px;border-radius:10px">
+      Confirmar e-mail de recuperação
+    </a>
+    <p style="margin:22px 0 0;font-size:12px;color:#94a3b8;line-height:1.6">
+      Se você não fez esse pedido, pode ignorar este e-mail.
+    </p>
+    <p style="margin:16px 0 0;font-size:12px;color:#94a3b8;word-break:break-all">
+      Se o botão não funcionar, copie e cole este endereço no navegador:<br>
+      {verify_link}
+    </p>
+  </div>
+</div>"""
+
+    send_email(to_email, subject, text_body, html_body)

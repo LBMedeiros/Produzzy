@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import AvatarCropModal from '../components/settings/AvatarCropModal'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import ModalPortal from '../components/ui/ModalPortal'
 import SelectMenu from '../components/ui/SelectMenu'
 import UserAvatar from '../components/ui/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
@@ -156,7 +157,8 @@ function EmailChangeModal({ currentEmail, onClose, onSubmit }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
       <section
         className="workspace-modal settings-email-modal"
         role="dialog"
@@ -237,7 +239,8 @@ function EmailChangeModal({ currentEmail, onClose, onSubmit }) {
           </div>
         </form>
       </section>
-    </div>
+      </div>
+    </ModalPortal>
   )
 }
 
@@ -290,7 +293,8 @@ function PasswordChangeModal({ onClose, onSubmit }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
       <section
         className="workspace-modal settings-email-modal"
         role="dialog"
@@ -404,7 +408,8 @@ function PasswordChangeModal({ onClose, onSubmit }) {
           </div>
         </form>
       </section>
-    </div>
+      </div>
+    </ModalPortal>
   )
 }
 
@@ -438,7 +443,8 @@ function DeleteWorkspaceModal({
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
       <section
         className="workspace-modal danger-confirm-modal"
         role="dialog"
@@ -495,7 +501,8 @@ function DeleteWorkspaceModal({
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </ModalPortal>
   )
 }
 
@@ -673,16 +680,151 @@ function ProfilePhotoSection({ removeAvatar, uploadAvatar, user }) {
   )
 }
 
+function RecoveryEmailModal({ currentRecoveryEmail, onClose, onSubmit }) {
+  const [recoveryEmail, setRecoveryEmail] = useState(currentRecoveryEmail ?? '')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState('')
+  const visibilityLabel = isPasswordVisible ? 'Ocultar senha' : 'Mostrar senha'
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+
+    const normalizedEmail = recoveryEmail.trim()
+
+    if (!normalizedEmail) {
+      setError('Informe o e-mail de recuperação.')
+      return
+    }
+
+    if (!currentPassword) {
+      setError('Informe sua senha atual.')
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+
+    try {
+      await onSubmit(normalizedEmail, currentPassword)
+      onClose()
+    } catch (submitError) {
+      setError(getEmailChangeError(submitError))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
+      <section
+        className="workspace-modal settings-email-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="recovery-email-title"
+      >
+        <div className="workspace-modal__header">
+          <div>
+            <span>E-mail de recuperação</span>
+            <h2 id="recovery-email-title">E-mail de recuperação</h2>
+          </div>
+          <button
+            aria-label="Fechar modal"
+            className="icon-button"
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            x
+          </button>
+        </div>
+
+        <form className="workspace-form" onSubmit={handleSubmit}>
+          <p className="settings-section__description">
+            Um e-mail de backup. Depois de confirmado, ele também recebe o link
+            de redefinição de senha caso você perca acesso ao principal.
+          </p>
+          <label>
+            E-mail de recuperação
+            <input
+              autoComplete="email"
+              disabled={isSaving}
+              onChange={(event) => {
+                setRecoveryEmail(event.target.value)
+                setError('')
+              }}
+              placeholder="backup@email.com"
+              required
+              type="email"
+              value={recoveryEmail}
+            />
+          </label>
+
+          <label
+            className="settings-password-label"
+            htmlFor="settings-recovery-password"
+          >
+            Senha atual
+          </label>
+          <span className="settings-password-field">
+            <input
+              autoComplete="current-password"
+              disabled={isSaving}
+              id="settings-recovery-password"
+              onChange={(event) => {
+                setCurrentPassword(event.target.value)
+                setError('')
+              }}
+              placeholder="Digite sua senha"
+              required
+              type={isPasswordVisible ? 'text' : 'password'}
+              value={currentPassword}
+            />
+            <button
+              aria-label={visibilityLabel}
+              aria-pressed={isPasswordVisible}
+              className="settings-password-field__toggle"
+              disabled={isSaving}
+              onClick={() => setIsPasswordVisible((value) => !value)}
+              type="button"
+            >
+              <PasswordVisibilityIcon isVisible={isPasswordVisible} />
+            </button>
+          </span>
+
+          {error ? <p className="form-error">{error}</p> : null}
+
+          <div className="workspace-form__actions">
+            <Button disabled={isSaving} type="submit">
+              {isSaving ? 'Salvando...' : 'Salvar e enviar confirmação'}
+            </Button>
+            <Button disabled={isSaving} onClick={onClose} variant="secondary">
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </section>
+      </div>
+    </ModalPortal>
+  )
+}
+
 function ProfileSettingsSection({
   changeEmail,
   changePassword,
   isAuthenticated,
+  removeRecoveryEmail,
+  setRecoveryEmail,
   updateProfile,
   user,
 }) {
   const [profileName, setProfileName] = useState(user?.name ?? '')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false)
+  const [isRemovingRecovery, setIsRemovingRecovery] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [profileFeedback, setProfileFeedback] = useState('')
@@ -723,6 +865,31 @@ function ProfileSettingsSection({
     await changePassword(data)
     setProfileFeedback('Senha alterada com sucesso.')
     setProfileError('')
+  }
+
+  async function handleRecoverySubmit(recoveryEmail, currentPassword) {
+    await setRecoveryEmail(recoveryEmail, currentPassword)
+    setProfileError('')
+    setProfileFeedback(
+      'E-mail de recuperação salvo. Confirme pelo link que enviamos a ele.',
+    )
+  }
+
+  async function handleRecoveryRemove() {
+    setProfileError('')
+    setProfileFeedback('')
+    setIsRemovingRecovery(true)
+
+    try {
+      await removeRecoveryEmail()
+      setProfileFeedback('E-mail de recuperação removido.')
+    } catch (error) {
+      setProfileError(
+        error?.message ?? 'Não foi possível remover o e-mail de recuperação.',
+      )
+    } finally {
+      setIsRemovingRecovery(false)
+    }
   }
 
   return (
@@ -793,6 +960,48 @@ function ProfileSettingsSection({
           </div>
         </div>
         <div className="settings-profile-field">
+          <span>E-mail de recuperação</span>
+          <strong>
+            {user?.recovery_email ? (
+              <>
+                {user.recovery_email}{' '}
+                <span
+                  className={`recovery-badge recovery-badge--${
+                    user.recovery_email_verified ? 'ok' : 'pending'
+                  }`}
+                >
+                  {user.recovery_email_verified ? 'Confirmado' : 'Pendente'}
+                </span>
+              </>
+            ) : (
+              'Não configurado'
+            )}
+          </strong>
+          <div className="settings-profile-actions">
+            <Button
+              onClick={() => {
+                setIsRecoveryModalOpen(true)
+                setProfileError('')
+                setProfileFeedback('')
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              {user?.recovery_email ? 'Alterar' : 'Adicionar'}
+            </Button>
+            {user?.recovery_email ? (
+              <Button
+                disabled={isRemovingRecovery}
+                onClick={handleRecoveryRemove}
+                size="sm"
+                variant="secondary"
+              >
+                {isRemovingRecovery ? 'Removendo...' : 'Remover'}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="settings-profile-field">
           <span>Membro desde</span>
           <strong>{formatDate(user?.created_at)}</strong>
         </div>
@@ -834,6 +1043,14 @@ function ProfileSettingsSection({
         <PasswordChangeModal
           onClose={() => setIsPasswordModalOpen(false)}
           onSubmit={handlePasswordChange}
+        />
+      ) : null}
+
+      {isRecoveryModalOpen ? (
+        <RecoveryEmailModal
+          currentRecoveryEmail={user?.recovery_email}
+          onClose={() => setIsRecoveryModalOpen(false)}
+          onSubmit={handleRecoverySubmit}
         />
       ) : null}
     </Card>
@@ -968,6 +1185,8 @@ function SettingsPage() {
     changePassword,
     isAuthenticated,
     removeAvatar,
+    removeRecoveryEmail,
+    setRecoveryEmail,
     updateProfile,
     uploadAvatar,
     user,
@@ -1054,6 +1273,8 @@ function SettingsPage() {
           changePassword={changePassword}
           isAuthenticated={isAuthenticated}
           key={user?.id ?? 'no-user'}
+          removeRecoveryEmail={removeRecoveryEmail}
+          setRecoveryEmail={setRecoveryEmail}
           updateProfile={updateProfile}
           user={user}
         />

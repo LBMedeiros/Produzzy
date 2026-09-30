@@ -169,6 +169,12 @@ PRODUZZY_CLOUDINARY_API_SECRET = os.getenv(
     "",
 ).strip()
 
+# Email verification ----------------------------------------------------------
+PRODUZZY_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES = get_int_env(
+    "PRODUZZY_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES",
+    1440,  # 24h
+)
+
 # Password reset (forgot password) --------------------------------------------
 PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = get_int_env(
     "PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES",

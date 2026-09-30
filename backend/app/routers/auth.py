@@ -41,6 +41,7 @@ from app.services import (
 from app.services.security_service import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
+    create_email_verification_token,
 )
 
 
@@ -126,6 +127,52 @@ def authenticate_password_login(
     return response
 
 
+def send_account_verification_email(user: models.User, token: str):
+    """Best-effort: never fails the request that triggered it."""
+    verify_link = f"{PRODUZZY_APP_BASE_URL.rstrip('/')}/verify-email/{token}"
+
+    try:
+        email_service.send_email_verification_email(user.email, verify_link)
+    except email_service.EmailNotConfiguredError:
+        if PRODUZZY_ENV in {"production", "prod"}:
+            auth_logger.warning(
+                "auth.verify_email link generated but SMTP is not configured; "
+                "e-mail was not sent"
+            )
+        else:
+            auth_logger.warning(
+                "auth.verify_email DEV verification link (SMTP off): %s",
+                verify_link,
+            )
+    except email_service.EmailSendError:
+        auth_logger.exception("auth.verify_email failed to send e-mail")
+
+
+def send_recovery_verification_email(recovery_email: str, token: str):
+    """Best-effort: never fails the request that triggered it."""
+    verify_link = (
+        f"{PRODUZZY_APP_BASE_URL.rstrip('/')}/verify-recovery-email/{token}"
+    )
+
+    try:
+        email_service.send_recovery_email_verification_email(
+            recovery_email,
+            verify_link,
+        )
+    except email_service.EmailNotConfiguredError:
+        if PRODUZZY_ENV in {"production", "prod"}:
+            auth_logger.warning(
+                "auth.recovery_email link generated but SMTP is not configured"
+            )
+        else:
+            auth_logger.warning(
+                "auth.recovery_email DEV verification link (SMTP off): %s",
+                verify_link,
+            )
+    except email_service.EmailSendError:
+        auth_logger.exception("auth.recovery_email failed to send e-mail")
+
+
 @router.post(
     "/register",
     response_model=schemas.UserResponse,
@@ -138,13 +185,18 @@ def register_user(
 ):
     key = build_rate_limit_key(request, crud.normalize_email(user_data.email))
 
-    return run_with_failure_rate_limit(
+    user = run_with_failure_rate_limit(
         "auth.register",
         key,
         PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS,
         PRODUZZY_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
         lambda: crud.create_user(user_data, db),
     )
+
+    # New password accounts must confirm their e-mail before logging in.
+    send_account_verification_email(user, create_email_verification_token(user.email))
+
+    return user
 
 
 @router.post("/login", response_model=schemas.Token)
@@ -241,23 +293,33 @@ def forgot_password(
     if user and token:
         reset_link = f"{PRODUZZY_APP_BASE_URL.rstrip('/')}/reset-password/{token}"
 
-        try:
-            email_service.send_password_reset_email(user.email, reset_link)
-        except email_service.EmailNotConfiguredError:
-            if PRODUZZY_ENV in {"production", "prod"}:
-                auth_logger.warning(
-                    "auth.forgot_password reset link generated but SMTP is not "
-                    "configured; e-mail was not sent"
+        # Also send to the confirmed backup e-mail, so losing access to the
+        # primary inbox is still recoverable.
+        recipients = [user.email]
+        if user.recovery_email and user.recovery_email_verified:
+            recipients.append(user.recovery_email)
+
+        for recipient in recipients:
+            try:
+                email_service.send_password_reset_email(recipient, reset_link)
+            except email_service.EmailNotConfiguredError:
+                if PRODUZZY_ENV in {"production", "prod"}:
+                    auth_logger.warning(
+                        "auth.forgot_password reset link generated but SMTP is "
+                        "not configured; e-mail was not sent"
+                    )
+                else:
+                    # Dev convenience: surface the link in the server log for
+                    # local testing. Never in production.
+                    auth_logger.warning(
+                        "auth.forgot_password DEV reset link (SMTP off): %s",
+                        reset_link,
+                    )
+                break
+            except email_service.EmailSendError:
+                auth_logger.exception(
+                    "auth.forgot_password failed to send e-mail to a recipient"
                 )
-            else:
-                # Dev convenience: no SMTP configured, so surface the link in
-                # the server log to allow local testing. Never in production.
-                auth_logger.warning(
-                    "auth.forgot_password DEV reset link (SMTP off): %s",
-                    reset_link,
-                )
-        except email_service.EmailSendError:
-            auth_logger.exception("auth.forgot_password failed to send e-mail")
 
     # Always the same response, regardless of whether the account exists.
     return schemas.MessageResponse(message=GENERIC_PASSWORD_RESET_MESSAGE)
@@ -285,6 +347,83 @@ def reset_password(
 
     return schemas.MessageResponse(
         message="Senha redefinida com sucesso. Agora é só entrar."
+    )
+
+
+GENERIC_VERIFICATION_MESSAGE = (
+    "Se existir uma conta não confirmada com esse e-mail, reenviamos o link "
+    "de confirmação."
+)
+
+
+@router.post("/verify-email", response_model=schemas.MessageResponse)
+def verify_email(
+    data: schemas.EmailVerificationConfirm,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    key = build_rate_limit_key(request, "verify-email")
+
+    run_with_failure_rate_limit(
+        "auth.verify_email",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+        lambda: crud.verify_email_with_token(data.token, db),
+    )
+
+    return schemas.MessageResponse(
+        message="E-mail confirmado com sucesso. Agora é só entrar."
+    )
+
+
+@router.post("/resend-verification", response_model=schemas.MessageResponse)
+def resend_verification(
+    data: schemas.EmailVerificationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    # Every request counts toward the limit (not only failures), preventing
+    # inbox spam / account probing.
+    key = build_rate_limit_key(request, crud.normalize_email(data.email))
+    ensure_rate_limit_allowed(
+        "auth.resend_verification",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    record_rate_limit_failure(
+        "auth.resend_verification",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    user, token = crud.create_email_verification(data.email, db)
+
+    if user and token:
+        send_account_verification_email(user, token)
+
+    return schemas.MessageResponse(message=GENERIC_VERIFICATION_MESSAGE)
+
+
+@router.post("/verify-recovery-email", response_model=schemas.MessageResponse)
+def verify_recovery_email(
+    data: schemas.RecoveryEmailVerificationConfirm,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    key = build_rate_limit_key(request, "verify-recovery-email")
+
+    run_with_failure_rate_limit(
+        "auth.verify_recovery_email",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+        lambda: crud.verify_recovery_email_with_token(data.token, db),
+    )
+
+    return schemas.MessageResponse(
+        message="E-mail de recuperação confirmado com sucesso."
     )
 
 
@@ -323,6 +462,26 @@ def change_current_user_password(
 ):
     crud.change_current_user_password(current_user, password_data, db)
     return None
+
+
+@router.post("/me/recovery-email", response_model=schemas.UserResponse)
+def set_current_user_recovery_email(
+    data: schemas.RecoveryEmailUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user, token = crud.set_recovery_email(current_user, data, db)
+    send_recovery_verification_email(user.recovery_email, token)
+
+    return user
+
+
+@router.delete("/me/recovery-email", response_model=schemas.UserResponse)
+def remove_current_user_recovery_email(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.remove_recovery_email(current_user, db)
 
 
 def raise_avatar_storage_error(error: Exception):

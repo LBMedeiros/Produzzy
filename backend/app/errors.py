@@ -10,6 +10,7 @@ __all__ = [
     "DomainError",
     "ValidationError",
     "AuthError",
+    "EmailNotVerified",
     "PermissionDenied",
     "NotFound",
     "Conflict",
@@ -31,6 +32,11 @@ class ValidationError(DomainError):
 
 class AuthError(DomainError):
     status_code = 401
+
+
+class EmailNotVerified(DomainError):
+    # 403: credentials are correct, but the e-mail was not confirmed yet.
+    status_code = 403
 
 
 class PermissionDenied(DomainError):

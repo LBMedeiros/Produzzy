@@ -71,6 +71,46 @@ export function resetPassword(token, newPassword) {
   })
 }
 
+export function verifyEmail(token) {
+  return request('/auth/verify-email', {
+    body: { token },
+    method: 'POST',
+    skipAuth: true,
+  })
+}
+
+export function resendVerification(email) {
+  return request('/auth/resend-verification', {
+    body: { email: email.trim() },
+    method: 'POST',
+    skipAuth: true,
+  })
+}
+
+export function setRecoveryEmail(recoveryEmail, currentPassword) {
+  return request('/auth/me/recovery-email', {
+    body: {
+      current_password: currentPassword,
+      recovery_email: recoveryEmail.trim(),
+    },
+    method: 'POST',
+  })
+}
+
+export function removeRecoveryEmail() {
+  return request('/auth/me/recovery-email', {
+    method: 'DELETE',
+  })
+}
+
+export function verifyRecoveryEmail(token) {
+  return request('/auth/verify-recovery-email', {
+    body: { token },
+    method: 'POST',
+    skipAuth: true,
+  })
+}
+
 export function getMe(token) {
   return request('/auth/me', token ? { token } : undefined)
 }

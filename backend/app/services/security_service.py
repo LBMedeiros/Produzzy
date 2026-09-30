@@ -5,6 +5,7 @@ from passlib.context import CryptContext
 
 from app.config import (
     PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES,
+    PRODUZZY_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,
     PRODUZZY_JWT_ALGORITHM,
     PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
     PRODUZZY_SECRET_KEY,
@@ -15,6 +16,9 @@ SECRET_KEY = PRODUZZY_SECRET_KEY
 ALGORITHM = PRODUZZY_JWT_ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES
 PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES = (
+    PRODUZZY_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES
+)
 
 # bcrypt cost 10 (OWASP minimum) — cost 12 on shared CPU (e.g. Render free)
 # adds ~1s to every login. Existing cost-12 hashes still verify fine and get
@@ -74,6 +78,49 @@ def decode_password_reset_token(token: str):
     payload = decode_access_token(token)
 
     if payload.get("type") != "password_reset":
+        raise JWTError("Tipo de token inválido.")
+
+    return payload
+
+
+def create_email_verification_token(subject: str):
+    """Token used to confirm ownership of an e-mail address after sign-up."""
+    expires_delta = timedelta(minutes=EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES)
+
+    return create_access_token(
+        data={"sub": subject, "type": "email_verification"},
+        expires_delta=expires_delta,
+    )
+
+
+def decode_email_verification_token(token: str):
+    payload = decode_access_token(token)
+
+    if payload.get("type") != "email_verification":
+        raise JWTError("Tipo de token inválido.")
+
+    return payload
+
+
+def create_recovery_email_verification_token(subject: str, recovery_email: str):
+    """Confirms ownership of a backup e-mail. `re` pins the token to the exact
+    address being confirmed, so an old link can't verify a changed one."""
+    expires_delta = timedelta(minutes=EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES)
+
+    return create_access_token(
+        data={
+            "sub": subject,
+            "type": "recovery_email_verification",
+            "re": recovery_email,
+        },
+        expires_delta=expires_delta,
+    )
+
+
+def decode_recovery_email_verification_token(token: str):
+    payload = decode_access_token(token)
+
+    if payload.get("type") != "recovery_email_verification":
         raise JWTError("Tipo de token inválido.")
 
     return payload

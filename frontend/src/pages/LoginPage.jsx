@@ -5,6 +5,7 @@ import PasswordField from '../components/auth/PasswordField'
 import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
+import { resendVerification } from '../services/authService'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
@@ -138,6 +139,10 @@ function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // When set, the account exists but the e-mail is not confirmed yet.
+  // { email, context: 'register' | 'login' }
+  const [verificationNotice, setVerificationNotice] = useState(null)
+  const [resendState, setResendState] = useState('idle')
 
   const isRegisterMode = mode === 'register'
 
@@ -158,6 +163,7 @@ function LoginPage() {
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+    setVerificationNotice(null)
     setIsSubmitting(true)
 
     try {
@@ -171,20 +177,53 @@ function LoginPage() {
           name: form.name.trim(),
           password: form.password,
         })
+
+        // Strict verification: the account starts blocked. Don't auto-login —
+        // ask the user to confirm the e-mail we just sent.
+        setResendState('idle')
+        setVerificationNotice({ context: 'register', email: form.email.trim() })
+        return
       }
 
-      await login(form.email, form.password, {
-        rememberMe: !isRegisterMode && rememberMe,
-      })
+      await login(form.email, form.password, { rememberMe })
     } catch (submitError) {
-      setError(getFriendlyError(submitError))
+      if (submitError?.status === 403) {
+        // Credentials are valid, but the e-mail isn't confirmed yet.
+        setResendState('idle')
+        setVerificationNotice({ context: 'login', email: form.email.trim() })
+      } else {
+        setError(getFriendlyError(submitError))
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  async function handleResendVerification() {
+    if (!verificationNotice?.email) {
+      return
+    }
+
+    setResendState('sending')
+
+    try {
+      await resendVerification(verificationNotice.email)
+      setResendState('sent')
+    } catch {
+      setResendState('error')
+    }
+  }
+
+  function backToLogin() {
+    setVerificationNotice(null)
+    setResendState('idle')
+    setError('')
+    setMode('login')
+  }
+
   async function handleGoogleLogin() {
     setError('')
+    setVerificationNotice(null)
     setIsGoogleSubmitting(true)
 
     try {
@@ -259,6 +298,8 @@ function LoginPage() {
       password: false,
     })
     setError('')
+    setVerificationNotice(null)
+    setResendState('idle')
   }
 
   return (
@@ -269,10 +310,62 @@ function LoginPage() {
           <strong>Produzzy</strong>
         </div>
         <div className="login-panel__copy">
-          <h1>{isRegisterMode ? 'Crie sua conta' : 'Entre no Produzzy'}</h1>
-          <p>Use Google ou seu email e senha para acessar seus workspaces.</p>
+          <h1>
+            {verificationNotice
+              ? 'Confirme seu e-mail'
+              : isRegisterMode
+                ? 'Crie sua conta'
+                : 'Entre no Produzzy'}
+          </h1>
+          <p>
+            {verificationNotice
+              ? 'Falta um passo: confirme seu e-mail para acessar sua conta.'
+              : 'Use Google ou seu email e senha para acessar seus workspaces.'}
+          </p>
         </div>
 
+        {verificationNotice ? (
+          <>
+            <div className="auth-feedback" role="status">
+              <h2>
+                {verificationNotice.context === 'register'
+                  ? 'Conta criada! Confirme seu e-mail'
+                  : 'Confirmação pendente'}
+              </h2>
+              <p>
+                Enviamos um link de confirmação para{' '}
+                <strong>{verificationNotice.email}</strong>. Abra o e-mail e
+                clique no link para ativar o acesso — confira também o spam.
+              </p>
+              {resendState === 'sent' ? (
+                <p className="form-success">
+                  Reenviamos o link. Verifique seu e-mail.
+                </p>
+              ) : null}
+              {resendState === 'error' ? (
+                <p className="form-error">
+                  Não foi possível reenviar agora. Tente novamente em instantes.
+                </p>
+              ) : null}
+              <Button
+                className="login-form__submit"
+                variant="secondary"
+                disabled={resendState === 'sending'}
+                onClick={handleResendVerification}
+              >
+                {resendState === 'sending'
+                  ? 'Reenviando...'
+                  : 'Reenviar e-mail de confirmação'}
+              </Button>
+            </div>
+            <p className="login-panel__footer">
+              <button type="button" onClick={backToLogin}>
+                Voltar para o login
+              </button>
+            </p>
+          </>
+        ) : (
+          <>
         <div className="login-social">
           <button
             aria-label="Continuar com Google"
@@ -387,6 +480,8 @@ function LoginPage() {
             <Link to="/forgot-password">Esqueceu sua senha?</Link>
           </p>
         ) : null}
+          </>
+        )}
       </section>
 
       <AuthHero />

@@ -136,6 +136,8 @@ class UserResponse(BaseModel):
     email: str
     avatar_url: Optional[str] = None
     is_active: bool
+    recovery_email: Optional[str] = None
+    recovery_email_verified: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -186,6 +188,41 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str = Field(min_length=1, max_length=2000)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class EmailVerificationRequest(BaseModel):
+    email: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return normalize_email_input(value)
+
+
+class EmailVerificationConfirm(BaseModel):
+    token: str = Field(min_length=1, max_length=2000)
+
+
+class RecoveryEmailUpdate(BaseModel):
+    recovery_email: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )
+    current_password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("recovery_email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return normalize_email_input(value)
+
+
+class RecoveryEmailVerificationConfirm(BaseModel):
+    token: str = Field(min_length=1, max_length=2000)
 
 
 class MessageResponse(BaseModel):

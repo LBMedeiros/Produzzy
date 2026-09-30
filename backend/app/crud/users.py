@@ -12,8 +12,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app import models, schemas
 from app.services.security_service import (
+    create_email_verification_token,
     create_password_reset_token,
+    create_recovery_email_verification_token,
+    decode_email_verification_token,
     decode_password_reset_token,
+    decode_recovery_email_verification_token,
     get_password_hash,
     verify_and_maybe_rehash,
     verify_password,
@@ -51,6 +55,7 @@ def create_user(user_data: schemas.UserCreate, db: Session):
         email=email,
         hashed_password=get_password_hash(user_data.password),
         auth_provider="password",
+        email_verified=False,
     )
 
     db.add(new_user)
@@ -97,6 +102,15 @@ def authenticate_user(
 
     if not user.is_active:
         raise invalid_credentials_error
+
+    # Credentials are correct, but the e-mail must be confirmed first. Checked
+    # only after the password so it never reveals whether an e-mail is
+    # registered to someone who doesn't know the password.
+    if not user.email_verified:
+        raise EmailNotVerified(
+            "Confirme seu e-mail para acessar sua conta. "
+            "Enviamos um link de confirmação para o seu e-mail."
+        )
 
     if upgraded_hash:
         user.hashed_password = upgraded_hash
@@ -146,6 +160,7 @@ def authenticate_google_user(google_claims: dict, db: Session):
 
         existing_email_user.auth_provider = "google"
         existing_email_user.provider_user_id = provider_user_id
+        existing_email_user.email_verified = True
         db.commit()
         db.refresh(existing_email_user)
 
@@ -158,6 +173,7 @@ def authenticate_google_user(google_claims: dict, db: Session):
         auth_provider="google",
         provider_user_id=provider_user_id,
         is_active=True,
+        email_verified=True,
     )
 
     db.add(new_user)
@@ -280,6 +296,125 @@ def reset_password_with_token(token: str, new_password: str, db: Session):
 
     db.commit()
     db.refresh(user)
+
+    return user
+
+def create_email_verification(email: str, db: Session):
+    """Return (user, token) when a verification e-mail should be sent, else
+    (None, None) — account absent, inactive, or already verified. Never reveals
+    which, so the caller always responds the same way."""
+    user = get_user_by_email(email, db)
+
+    if not user or not user.is_active or user.email_verified:
+        return None, None
+
+    token = create_email_verification_token(user.email)
+
+    return user, token
+
+def verify_email_with_token(token: str, db: Session):
+    invalid_token_error = ValidationError(
+        "Link de confirmação inválido ou expirado. Solicite um novo."
+    )
+
+    try:
+        payload = decode_email_verification_token(token)
+    except JWTError as error:
+        raise invalid_token_error from error
+
+    email = normalize_email(str(payload.get("sub") or ""))
+
+    if not email:
+        raise invalid_token_error
+
+    user = get_user_by_email(email, db)
+
+    if not user or not user.is_active:
+        raise invalid_token_error
+
+    if not user.email_verified:
+        user.email_verified = True
+        db.commit()
+        db.refresh(user)
+
+    return user
+
+def set_recovery_email(
+    current_user: models.User,
+    data: schemas.RecoveryEmailUpdate,
+    db: Session,
+):
+    """Set/replace the backup recovery e-mail (unverified) and return
+    (user, verification_token). Requires the current password so a hijacked
+    session can't quietly add its own recovery channel."""
+    if not current_user.hashed_password:
+        raise ValidationError(
+            "Contas Google acessam pelo provedor e não usam e-mail de "
+            "recuperação."
+        )
+
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise ValidationError("Senha atual incorreta.")
+
+    recovery_email = normalize_email(data.recovery_email)
+
+    if recovery_email == normalize_email(current_user.email):
+        raise ValidationError(
+            "O e-mail de recuperação deve ser diferente do e-mail principal."
+        )
+
+    current_user.recovery_email = recovery_email
+    current_user.recovery_email_verified = False
+
+    db.commit()
+    db.refresh(current_user)
+
+    token = create_recovery_email_verification_token(
+        current_user.email,
+        recovery_email,
+    )
+
+    return current_user, token
+
+def remove_recovery_email(current_user: models.User, db: Session):
+    current_user.recovery_email = None
+    current_user.recovery_email_verified = False
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+def verify_recovery_email_with_token(token: str, db: Session):
+    invalid_token_error = ValidationError(
+        "Link de confirmação inválido ou expirado. Solicite um novo."
+    )
+
+    try:
+        payload = decode_recovery_email_verification_token(token)
+    except JWTError as error:
+        raise invalid_token_error from error
+
+    email = normalize_email(str(payload.get("sub") or ""))
+    recovery_email = normalize_email(str(payload.get("re") or ""))
+
+    if not email or not recovery_email:
+        raise invalid_token_error
+
+    user = get_user_by_email(email, db)
+
+    if (
+        not user
+        or not user.is_active
+        or not user.recovery_email
+        or normalize_email(user.recovery_email) != recovery_email
+    ):
+        raise invalid_token_error
+
+    if not user.recovery_email_verified:
+        user.recovery_email_verified = True
+        db.commit()
+        db.refresh(user)
 
     return user
 

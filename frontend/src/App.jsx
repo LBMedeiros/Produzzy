@@ -27,6 +27,7 @@ const ProductionPage = lazy(() => import('./pages/ProductionPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const StockPage = lazy(() => import('./pages/StockPage'))
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -170,6 +171,11 @@ function AppRoutes() {
           }
         />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+        <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
+        <Route
+          path="/verify-recovery-email/:token"
+          element={<VerifyEmailPage variant="recovery" />}
+        />
         <Route
           path="/invites/:token/accept"
           element={
