@@ -55,7 +55,10 @@ def create_user(user_data: schemas.UserCreate, db: Session):
         email=email,
         hashed_password=get_password_hash(user_data.password),
         auth_provider="password",
-        email_verified=False,
+        # Accounts are active right after sign-up (no e-mail confirmation gate):
+        # requiring a confirmation link locked out anyone who signed up with a
+        # typo'd/throwaway address, and e-mail delivery isn't guaranteed.
+        email_verified=True,
     )
 
     db.add(new_user)
@@ -102,15 +105,6 @@ def authenticate_user(
 
     if not user.is_active:
         raise invalid_credentials_error
-
-    # Credentials are correct, but the e-mail must be confirmed first. Checked
-    # only after the password so it never reveals whether an e-mail is
-    # registered to someone who doesn't know the password.
-    if not user.email_verified:
-        raise EmailNotVerified(
-            "Confirme seu e-mail para acessar sua conta. "
-            "Enviamos um link de confirmação para o seu e-mail."
-        )
 
     if upgraded_hash:
         user.hashed_password = upgraded_hash

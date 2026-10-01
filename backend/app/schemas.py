@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
@@ -9,6 +10,18 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 # limit (2,147,483,647) so accumulation never overflows the column — and a
 # billion units is already far beyond any realistic inventory.
 MAX_QUANTITY = 1_000_000_000
+
+
+def validate_password_strength(value):
+    """Password policy: at least one number and one special character (the
+    8-character minimum is enforced by each field's `min_length`)."""
+    if isinstance(value, str):
+        if not re.search(r"\d", value):
+            raise ValueError("A senha deve conter ao menos um número.")
+        if not re.search(r"[^A-Za-z0-9]", value):
+            raise ValueError("A senha deve conter ao menos um caractere especial.")
+
+    return value
 
 
 class StockMovementType(str, Enum):
@@ -116,6 +129,11 @@ class UserCreate(BaseModel):
     def normalize_email(cls, value):
         return normalize_email_input(value)
 
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value):
+        return validate_password_strength(value)
+
 
 class UserLogin(BaseModel):
     email: str = Field(
@@ -178,6 +196,11 @@ class UserPasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
 
+    @field_validator("new_password")
+    @classmethod
+    def check_password(cls, value):
+        return validate_password_strength(value)
+
 
 class PasswordResetRequest(BaseModel):
     email: str = Field(
@@ -195,6 +218,11 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str = Field(min_length=1, max_length=2000)
     new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def check_password(cls, value):
+        return validate_password_strength(value)
 
 
 class EmailVerificationRequest(BaseModel):

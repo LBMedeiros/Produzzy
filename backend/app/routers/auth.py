@@ -193,9 +193,8 @@ def register_user(
         lambda: crud.create_user(user_data, db),
     )
 
-    # New password accounts must confirm their e-mail before logging in.
-    send_account_verification_email(user, create_email_verification_token(user.email))
-
+    # Accounts are active immediately (no e-mail confirmation gate), so the user
+    # can log in right after registering.
     return user
 
 

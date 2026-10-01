@@ -5,6 +5,7 @@ import PasswordField from '../components/auth/PasswordField'
 import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
+import { getPasswordError, PASSWORD_HINT } from '../lib/password'
 import { resendVerification } from '../services/authService'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
@@ -168,6 +169,12 @@ function LoginPage() {
 
     try {
       if (isRegisterMode) {
+        const passwordError = getPasswordError(form.password)
+
+        if (passwordError) {
+          throw new Error(passwordError)
+        }
+
         if (form.password !== form.confirmPassword) {
           throw new Error('As senhas precisam ser iguais.')
         }
@@ -178,10 +185,8 @@ function LoginPage() {
           password: form.password,
         })
 
-        // Strict verification: the account starts blocked. Don't auto-login —
-        // ask the user to confirm the e-mail we just sent.
-        setResendState('idle')
-        setVerificationNotice({ context: 'register', email: form.email.trim() })
+        // The account is active right away — log the user straight in.
+        await login(form.email.trim(), form.password, { rememberMe })
         return
       }
 
@@ -424,6 +429,8 @@ function LoginPage() {
             onChange={(event) => updateField('password', event.target.value)}
             onToggle={() => togglePasswordVisibility('password')}
           />
+
+          {isRegisterMode ? <p className="login-hint">{PASSWORD_HINT}</p> : null}
 
           {isRegisterMode ? (
             <PasswordField

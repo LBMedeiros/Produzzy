@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { formatWorkspaceRole, getWorkspaceRoleValue } from '../lib/formatters'
+import { getPasswordError, PASSWORD_HINT } from '../lib/password'
 import { exportMyData } from '../services/authService'
 import { listWorkspaceMembers } from '../services/workspaceService'
 
@@ -263,8 +264,10 @@ function PasswordChangeModal({ onClose, onSubmit }) {
       return
     }
 
-    if (newPassword.length < 8) {
-      setError('A nova senha deve ter ao menos 8 caracteres.')
+    const passwordError = getPasswordError(newPassword)
+
+    if (passwordError) {
+      setError(passwordError)
       return
     }
 
@@ -374,6 +377,7 @@ function PasswordChangeModal({ onClose, onSubmit }) {
               value={newPassword}
             />
           </span>
+          <p className="settings-section__hint">{PASSWORD_HINT}</p>
 
           <label
             className="settings-password-label"
