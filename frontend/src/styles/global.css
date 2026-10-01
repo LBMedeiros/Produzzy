@@ -837,6 +837,7 @@ a {
   color: #cbd5e1;
   padding: 0 10px;
   text-align: left;
+  text-decoration: none;
   font-weight: 700;
   transition:
     background-color 0.18s ease,
@@ -5293,6 +5294,14 @@ a {
   gap: 16px;
 }
 
+/* Password requirements hint shown under the sign-up password field. */
+.login-hint {
+  margin-top: -8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .login-field {
   display: grid;
   gap: 8px;
@@ -6276,16 +6285,34 @@ a {
     margin-bottom: 10px;
   }
 
+  /* Horizontal, scrollable row: flex items keep their natural width so they
+     never overlap (a shrinking grid track did), and the row scrolls when the
+     labels don't all fit. */
   .sidebar__nav {
+    display: flex;
     max-width: 100%;
     min-width: 0;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
     overflow-x: auto;
   }
 
   .sidebar__item {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
     justify-content: center;
-    min-width: 130px;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .sidebar__item span {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .sidebar__item strong {
+    white-space: nowrap;
   }
 
   .sidebar.is-collapsed .sidebar__item {
