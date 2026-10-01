@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import AvatarCropModal from '../components/settings/AvatarCropModal'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -9,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { formatWorkspaceRole, getWorkspaceRoleValue } from '../lib/formatters'
+import { exportMyData } from '../services/authService'
 import { listWorkspaceMembers } from '../services/workspaceService'
 
 const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024
@@ -1179,10 +1181,205 @@ function WorkspaceSettingsSection({
   )
 }
 
+function DeleteAccountModal({ hasPassword, onClose, onConfirm }) {
+  const [password, setPassword] = useState('')
+  const [confirmText, setConfirmText] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [error, setError] = useState('')
+  const canConfirm =
+    confirmText.trim().toUpperCase() === 'EXCLUIR' && (!hasPassword || password)
+
+  async function handleDelete() {
+    if (!canConfirm) {
+      return
+    }
+
+    setIsDeleting(true)
+    setError('')
+
+    try {
+      await onConfirm(password)
+      // On success the session is cleared by the context, and the router sends
+      // the user back to /login — nothing else to do here.
+    } catch (deleteError) {
+      setError(deleteError?.message ?? 'Não foi possível excluir a conta.')
+      setIsDeleting(false)
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
+        <section
+          className="workspace-modal danger-confirm-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+        >
+          <div className="workspace-modal__header">
+            <div>
+              <span>Ação irreversível</span>
+              <h2 id="delete-account-title">Excluir minha conta</h2>
+            </div>
+            <button
+              aria-label="Fechar modal"
+              className="icon-button"
+              disabled={isDeleting}
+              onClick={onClose}
+              type="button"
+            >
+              x
+            </button>
+          </div>
+
+          <div className="workspace-form">
+            <p className="workspace-modal__text">
+              Isso remove seus dados pessoais (nome, e-mail, foto) e desativa sua
+              conta. Os workspaces que são só seus serão excluídos. Esta ação não
+              pode ser desfeita.
+            </p>
+            {hasPassword ? (
+              <label>
+                Senha atual
+                <input
+                  autoComplete="current-password"
+                  disabled={isDeleting}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    setError('')
+                  }}
+                  type="password"
+                  value={password}
+                />
+              </label>
+            ) : null}
+            <label>
+              Digite EXCLUIR para confirmar
+              <input
+                disabled={isDeleting}
+                onChange={(event) => setConfirmText(event.target.value)}
+                placeholder="EXCLUIR"
+                value={confirmText}
+              />
+            </label>
+
+            {error ? <p className="form-error">{error}</p> : null}
+
+            <div className="workspace-form__actions">
+              <Button
+                disabled={!canConfirm || isDeleting}
+                onClick={handleDelete}
+                variant="danger"
+              >
+                {isDeleting ? 'Excluindo...' : 'Excluir minha conta'}
+              </Button>
+              <Button disabled={isDeleting} onClick={onClose} variant="secondary">
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </ModalPortal>
+  )
+}
+
+function PrivacyDataSection({ deleteAccount, user }) {
+  const [isExporting, setIsExporting] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const [error, setError] = useState('')
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+
+  async function handleExport() {
+    setIsExporting(true)
+    setError('')
+    setFeedback('')
+
+    try {
+      const data = await exportMyData()
+      // jsPDF is heavy, so it's only loaded when the user actually exports.
+      const { downloadDataExportPdf } = await import('../lib/dataExportPdf')
+      await downloadDataExportPdf(data)
+      setFeedback('Seus dados foram baixados.')
+    } catch (exportError) {
+      setError(exportError?.message ?? 'Não foi possível baixar seus dados.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  return (
+    <Card
+      className="settings-section settings-section--wide"
+      title="Privacidade e dados"
+      eyebrow="LGPD"
+    >
+      <p className="settings-section__description">
+        Seus direitos sobre seus dados pessoais. Consulte os{' '}
+        <Link to="/termos">Termos de Uso</Link> e a{' '}
+        <Link to="/privacidade">Política de Privacidade</Link>.
+      </p>
+
+      <div className="settings-danger__content">
+        <div>
+          <h3>Baixar meus dados</h3>
+          <p>
+            Baixa um arquivo PDF, fácil de ler, com os dados da sua conta
+            (perfil, workspaces e histórico de atividade).
+          </p>
+        </div>
+        <Button disabled={isExporting} onClick={handleExport} variant="secondary">
+          {isExporting ? 'Gerando...' : 'Baixar meus dados'}
+        </Button>
+      </div>
+
+      <div className="settings-danger__content">
+        <div>
+          <h3>Excluir minha conta</h3>
+          <p>
+            Remove seus dados pessoais e desativa a conta. Esta ação não pode ser
+            desfeita.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setIsDeleteOpen(true)
+            setError('')
+            setFeedback('')
+          }}
+          variant="danger"
+        >
+          Excluir minha conta
+        </Button>
+      </div>
+
+      {error ? (
+        <p className="settings-feedback settings-feedback--error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {feedback ? (
+        <p className="settings-feedback settings-feedback--success" aria-live="polite">
+          {feedback}
+        </p>
+      ) : null}
+
+      {isDeleteOpen ? (
+        <DeleteAccountModal
+          hasPassword={user?.has_password !== false}
+          onClose={() => setIsDeleteOpen(false)}
+          onConfirm={deleteAccount}
+        />
+      ) : null}
+    </Card>
+  )
+}
+
 function SettingsPage() {
   const {
     changeEmail,
     changePassword,
+    deleteAccount,
     isAuthenticated,
     removeAvatar,
     removeRecoveryEmail,
@@ -1358,6 +1555,8 @@ function SettingsPage() {
             </div>
           </div>
         </Card>
+
+        <PrivacyDataSection deleteAccount={deleteAccount} user={user} />
 
         <Card
           className="settings-section settings-section--wide settings-danger"

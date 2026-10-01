@@ -23,10 +23,12 @@ const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage'))
 const LabelsPage = lazy(() => import('./pages/LabelsPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 const ProductionPage = lazy(() => import('./pages/ProductionPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const StockPage = lazy(() => import('./pages/StockPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'))
 
 const queryClient = new QueryClient({
@@ -176,6 +178,8 @@ function AppRoutes() {
           path="/verify-recovery-email/:token"
           element={<VerifyEmailPage variant="recovery" />}
         />
+        <Route path="/termos" element={<TermsPage />} />
+        <Route path="/privacidade" element={<PrivacyPage />} />
         <Route
           path="/invites/:token/accept"
           element={

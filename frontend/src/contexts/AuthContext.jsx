@@ -17,6 +17,7 @@ import {
   logout as logoutRequest,
   changeEmail as changeEmailRequest,
   changePassword as changePasswordRequest,
+  deleteAccount as deleteAccountRequest,
   removeAvatar as removeAvatarRequest,
   register as registerRequest,
   removeRecoveryEmail as removeRecoveryEmailRequest,
@@ -274,6 +275,14 @@ export function AuthProvider({ children }) {
     return updatedUser
   }, [])
 
+  const deleteAccount = useCallback(
+    async (currentPassword) => {
+      await deleteAccountRequest(currentPassword)
+      clearSession()
+    },
+    [clearSession],
+  )
+
   const uploadAvatar = useCallback(async (file) => {
     const updatedUser = await uploadAvatarRequest(file)
 
@@ -304,6 +313,7 @@ export function AuthProvider({ children }) {
       logout,
       changeEmail,
       changePassword,
+      deleteAccount,
       removeAvatar,
       removeRecoveryEmail,
       refreshMe,
@@ -317,6 +327,7 @@ export function AuthProvider({ children }) {
     [
       changeEmail,
       changePassword,
+      deleteAccount,
       error,
       loading,
       login,

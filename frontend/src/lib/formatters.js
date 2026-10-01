@@ -64,3 +64,63 @@ export const memberTitleOptions = [
   'Produção',
   'Assistente',
 ]
+
+export const auditActionLabels = {
+  'category.created': 'Categoria criada',
+  'category.deleted': 'Categoria removida',
+  'category.restored': 'Categoria restaurada',
+  'category.updated': 'Categoria atualizada',
+  'invite.accepted': 'Convite aceito',
+  'invite.created': 'Convite enviado',
+  'invite.expired': 'Convite expirado',
+  'invite.revoked': 'Convite revogado',
+  'invite_link.accepted': 'Convite por link aceito',
+  'invite_link.created': 'Link de convite criado',
+  'invite_link.expired': 'Link de convite expirado',
+  'invite_link.revoked': 'Link de convite revogado',
+  'member.removed': 'Membro removido',
+  'member.role_updated': 'Papel de membro atualizado',
+  'member.title_updated': 'Cargo de membro atualizado',
+  'product.created': 'Produto criado',
+  'product.deleted': 'Produto enviado para lixeira',
+  'product.restored': 'Produto restaurado',
+  'product.updated': 'Produto atualizado',
+  'replenishment.assignee_added': 'Responsável adicionado à reposição',
+  'replenishment.assignee_removed': 'Responsável removido da reposição',
+  'replenishment.canceled': 'Necessidade de reposição cancelada',
+  'replenishment.completed': 'Necessidade de reposição concluída',
+  'replenishment.created': 'Necessidade de reposição criada',
+  'replenishment.stocked': 'Entrada da reposição registrada',
+  'replenishment.updated': 'Necessidade de reposição atualizada',
+  'stock.movement_created': 'Estoque movimentado',
+  'workspace.created': 'Workspace criado',
+  'workspace.updated': 'Workspace atualizado',
+}
+
+export const auditEntityLabels = {
+  category: 'Categoria',
+  product: 'Produto',
+  replenishment_request: 'Reposição',
+  stock_movement: 'Movimento de estoque',
+  workspace: 'Workspace',
+  workspace_invite: 'Convite',
+  workspace_invite_link: 'Link de convite',
+  workspace_member: 'Membro',
+}
+
+export function humanizeAuditAction(action) {
+  if (auditActionLabels[action]) {
+    return auditActionLabels[action]
+  }
+
+  // Fallback for any unmapped action: strip the "domain." prefix and de-snake.
+  const readable = String(action ?? '')
+    .split('.')
+    .pop()
+    .replace(/_/g, ' ')
+    .trim()
+
+  return readable
+    ? readable.charAt(0).toUpperCase() + readable.slice(1)
+    : 'Atividade'
+}

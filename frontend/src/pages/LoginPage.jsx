@@ -482,6 +482,12 @@ function LoginPage() {
         ) : null}
           </>
         )}
+
+        <p className="login-panel__legal">
+          Ao continuar, você concorda com os{' '}
+          <Link to="/termos">Termos de Uso</Link> e a{' '}
+          <Link to="/privacidade">Política de Privacidade</Link>.
+        </p>
       </section>
 
       <AuthHero />

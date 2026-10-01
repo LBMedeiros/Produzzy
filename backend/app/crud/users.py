@@ -418,6 +418,191 @@ def verify_recovery_email_with_token(token: str, db: Session):
 
     return user
 
+def export_user_data(current_user: models.User, db: Session):
+    """LGPD data portability: the personal/account data we hold about the user."""
+    memberships = (
+        db.query(models.WorkspaceMember)
+        .filter(models.WorkspaceMember.user_id == current_user.id)
+        .all()
+    )
+
+    membership_rows = []
+    for membership in memberships:
+        workspace = (
+            db.query(models.Workspace)
+            .filter(models.Workspace.id == membership.workspace_id)
+            .first()
+        )
+        membership_rows.append(
+            {
+                "workspace": workspace.name if workspace else None,
+                "role": membership.role,
+                "title": getattr(membership, "title", None),
+            }
+        )
+
+    owned = (
+        db.query(models.Workspace)
+        .filter(models.Workspace.owner_id == current_user.id)
+        .all()
+    )
+
+    def iso(value):
+        return value.isoformat() if value else None
+
+    # workspace id -> name, for the activity log and the per-workspace summary.
+    workspace_ids = {m.workspace_id for m in memberships} | {w.id for w in owned}
+    workspace_names = {}
+    if workspace_ids:
+        workspace_names = {
+            w.id: w.name
+            for w in db.query(models.Workspace)
+            .filter(models.Workspace.id.in_(workspace_ids))
+            .all()
+        }
+
+    # The user's own recent actions (most recent first, capped).
+    activity = (
+        db.query(models.AuditLog)
+        .filter(models.AuditLog.user_id == current_user.id)
+        .order_by(models.AuditLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    activity_rows = [
+        {
+            "action": entry.action,
+            "entity_type": entry.entity_type,
+            "workspace": workspace_names.get(entry.workspace_id),
+            "at": iso(entry.created_at),
+        }
+        for entry in activity
+    ]
+
+    # Count of what each workspace the user belongs to currently holds.
+    summary_rows = []
+    for membership in memberships:
+        wid = membership.workspace_id
+        summary_rows.append(
+            {
+                "workspace": workspace_names.get(wid),
+                "role": membership.role,
+                "products": db.query(models.Product)
+                .filter(
+                    models.Product.workspace_id == wid,
+                    models.Product.is_active.is_(True),
+                )
+                .count(),
+                "categories": db.query(models.Category)
+                .filter(
+                    models.Category.workspace_id == wid,
+                    models.Category.is_active.is_(True),
+                )
+                .count(),
+                "movements": db.query(models.StockMovement)
+                .filter(models.StockMovement.workspace_id == wid)
+                .count(),
+            }
+        )
+
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "account": {
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "auth_provider": current_user.auth_provider,
+            "email_verified": current_user.email_verified,
+            "recovery_email": current_user.recovery_email,
+            "recovery_email_verified": current_user.recovery_email_verified,
+            "avatar_url": current_user.avatar_url,
+            "created_at": iso(current_user.created_at),
+            "updated_at": iso(current_user.updated_at),
+        },
+        "workspace_memberships": membership_rows,
+        "owned_workspaces": [
+            {"name": w.name, "created_at": iso(w.created_at)} for w in owned
+        ],
+        "workspace_summaries": summary_rows,
+        "activity": activity_rows,
+    }
+
+def delete_account(
+    current_user: models.User,
+    current_password: str | None,
+    db: Session,
+):
+    """LGPD erasure via anonymization: scrub personal data and deactivate the
+    account, keeping the row so system records (movements, audit) stay valid.
+    Solo workspaces are deleted; owning a shared workspace blocks deletion.
+
+    Returns (deleted_workspace_names, previous_avatar_public_id)."""
+    # Password accounts must confirm; Google-only accounts rely on the session.
+    if current_user.hashed_password:
+        if not current_password or not verify_password(
+            current_password, current_user.hashed_password
+        ):
+            raise ValidationError("Senha atual incorreta.")
+
+    owned = (
+        db.query(models.Workspace)
+        .filter(models.Workspace.owner_id == current_user.id)
+        .all()
+    )
+
+    blocking = []
+    solo = []
+    for workspace in owned:
+        other_members = (
+            db.query(models.WorkspaceMember)
+            .filter(models.WorkspaceMember.workspace_id == workspace.id)
+            .filter(models.WorkspaceMember.user_id != current_user.id)
+            .count()
+        )
+        if other_members > 0:
+            blocking.append(workspace.name)
+        else:
+            solo.append(workspace)
+
+    if blocking:
+        raise ValidationError(
+            "Você é dono de workspace(s) com outros membros ("
+            + ", ".join(blocking)
+            + "). Transfira a propriedade ou exclua esses workspaces antes de "
+            "excluir sua conta."
+        )
+
+    deleted_names = [workspace.name for workspace in solo]
+    previous_avatar_public_id = current_user.avatar_public_id
+
+    # Delete solo workspaces (ON DELETE CASCADE removes their data + member rows).
+    for workspace in solo:
+        db.delete(workspace)
+
+    db.flush()
+
+    # Leave any workspaces where the user is only a member.
+    db.query(models.WorkspaceMember).filter(
+        models.WorkspaceMember.user_id == current_user.id
+    ).delete(synchronize_session=False)
+
+    # Anonymize + deactivate. The e-mail becomes a unique tombstone so the
+    # original address is freed and the unique constraint stays satisfied.
+    current_user.name = "Conta removida"
+    current_user.email = f"deleted-{current_user.id}@deleted.produzzy.local"
+    current_user.hashed_password = None
+    current_user.avatar_url = None
+    current_user.avatar_public_id = None
+    current_user.recovery_email = None
+    current_user.recovery_email_verified = False
+    current_user.provider_user_id = None
+    current_user.auth_provider = "deleted"
+    current_user.is_active = False
+
+    db.commit()
+
+    return deleted_names, previous_avatar_public_id
+
 def update_current_user_avatar(
     current_user: models.User,
     avatar_url: str,

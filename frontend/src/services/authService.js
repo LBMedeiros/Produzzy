@@ -111,6 +111,17 @@ export function verifyRecoveryEmail(token) {
   })
 }
 
+export function exportMyData() {
+  return request('/auth/me/export')
+}
+
+export function deleteAccount(currentPassword) {
+  return request('/auth/me', {
+    body: { current_password: currentPassword || null },
+    method: 'DELETE',
+  })
+}
+
 export function getMe(token) {
   return request('/auth/me', token ? { token } : undefined)
 }

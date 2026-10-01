@@ -484,6 +484,40 @@ def remove_current_user_recovery_email(
     return crud.remove_recovery_email(current_user, db)
 
 
+@router.get("/me/export")
+def export_current_user_data(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """LGPD data portability — returns the account's personal data as JSON."""
+    return crud.export_user_data(current_user, db)
+
+
+@router.delete("/me", response_model=schemas.MessageResponse)
+def delete_current_user_account(
+    deletion_data: schemas.AccountDeletionRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """LGPD erasure — anonymizes and deactivates the account."""
+    _deleted_workspaces, previous_avatar_public_id = crud.delete_account(
+        current_user,
+        deletion_data.current_password,
+        db,
+    )
+
+    # Best-effort: drop the avatar from Cloudinary after the account is scrubbed.
+    if previous_avatar_public_id:
+        try:
+            avatar_storage_service.delete_avatar(previous_avatar_public_id)
+        except Exception:
+            logger.exception("Failed to remove avatar during account deletion.")
+
+    return schemas.MessageResponse(
+        message="Conta excluída. Seus dados pessoais foram removidos."
+    )
+
+
 def raise_avatar_storage_error(error: Exception):
     if isinstance(error, avatar_storage_service.AvatarStorageNotConfiguredError):
         raise HTTPException(
