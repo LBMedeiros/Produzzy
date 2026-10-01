@@ -507,7 +507,15 @@ function Header({ onNavigated }) {
       return undefined
     }
 
-    function handlePointerDown(event) {
+    function handleDocumentClick(event) {
+      // Portal'd dropdowns (e.g. the member "cargo" selector) render their
+      // options outside these containers via a body portal. A click on one of
+      // those options must NOT count as an outside click, otherwise selecting a
+      // cargo would close the whole members popover before the change applies.
+      if (event.target.closest?.('.select-menu__menu')) {
+        return
+      }
+
       if (
         isWorkspaceMenuMounted &&
         !workspaceSwitcherRef.current?.contains(event.target)
@@ -546,11 +554,14 @@ function Header({ onNavigated }) {
       }
     }
 
-    document.addEventListener('pointerdown', handlePointerDown)
+    // `click` (not `pointerdown`) so a touch-scroll/drag doesn't dismiss the
+    // popovers: dragging to scroll the members list keeps the card open, and
+    // only a real tap outside closes it.
+    document.addEventListener('click', handleDocumentClick)
     document.addEventListener('keydown', handleKeyDown)
 
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('click', handleDocumentClick)
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [

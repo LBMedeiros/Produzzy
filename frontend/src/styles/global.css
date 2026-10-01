@@ -340,12 +340,21 @@
 
 :root[data-theme="dark"] .badge--danger,
 :root[data-theme="dark"] .form-error,
-:root[data-theme="dark"] .settings-feedback--error {
+:root[data-theme="dark"] .settings-feedback--error,
+:root[data-theme="dark"] .members-popover__feedback--error,
+:root[data-theme="dark"] .stock-feedback--error,
+:root[data-theme="dark"] .user-menu__item--exit {
   color: #fca5a5;
 }
 
 :root[data-theme="dark"] .form-success,
-:root[data-theme="dark"] .settings-feedback--success {
+:root[data-theme="dark"] .settings-feedback--success,
+:root[data-theme="dark"] .members-popover__feedback--success,
+:root[data-theme="dark"] .stock-feedback--success,
+:root[data-theme="dark"] .recovery-badge--ok,
+:root[data-theme="dark"] .table-action--restore,
+:root[data-theme="dark"] .replenishment-ready-action p,
+:root[data-theme="dark"] .replenishment-stocked-note {
   color: #86efac;
 }
 
@@ -1396,10 +1405,22 @@ a {
   white-space: nowrap;
 }
 
-.topbar__user:hover,
-.topbar__user.is-open {
+.topbar__user:hover {
   border-color: rgba(37, 99, 235, 0.28);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+/* Open/active state: clearly tinted blue so it's obvious which popover the user
+   opened. Uses a translucent blue over the surface (not a solid light fill) so
+   the text stays readable in dark mode too. */
+.topbar__user.is-open {
+  border-color: var(--blue);
+  background: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.topbar__user.is-open strong {
+  color: var(--blue);
 }
 
 .topbar__user-wrap {
@@ -1427,10 +1448,20 @@ a {
     box-shadow 0.18s ease;
 }
 
-.member-avatars:hover,
-.member-avatars.is-open {
+.member-avatars:hover {
   border-color: rgba(37, 99, 235, 0.28);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+/* Matches .topbar__user.is-open — see note there. */
+.member-avatars.is-open {
+  border-color: var(--blue);
+  background: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.member-avatars.is-open .member-avatars__count {
+  color: var(--blue);
 }
 
 .member-avatars__icon {
@@ -1806,14 +1837,19 @@ a {
   margin-bottom: 10px;
 }
 
+/* Same standard as .settings-feedback / .form-success so every success/error
+   card shares one color (tokens + dark-theme overrides below), instead of the
+   hardcoded dark green that was unreadable on the dark card. */
 .members-popover__feedback--error {
+  border: 1px solid rgba(220, 38, 38, 0.2);
   background: var(--danger-soft);
-  color: #991b1b;
+  color: var(--danger);
 }
 
 .members-popover__feedback--success {
+  border: 1px solid rgba(22, 163, 74, 0.2);
   background: var(--success-soft);
-  color: #166534;
+  color: var(--success);
 }
 
 .members-popover__empty {
@@ -2901,13 +2937,13 @@ a {
 .stock-feedback--success {
   border: 1px solid rgba(22, 163, 74, 0.22);
   background: var(--success-soft);
-  color: #166534;
+  color: var(--success);
 }
 
 .stock-feedback--error {
   border: 1px solid rgba(220, 38, 38, 0.22);
   background: var(--danger-soft);
-  color: #991b1b;
+  color: var(--danger);
 }
 
 .stock-loading,
@@ -4273,14 +4309,14 @@ a {
   font-size: 13px;
 }
 
+/* Read-only informational values (Idioma, Formato de impressão). Styled as
+   plain text — not a pill/button — so they don't look clickable like the
+   Tema control above them. */
 .settings-preference__value {
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--surface-elevated);
-  color: var(--muted);
-  padding: 7px 10px;
-  font-size: 12px;
-  font-weight: 800;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
   text-align: right;
 }
 
@@ -4297,6 +4333,9 @@ a {
 .settings-danger__content {
   display: flex;
   align-items: center;
+  /* Keep wrapped rows packed together — otherwise the default `stretch`
+     spreads the text and the button far apart when they break to two lines. */
+  align-content: start;
   justify-content: space-between;
   min-width: 0;
   flex-wrap: wrap;
@@ -4325,6 +4364,12 @@ a {
   margin-top: 5px;
   color: var(--muted);
   font-size: 14px;
+}
+
+/* Breathing room between stacked action rows (e.g. "Baixar meus dados" and
+   "Excluir minha conta" in the Privacy & data card). */
+.settings-danger__content + .settings-danger__content {
+  margin-top: 18px;
 }
 
 @media (max-width: 760px) {
@@ -4707,11 +4752,176 @@ a {
 
 .replenishment-request-card__assignees {
   min-height: 48px;
+  /* Bottom-align so the chat icon sits on the avatars' line (not the label). */
+  align-items: flex-end;
 }
 
 .replenishment-request-card__assignees > div {
   display: grid;
   gap: 5px;
+}
+
+.replenishment-request-card__assignees-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Round chat icon button on the right of the card. */
+.replenishment-chat-trigger {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.replenishment-chat-trigger:hover {
+  border-color: rgba(37, 99, 235, 0.4);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.replenishment-chat-trigger svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Handoff chat modal */
+.replenishment-chat-modal {
+  display: flex;
+  width: min(460px, 100%);
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.replenishment-chat__list {
+  display: flex;
+  min-height: 160px;
+  max-height: min(460px, 56vh);
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.replenishment-chat__state {
+  margin: auto;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.replenishment-chat__message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.replenishment-chat__message.is-mine {
+  flex-direction: row-reverse;
+}
+
+.replenishment-chat__avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.replenishment-chat__bubble {
+  min-width: 0;
+  max-width: 78%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  padding: 8px 11px;
+}
+
+.replenishment-chat__message.is-mine .replenishment-chat__bubble {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.replenishment-chat__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 3px;
+}
+
+.replenishment-chat__meta strong {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.replenishment-chat__meta span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.replenishment-chat__bubble p {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.replenishment-chat__form {
+  display: grid;
+  gap: 10px;
+}
+
+.replenishment-chat__form textarea {
+  width: 100%;
+  min-height: 60px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.replenishment-chat__form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.replenishment-chat__hint {
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  color: var(--muted);
+  padding: 10px 12px;
+  font-size: 12px;
 }
 
 .replenishment-request-card__notes {
@@ -4751,7 +4961,7 @@ a {
 }
 
 .replenishment-ready-action p {
-  color: #166534;
+  color: var(--success);
   font-size: 12px;
   font-weight: 750;
 }
@@ -4763,7 +4973,7 @@ a {
 }
 
 .replenishment-stocked-note {
-  color: #166534;
+  color: var(--success);
   font-weight: 750;
 }
 
@@ -4787,14 +4997,14 @@ a {
 
 .replenishment-assignee-avatar {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border: 2px solid var(--surface);
   border-radius: 50%;
   background: var(--blue-soft);
   color: var(--blue);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   transition: border-color 0.18s ease;
 }
@@ -5900,6 +6110,10 @@ a {
 
   .settings-page__grid {
     grid-template-columns: 1fr;
+    /* Single column: let each card size to its content instead of stretching
+       to the grid row height (which left the danger/privacy cards huge). */
+    align-items: start;
+    align-content: start;
   }
 
   .settings-section--wide {
@@ -6027,15 +6241,21 @@ a {
   }
 
   .sidebar {
-    position: static;
+    /* Pin the top bar (logo + page navigation) so the pages stay reachable
+       while scrolling — no need to go back to the top. Above the topbar
+       (z-index 50) but below modals (z-index 60). */
+    position: sticky;
+    top: 0;
+    z-index: 55;
     width: 100%;
     max-width: 100%;
     min-width: 0;
     height: auto;
     min-height: auto;
     overflow: visible;
-    padding: 16px;
+    padding: 12px 16px;
     align-items: stretch;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
   }
 
   .sidebar.is-collapsed {
@@ -6053,7 +6273,7 @@ a {
   }
 
   .brand {
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
 
   .sidebar__nav {
@@ -6251,11 +6471,6 @@ a {
     width: 100%;
   }
 
-  .replenishment-request-card__assignees {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .replenishment-request-card__header {
     align-items: stretch;
     flex-direction: column;
@@ -6301,6 +6516,9 @@ a {
 
   .labels-actions__buttons .button {
     width: 100%;
+    /* Undo the row's `flex: 1 1 140px`, whose 140px basis becomes a huge
+       HEIGHT once the row turns into a column. Size to content instead. */
+    flex: 0 0 auto;
   }
 
   .segmented-control {
@@ -6670,5 +6888,144 @@ a {
 @media (max-width: 560px) {
   .dashboard-activity__footer .button {
     width: 100%;
+  }
+}
+
+/* ---- Login panel: legal links ---- */
+.login-panel__legal {
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.login-panel__legal a {
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* ---- Public legal pages (Terms, Privacy) ---- */
+.legal-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100svh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.legal-page__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px clamp(16px, 5vw, 48px);
+  border-bottom: 1px solid var(--border);
+}
+
+.legal-page__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.legal-page__brand strong {
+  font-size: 18px;
+}
+
+.legal-page__back {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.legal-doc {
+  flex: 1;
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: clamp(24px, 4vw, 48px) clamp(16px, 5vw, 24px);
+  line-height: 1.7;
+}
+
+.legal-doc h1 {
+  margin-bottom: 4px;
+  font-size: clamp(26px, 5vw, 34px);
+}
+
+.legal-doc__updated {
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.legal-doc h2 {
+  margin: 28px 0 8px;
+  font-size: 19px;
+}
+
+.legal-doc p,
+.legal-doc li {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.legal-doc ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 8px 20px;
+}
+
+.legal-doc a {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.legal-page__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.legal-page__footer a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.legal-page__footer a:hover {
+  color: var(--text);
+}
+
+/* ---- Danger/privacy rows: clean vertical stack on phones ---- */
+@media (max-width: 560px) {
+  .settings-danger__content {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+
+  /* THE fix: the text block has `flex: 1 1 360px`. In a column that 360px
+     becomes a HEIGHT (and flex-grow stretches it more), leaving a huge gap
+     between the text and the button. Size it to its content instead. */
+  .settings-danger__content > div {
+    flex: 0 0 auto;
+  }
+
+  .settings-danger__content .button {
+    width: 100%;
+    margin-left: 0;
   }
 }
