@@ -4,6 +4,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import AssigneeAvatars from '../components/replenishment/AssigneeAvatars'
+import ReplenishmentChatModal from '../components/replenishment/ReplenishmentChatModal'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
@@ -89,6 +90,7 @@ function ProductionPage({
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [creationModal, setCreationModal] = useState(null)
+  const [chatRequest, setChatRequest] = useState(null)
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [updatingRequestId, setUpdatingRequestId] = useState(null)
@@ -246,6 +248,9 @@ function ProductionPage({
     try {
       const createdRequest = await createReplenishment(workspaceId, {
         product_id: creationModal.product.id,
+        // "Quem confirma inicia": start the need and make the creator the
+        // responsible in one step (no manual "Iniciar/Assumir" afterwards).
+        assigned_to_user_id: user?.id,
         ...requestData,
       })
       queryClient.setQueryData(
@@ -258,9 +263,9 @@ function ProductionPage({
         ),
       )
       setCreationModal(null)
-      setRequestFilter('open')
+      setRequestFilter('in_progress')
       setSuccessMessage(
-        `Necessidade de ${requestTypeLabels[createdRequest.type].toLowerCase()} criada com sucesso.`,
+        `Reposição de ${requestTypeLabels[createdRequest.type].toLowerCase()} iniciada. Você é o responsável.`,
       )
       await invalidateReplenishment()
     } catch (createError) {
@@ -514,24 +519,33 @@ function ProductionPage({
                         <span>Responsáveis</span>
                         <AssigneeAvatars assignees={assignees} />
                       </div>
-                      {requestItem.status === 'open' ||
-                      requestItem.status === 'in_progress' ? (
-                        <Button
-                          disabled={isUpdating}
-                          onClick={() =>
-                            handleAssigneeUpdate(
-                              requestItem,
-                              !isCurrentUserAssigned,
-                            )
-                          }
-                          size="sm"
-                          variant="secondary"
+                      <div className="replenishment-request-card__assignees-actions">
+                        {(requestItem.status === 'open' ||
+                          requestItem.status === 'in_progress') &&
+                        !isCurrentUserAssigned ? (
+                          <Button
+                            disabled={isUpdating}
+                            onClick={() =>
+                              handleAssigneeUpdate(requestItem, true)
+                            }
+                            size="sm"
+                            variant="secondary"
+                          >
+                            Assumir tarefa
+                          </Button>
+                        ) : null}
+                        <button
+                          aria-label="Abrir chat da reposição"
+                          className="replenishment-chat-trigger"
+                          onClick={() => setChatRequest(requestItem)}
+                          title="Chat da reposição"
+                          type="button"
                         >
-                          {isCurrentUserAssigned
-                            ? 'Sair da tarefa'
-                            : 'Assumir tarefa'}
-                        </Button>
-                      ) : null}
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 9 9 0 0 1-4-.9L3 21l1.9-5.5a8.38 8.38 0 0 1-.9-4 8.5 8.5 0 0 1 17 0Z" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
 
                     {requestItem.notes ? (
@@ -637,6 +651,19 @@ function ProductionPage({
           onClose={closeCreationModal}
           onSubmit={handleCreateRequest}
           product={creationModal.product}
+        />
+      ) : null}
+
+      {chatRequest ? (
+        <ReplenishmentChatModal
+          canPost={(chatRequest.assignees ?? []).some(
+            (assignee) => assignee.id === user?.id,
+          )}
+          currentUserId={user?.id}
+          onClose={() => setChatRequest(null)}
+          productLabel={chatRequest.product_name ?? 'Reposição'}
+          requestId={chatRequest.id}
+          workspaceId={workspaceId}
         />
       ) : null}
     </div>

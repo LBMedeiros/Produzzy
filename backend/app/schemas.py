@@ -142,6 +142,7 @@ class UserResponse(BaseModel):
     email: str
     avatar_url: Optional[str] = None
     is_active: bool
+    has_password: bool = True
     recovery_email: Optional[str] = None
     recovery_email_verified: bool = False
     created_at: Optional[datetime] = None
@@ -229,6 +230,11 @@ class RecoveryEmailUpdate(BaseModel):
 
 class RecoveryEmailVerificationConfirm(BaseModel):
     token: str = Field(min_length=1, max_length=2000)
+
+
+class AccountDeletionRequest(BaseModel):
+    # Required for password accounts; Google-only accounts (no password) may omit.
+    current_password: Optional[str] = Field(default=None, max_length=128)
 
 
 class MessageResponse(BaseModel):
@@ -488,6 +494,27 @@ class ReplenishmentRequestResponse(BaseModel):
     created_by_name: Optional[str] = None
     assigned_to_name: Optional[str] = None
     assignees: list[ReplenishmentAssigneeResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReplenishmentMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def strip_body(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class ReplenishmentMessageResponse(BaseModel):
+    id: int
+    replenishment_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    user_avatar_url: Optional[str] = None
+    body: str
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

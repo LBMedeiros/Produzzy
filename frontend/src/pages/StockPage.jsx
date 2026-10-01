@@ -880,10 +880,13 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     try {
       await createReplenishment(workspaceId, {
         product_id: replenishmentProduct.id,
+        // "Quem confirma inicia": already starts the need and assigns the
+        // creator as responsible (see ProductionPage).
+        assigned_to_user_id: user?.id,
         ...requestData,
       })
       setReplenishmentProduct(null)
-      setSuccessMessage('Necessidade de reposição criada com sucesso.')
+      setSuccessMessage('Reposição iniciada. Você é o responsável.')
       await loadStockData()
     } catch (createError) {
       setReplenishmentError(getFriendlyError(createError))
@@ -2121,23 +2124,27 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
               <label>
                 Categoria
-                <select
+                <SelectMenu
+                  ariaLabel="Categoria"
                   disabled={!categories.length}
-                  onChange={(event) =>
-                    updateProductField('category', event.target.value)
+                  onChange={(value) => updateProductField('category', value)}
+                  options={
+                    categories.length
+                      ? categories.map((category) => ({
+                          label: category.name,
+                          value: category.name,
+                        }))
+                      : [
+                          {
+                            disabled: true,
+                            label: 'Crie uma categoria primeiro',
+                            value: '',
+                          },
+                        ]
                   }
-                  required
+                  portal
                   value={productForm.category}
-                >
-                  {categories.length ? null : (
-                    <option value="">Crie uma categoria primeiro</option>
-                  )}
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.name}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
 
               {productModal.mode === 'create' ? (
@@ -2231,19 +2238,20 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               ) : null}
               <label>
                 Tipo
-                <select
-                  disabled={Boolean(
-                    movementProduct.replenishmentRequestId,
-                  )}
-                  onChange={(event) =>
-                    updateMovementField('movementType', event.target.value)
+                <SelectMenu
+                  ariaLabel="Tipo de movimentação"
+                  disabled={Boolean(movementProduct.replenishmentRequestId)}
+                  onChange={(value) =>
+                    updateMovementField('movementType', value)
                   }
+                  options={[
+                    { label: 'Entrada', value: 'entrada' },
+                    { label: 'Saída', value: 'saida' },
+                    { label: 'Ajuste', value: 'ajuste' },
+                  ]}
+                  portal
                   value={movementForm.movementType}
-                >
-                  <option value="entrada">Entrada</option>
-                  <option value="saida">Saída</option>
-                  <option value="ajuste">Ajuste</option>
-                </select>
+                />
               </label>
               <label>
                 Quantidade

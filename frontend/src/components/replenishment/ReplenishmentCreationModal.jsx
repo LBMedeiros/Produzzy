@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getReplenishmentQuantity } from '../../lib/replenishment'
 import Button from '../ui/Button'
+import SelectMenu from '../ui/SelectMenu'
 
 function formatNumber(value) {
   return new Intl.NumberFormat('pt-BR').format(value ?? 0)
@@ -74,7 +75,7 @@ function ReplenishmentCreationModal({
         <div className="workspace-modal__header">
           <div>
             <span>Reposição</span>
-            <h2>Criar necessidade de reposição</h2>
+            <h2>Nova reposição</h2>
           </div>
           <button
             aria-label="Fechar modal"
@@ -114,14 +115,17 @@ function ReplenishmentCreationModal({
           <form className="stock-form" onSubmit={handleSubmit}>
             <label>
               Tipo de reposição
-              <select
+              <SelectMenu
+                ariaLabel="Tipo de reposição"
                 disabled={isSaving}
-                onChange={(event) => setReplenishmentType(event.target.value)}
+                onChange={setReplenishmentType}
+                options={[
+                  { label: 'Compra', value: 'purchase' },
+                  { label: 'Produção', value: 'production' },
+                ]}
+                portal
                 value={replenishmentType}
-              >
-                <option value="purchase">Compra</option>
-                <option value="production">Produção</option>
-              </select>
+              />
             </label>
             <label>
               Quantidade prevista

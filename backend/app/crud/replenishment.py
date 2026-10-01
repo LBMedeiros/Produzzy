@@ -114,13 +114,23 @@ def create_replenishment_request(
     if active_request is not None:
         raise Conflict(ACTIVE_REPLENISHMENT_EXISTS)
 
+    # "Quem confirma inicia": the UI always creates a need already assigned to
+    # whoever confirmed it, so such a request starts "in progress" instead of
+    # waiting as an open need. Created without a responsible (e.g. programmatic
+    # callers) it stays "open" as before.
+    initial_status = (
+        schemas.ReplenishmentStatus.in_progress.value
+        if request_data.assigned_to_user_id is not None
+        else schemas.ReplenishmentStatus.open.value
+    )
+
     replenishment_request = models.ReplenishmentRequest(
         workspace_id=workspace_id,
         product_id=product.id,
         created_by_user_id=current_user.id,
         assigned_to_user_id=request_data.assigned_to_user_id,
         type=request_data.type.value,
-        status=schemas.ReplenishmentStatus.open.value,
+        status=initial_status,
         quantity_needed=request_data.quantity_needed,
         notes=request_data.notes,
     )
@@ -165,6 +175,92 @@ def create_replenishment_request(
         db,
     )
 
+# Retention windows (see product decision): canceled needs and the chat of
+# finalized needs are purged so old records don't pile up forever.
+CANCELED_REPLENISHMENT_TTL = timedelta(days=7)
+FINALIZED_CHAT_TTL = timedelta(days=30)
+REPLENISHMENT_CLEANUP_INTERVAL = timedelta(hours=24)
+
+# Per-process throttle timestamp (no scheduler needed on the free tier): the
+# cleanup runs at most once a day, triggered lazily when the board is loaded.
+_last_replenishment_cleanup_at = None
+
+
+def cleanup_old_replenishment_data(db: Session, now=None):
+    """Purge data past its retention window: canceled needs after 7 days (with
+    their chat and assignees) and the chat of finalized needs after 30 days
+    (the need itself is kept as history)."""
+    now = now or aware_utc_now()
+    canceled_cutoff = now - CANCELED_REPLENISHMENT_TTL
+    finalized_chat_cutoff = now - FINALIZED_CHAT_TTL
+
+    canceled_ids = [
+        row[0]
+        for row in db.query(models.ReplenishmentRequest.id)
+        .filter(
+            models.ReplenishmentRequest.status
+            == schemas.ReplenishmentStatus.canceled.value,
+            models.ReplenishmentRequest.updated_at < canceled_cutoff,
+        )
+        .all()
+    ]
+
+    if canceled_ids:
+        db.query(models.ReplenishmentMessage).filter(
+            models.ReplenishmentMessage.replenishment_id.in_(canceled_ids)
+        ).delete(synchronize_session=False)
+        db.query(models.ReplenishmentAssignee).filter(
+            models.ReplenishmentAssignee.replenishment_id.in_(canceled_ids)
+        ).delete(synchronize_session=False)
+        db.query(models.ReplenishmentRequest).filter(
+            models.ReplenishmentRequest.id.in_(canceled_ids)
+        ).delete(synchronize_session=False)
+
+    finalized_ids = [
+        row[0]
+        for row in db.query(models.ReplenishmentRequest.id)
+        .filter(
+            models.ReplenishmentRequest.status.in_(
+                [
+                    schemas.ReplenishmentStatus.completed.value,
+                    schemas.ReplenishmentStatus.stocked.value,
+                ]
+            ),
+            models.ReplenishmentRequest.completed_at.isnot(None),
+            models.ReplenishmentRequest.completed_at < finalized_chat_cutoff,
+        )
+        .all()
+    ]
+
+    if finalized_ids:
+        db.query(models.ReplenishmentMessage).filter(
+            models.ReplenishmentMessage.replenishment_id.in_(finalized_ids)
+        ).delete(synchronize_session=False)
+
+    db.commit()
+
+
+def maybe_cleanup_replenishment_data(db: Session):
+    """Runs the retention cleanup at most once a day per process, and never lets
+    a cleanup failure break the board load that triggered it."""
+    global _last_replenishment_cleanup_at
+    now = aware_utc_now()
+
+    if (
+        _last_replenishment_cleanup_at is not None
+        and now - _last_replenishment_cleanup_at < REPLENISHMENT_CLEANUP_INTERVAL
+    ):
+        return
+
+    # Mark the attempt up front so concurrent board loads don't all run it.
+    _last_replenishment_cleanup_at = now
+
+    try:
+        cleanup_old_replenishment_data(db, now=now)
+    except Exception:
+        db.rollback()
+
+
 def list_replenishment_requests(
     workspace_id: int,
     db: Session,
@@ -172,6 +268,8 @@ def list_replenishment_requests(
     page: int = 1,
     limit: int = 20,
 ):
+    maybe_cleanup_replenishment_data(db)
+
     query = (
         db.query(models.ReplenishmentRequest)
         .options(
@@ -475,3 +573,58 @@ def remove_replenishment_user(
     db.commit()
 
     return get_replenishment_request_by_id(workspace_id, request_id, db)
+
+
+def list_replenishment_messages(
+    workspace_id: int,
+    request_id: int,
+    db: Session,
+):
+    # Raises NotFound if the request is not in this workspace.
+    get_replenishment_request_by_id(workspace_id, request_id, db)
+
+    return (
+        db.query(models.ReplenishmentMessage)
+        .options(joinedload(models.ReplenishmentMessage.user))
+        .filter(models.ReplenishmentMessage.replenishment_id == request_id)
+        .filter(models.ReplenishmentMessage.workspace_id == workspace_id)
+        .order_by(models.ReplenishmentMessage.created_at.asc())
+        .all()
+    )
+
+
+def create_replenishment_message(
+    workspace_id: int,
+    request_id: int,
+    body: str,
+    current_user: models.User,
+    db: Session,
+):
+    replenishment_request = get_replenishment_request_by_id(
+        workspace_id,
+        request_id,
+        db,
+    )
+
+    # Only people assigned to the need can comment; everyone can read.
+    is_assignee = any(
+        assignee.user_id == current_user.id
+        for assignee in replenishment_request.assignees
+    )
+
+    if not is_assignee:
+        raise PermissionDenied(
+            "Apenas responsáveis por esta reposição podem comentar."
+        )
+
+    message = models.ReplenishmentMessage(
+        replenishment_id=request_id,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        body=body,
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    return message

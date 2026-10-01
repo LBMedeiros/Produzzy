@@ -213,3 +213,51 @@ def update_replenishment(
         current_user=current_user,
         db=db,
     )
+
+
+@router.get(
+    "/{request_id}/messages",
+    response_model=list[schemas.ReplenishmentMessageResponse],
+)
+def get_replenishment_messages(
+    workspace_id: int,
+    request_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+
+    return crud.list_replenishment_messages(workspace_id, request_id, db)
+
+
+@router.post(
+    "/{request_id}/messages",
+    response_model=schemas.ReplenishmentMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_replenishment_message(
+    workspace_id: int,
+    request_id: int,
+    message_data: schemas.ReplenishmentMessageCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.READ_ROLES,
+    )
+
+    return crud.create_replenishment_message(
+        workspace_id=workspace_id,
+        request_id=request_id,
+        body=message_data.body,
+        current_user=current_user,
+        db=db,
+    )

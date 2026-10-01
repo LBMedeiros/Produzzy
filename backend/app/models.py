@@ -209,6 +209,11 @@ class User(Base):
         nullable=False,
     )
 
+    @property
+    def has_password(self) -> bool:
+        """True for password accounts; False for Google-only accounts."""
+        return bool(self.hashed_password)
+
     stock_movements = relationship(
         "StockMovement",
         back_populates="user",
@@ -772,6 +777,13 @@ class ReplenishmentRequest(Base):
         passive_deletes=True,
         order_by="ReplenishmentAssignee.created_at.asc()",
     )
+    messages = relationship(
+        "ReplenishmentMessage",
+        back_populates="replenishment",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ReplenishmentMessage.created_at.asc()",
+    )
 
     @property
     def product_name(self):
@@ -867,3 +879,51 @@ class ReplenishmentAssignee(Base):
         )
 
         return membership.role if membership else None
+
+
+class ReplenishmentMessage(Base):
+    """Handoff chat for a replenishment: assignees leave notes about where they
+    stopped / what is still needed, visible to everyone who can see the board."""
+
+    __tablename__ = "replenishment_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    replenishment_id = Column(
+        Integer,
+        ForeignKey("replenishment_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    body = Column(String(1000), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    replenishment = relationship(
+        "ReplenishmentRequest",
+        back_populates="messages",
+    )
+    user = relationship("User", foreign_keys=[user_id])
+
+    @property
+    def user_name(self):
+        return self.user.name if self.user else None
+
+    @property
+    def user_avatar_url(self):
+        return self.user.avatar_url if self.user else None

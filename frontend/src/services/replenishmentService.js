@@ -71,3 +71,16 @@ export function removeReplenishmentMember(workspaceId, requestId, userId) {
     { method: 'DELETE' },
   )
 }
+
+export function listReplenishmentMessages(workspaceId, requestId) {
+  return request(
+    `/workspaces/${workspaceId}/replenishments/${requestId}/messages`,
+  )
+}
+
+export function createReplenishmentMessage(workspaceId, requestId, body) {
+  return request(
+    `/workspaces/${workspaceId}/replenishments/${requestId}/messages`,
+    { body: { body }, method: 'POST' },
+  )
+}
