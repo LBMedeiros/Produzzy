@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ActionMenu from '../components/ui/ActionMenu'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import ModalPortal from '../components/ui/ModalPortal'
+import Pagination from '../components/ui/Pagination'
 import SelectMenu from '../components/ui/SelectMenu'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { getWorkspaceRoleValue } from '../lib/formatters'
+import { usePagination } from '../lib/pagination'
 import {
   createCategory,
   deleteCategory,
@@ -22,16 +24,16 @@ import {
   createStockMovement,
   deleteProduct,
   getProduct,
-  listLowStockProducts,
+  listAllLowStockProducts,
+  listAllProducts,
   listProductStockMovements,
-  listProducts,
   restoreProduct,
   updateProduct,
 } from '../services/productService'
 import { listWorkspaceStockMovements } from '../services/stockMovementService'
 import {
   createReplenishment,
-  listReplenishments,
+  listAllReplenishments,
 } from '../services/replenishmentService'
 
 const STOCK_FILTERS = [
@@ -74,6 +76,7 @@ const MOVEMENT_TONES = {
 
 const MOVEMENTS_PAGE_LIMIT = 20
 const WORKSPACE_MOVEMENTS_PAGE_LIMIT = 20
+const PRODUCTS_PAGE_SIZE = 20
 const PRODUCT_WRITE_ROLES = new Set(['owner', 'admin'])
 const STOCK_WRITE_ROLES = new Set(['owner', 'admin', 'employee'])
 
@@ -384,8 +387,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     try {
       const [categoryItems, readyItems] = await Promise.all([
         listCategories(workspaceId),
-        listReplenishments(workspaceId, {
-          limit: 100,
+        listAllReplenishments(workspaceId, {
           status: 'completed',
         }),
       ])
@@ -401,8 +403,8 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
       const productRequest =
         activeFilter === 'low-stock'
-          ? listLowStockProducts(workspaceId)
-          : listProducts(workspaceId, {
+          ? listAllLowStockProducts(workspaceId)
+          : listAllProducts(workspaceId, {
               status: activeFilter === 'deleted' ? 'deleted' : 'active',
             })
       const [productItems, recentMovementItems] = await Promise.all([
@@ -473,12 +475,10 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
     try {
       const [activeProducts, deletedProducts] = await Promise.all([
-        listProducts(workspaceId, {
-          limit: 100,
+        listAllProducts(workspaceId, {
           status: 'active',
         }),
-        listProducts(workspaceId, {
-          limit: 100,
+        listAllProducts(workspaceId, {
           status: 'deleted',
         }),
       ])
@@ -739,6 +739,15 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       return matchesSearch && matchesCategory
     })
   }, [categoryFilter, products, searchTerm])
+
+  const productListRef = useRef(null)
+  const productPagination = usePagination(
+    filteredProducts,
+    PRODUCTS_PAGE_SIZE,
+    `${workspaceId}-${activeFilter}-${categoryFilter}-${searchTerm.trim()}`,
+    productListRef,
+  )
+  const pageProducts = productPagination.pageItems
 
   const filteredWorkspaceMovements = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase()
@@ -1836,17 +1845,24 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             )}
           </>
         ) : filteredProducts.length ? (
-          <>
+          <div className="stock-product-list" ref={productListRef}>
             <div className="stock-product-table stock-product-table--full">
-              <DataTable columns={columns} rows={filteredProducts} />
+              <DataTable columns={columns} rows={pageProducts} />
             </div>
             <div className="stock-product-table stock-product-table--compact">
-              <DataTable columns={compactColumns} rows={filteredProducts} />
+              <DataTable columns={compactColumns} rows={pageProducts} />
             </div>
             <div className="stock-product-cards">
-              {filteredProducts.map((product) => renderProductCard(product))}
+              {pageProducts.map((product) => renderProductCard(product))}
             </div>
-          </>
+            <Pagination
+              itemLabel="produtos"
+              onPageChange={productPagination.setPage}
+              page={productPagination.page}
+              pageSize={productPagination.pageSize}
+              totalItems={productPagination.totalItems}
+            />
+          </div>
         ) : (
           <div className="stock-empty">
             <h2>Nenhum produto encontrado</h2>

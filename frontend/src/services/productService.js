@@ -1,4 +1,5 @@
 import { request } from '../lib/api'
+import { fetchAllPages } from '../lib/pagination'
 
 function withQuery(path, params = {}) {
   const query = new URLSearchParams()
@@ -28,6 +29,13 @@ export function listProducts(workspaceId, options = {}) {
   )
 }
 
+// Every matching product, across all API pages (the API caps a page at 100).
+export function listAllProducts(workspaceId, options = {}) {
+  return fetchAllPages((pageOptions) =>
+    listProducts(workspaceId, { ...options, ...pageOptions }),
+  )
+}
+
 export function listLowStockProducts(workspaceId, options = {}) {
   const { limit = 100, page = 1 } = options
 
@@ -36,6 +44,12 @@ export function listLowStockProducts(workspaceId, options = {}) {
       limit,
       page,
     }),
+  )
+}
+
+export function listAllLowStockProducts(workspaceId) {
+  return fetchAllPages((pageOptions) =>
+    listLowStockProducts(workspaceId, pageOptions),
   )
 }
 

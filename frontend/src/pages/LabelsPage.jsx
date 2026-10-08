@@ -166,7 +166,7 @@ import {
   getProductQrCode,
   getQrCodesSheet,
 } from '../services/labelService'
-import { listProducts } from '../services/productService'
+import { listAllProducts } from '../services/productService'
 
 function getFriendlyError(error) {
   if (error?.status === 400 || error?.status === 422) {
@@ -317,8 +317,7 @@ function LabelsPage({ onNavigate }) {
     setError('')
 
     try {
-      const activeProducts = await listProducts(numericWorkspaceId, {
-        limit: 100,
+      const activeProducts = await listAllProducts(numericWorkspaceId, {
         status: 'active',
       })
       setProducts(activeProducts)

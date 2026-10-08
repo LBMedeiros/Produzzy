@@ -307,7 +307,10 @@ def list_replenishment_requests(
                 models.ReplenishmentRequest.status == status_value
             )
 
-    query = query.order_by(models.ReplenishmentRequest.created_at.desc())
+    query = query.order_by(
+        models.ReplenishmentRequest.created_at.desc(),
+        models.ReplenishmentRequest.id.desc(),
+    )
 
     return paginate_query(query, page, limit).all()
 
