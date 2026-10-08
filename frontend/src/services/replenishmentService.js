@@ -1,4 +1,5 @@
 import { request } from '../lib/api'
+import { fetchAllPages } from '../lib/pagination'
 
 function withQuery(path, params = {}) {
   const query = new URLSearchParams()
@@ -23,6 +24,13 @@ export function listReplenishments(workspaceId, params = {}) {
       page,
       status,
     }),
+  )
+}
+
+// Every matching request, across all API pages (the API caps a page at 100).
+export function listAllReplenishments(workspaceId, params = {}) {
+  return fetchAllPages((pageOptions) =>
+    listReplenishments(workspaceId, { ...params, ...pageOptions }),
   )
 }
 

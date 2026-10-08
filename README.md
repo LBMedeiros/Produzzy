@@ -23,6 +23,7 @@ With Produzzy, teams can:
 - manage replenishment workflows;
 - track who performed each stock movement;
 - collaborate through shared workspaces with custom member titles;
+- hand off replenishment work through a per-request chat;
 - generate QR Codes, barcodes, and printable product labels;
 - scan a product's QR Code or barcode with the camera to jump straight to its stock movement.
 
@@ -32,16 +33,24 @@ With Produzzy, teams can:
 
 ### Authentication & Account
 
-- User registration and login with email and password
-- JWT-based authentication with protected routes and session handling
+- User registration and login with email and password (accounts are active right after sign-up, with automatic login)
+- Password policy enforced on both backend and frontend: 8+ characters with at least one number and one special character
+- JWT-based authentication with protected routes and session handling ("remember me")
 - Google OAuth (Sign in with Google)
 - Change email and change password from the account settings
 - Password recovery ("forgot password") via a single-use e-mail reset link
+- Optional backup recovery e-mail (confirmed by link) that also receives the reset link
 - Profile photo upload with an in-app crop/framing editor (stored on Cloudinary)
-- Login, registration and password-reset rate limiting
+- Login, registration, forgot-password and invite-acceptance rate limiting
 - Input validation
 
 > Google authentication requires OAuth credentials, and password recovery requires SMTP e-mail settings, both configured through environment variables. See [`DEPLOY.md`](./DEPLOY.md) for the full setup.
+
+### Privacy & LGPD
+
+- Public Terms of Use (`/termos`) and Privacy Policy (`/privacidade`) pages
+- "Download my data": a formatted PDF export of the account, workspaces, per-workspace summary, and activity history (generated client-side with jsPDF)
+- Account deletion from Settings (personal data is anonymized and the account deactivated)
 
 ### Workspaces & Collaboration
 
@@ -58,12 +67,15 @@ With Produzzy, teams can:
 - Organize products by category (with a trash/restore workflow for categories)
 - Search and filter inventory
 - Soft delete products with a trash and restore workflow
+- Product and category names are unique per workspace, case-insensitively (e.g. "Café" and "café" are the same name)
 - Product status derived from inventory levels
+- Global search across the workspace
 
 ### Inventory Control
 
 - Stock entries and withdrawals
 - Negative stock prevention
+- Quantities capped at 1,000,000,000 (clean validation error instead of a database overflow)
 - Minimum stock configuration
 - Low-stock and out-of-stock detection
 - Persistent stock movement history
@@ -92,7 +104,12 @@ Current workflow stages include:
 - Stocked
 - Cancelled
 
-The system calculates replenishment needs based on the product's current and minimum quantities, and assignees can be attached to a replenishment.
+The system calculates replenishment needs based on the product's current and minimum quantities.
+
+- Confirming a new replenishment assigns its creator and starts it directly as *In progress*
+- Additional assignees can be attached to a replenishment
+- **Handoff chat**: each request has its own message thread, so assignees can leave notes on where they stopped; everyone with board access can read it
+- **Retention**: cancelled requests are removed after 7 days, and the chat of finalized requests after 30 days (cleanup runs lazily, at most once a day)
 
 ### QR Codes, Barcodes & Labels
 
@@ -123,6 +140,7 @@ The system calculates replenishment needs based on the product's current and min
 - React Router (`react-router-dom`)
 - TanStack Query (React Query) for server-state
 - ZXing (`@zxing/browser`) for QR / barcode scanning
+- jsPDF for the personal-data PDF export
 - Plain CSS
 - Context API
 
@@ -136,14 +154,15 @@ The system calculates replenishment needs based on the product's current and min
 - python-jose (JWT) · passlib + bcrypt (password hashing)
 - Pillow, `qrcode`, and `python-barcode` (QR/barcode/label generation)
 - Cloudinary (avatar/media storage)
+- SMTP (provider-agnostic) for password-reset and recovery e-mails
 
 ### Database
 
-- PostgreSQL
+- PostgreSQL (hosted on Neon in production)
 
 ### Deployment
 
-- Render (managed PostgreSQL, API web service, and static frontend)
+- Render (API web service and static frontend) + Neon (managed PostgreSQL)
 
 ### Development Tools
 
@@ -171,10 +190,10 @@ The system calculates replenishment needs based on the product's current and min
       └───────┬─────────────────┬──────────────────┬─────┘
               │                 │                  │
          SQLAlchemy      Cloudinary (media)   Google OAuth
-              │                                (sign-in)
+              │          SMTP (e-mails)        (sign-in)
               ▼
       ┌─────────────────────┐
-      │     PostgreSQL      │
+      │ PostgreSQL (Neon)   │
       └─────────────────────┘
 ```
 
@@ -196,7 +215,8 @@ Produzzy/
 │   │   │                        #   categories, workspaces, invites, replenishment,
 │   │   │                        #   dashboard, search, audit)
 │   │   ├── services/            # security, google_auth, rate_limit,
-│   │   │                        #   qrcode, avatar_storage
+│   │   │                        #   qrcode, avatar_storage, email
+│   │   ├── assets/              # brand icon used on QR codes/labels
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── dependencies.py
@@ -211,11 +231,14 @@ Produzzy/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/          # ui, layout, replenishment, settings, labels
+│   │   ├── components/          # ui, layout, replenishment, settings, labels,
+│   │   │                        #   auth, legal
 │   │   ├── contexts/            # Auth, Workspace, Theme
-│   │   ├── pages/
+│   │   ├── pages/               # dashboard, stock, production, labels, settings,
+│   │   │                        #   auth flows, terms/privacy, invite acceptance
 │   │   ├── services/            # API layer per domain
-│   │   ├── lib/                 # api client, formatters, replenishment helpers
+│   │   ├── lib/                 # api client, formatters, replenishment helpers,
+│   │   │                        #   password policy, PDF data export
 │   │   └── styles/
 │   ├── .env.example
 │   └── package.json
@@ -353,8 +376,11 @@ Example (see [`backend/.env.example`](./backend/.env.example) for the full list)
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/produzzy
+# Dedicated test database (must differ from DATABASE_URL)
+# DATABASE_URL_TEST=postgresql://user:password@localhost:5432/produzzy_test
 
 PRODUZZY_ENV=development
+PRODUZZY_API_VERSION=
 PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173
 
 PRODUZZY_SECRET_KEY=replace-with-a-long-random-secret-key
@@ -367,6 +393,12 @@ PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS=5
 PRODUZZY_REGISTER_RATE_LIMIT_WINDOW_SECONDS=300
 PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS=5
 PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS=300
+PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS=5
+PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS=900
+
+# Lifetime of e-mailed links, in minutes
+PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30
+# PRODUZZY_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=
 
 # Optional — Sign in with Google
 PRODUZZY_GOOGLE_CLIENT_ID=
@@ -377,13 +409,14 @@ PRODUZZY_CLOUDINARY_CLOUD_NAME=
 PRODUZZY_CLOUDINARY_API_KEY=
 PRODUZZY_CLOUDINARY_API_SECRET=
 
-# Optional — SMTP e-mail, required for password recovery to send the reset link
+# Optional — SMTP e-mail, required for password recovery and recovery-e-mail confirmation
 PRODUZZY_SMTP_HOST=
 PRODUZZY_SMTP_PORT=587
 PRODUZZY_SMTP_USER=
 PRODUZZY_SMTP_PASSWORD=
 PRODUZZY_SMTP_FROM=
 PRODUZZY_SMTP_FROM_NAME=Produzzy
+PRODUZZY_SMTP_USE_TLS=true
 # Public frontend URL used in the reset link (defaults to first allowed origin)
 PRODUZZY_APP_BASE_URL=
 
@@ -462,13 +495,13 @@ python -m compileall app alembic tests
 
 ## Deployment
 
-Produzzy is deployed on **Render** using the [`render.yaml`](./render.yaml) Blueprint, which provisions a managed PostgreSQL database, the FastAPI API, and the static React frontend.
+Produzzy is deployed on **Render** using the [`render.yaml`](./render.yaml) Blueprint, which provisions the FastAPI API and the static React frontend. The database is an external managed PostgreSQL on **Neon** (pooled connection string with `sslmode=require` in `DATABASE_URL`); the Blueprint keeps a commented-out Render Postgres block as an alternative.
 
 - Migrations run automatically as a pre-deploy step (`alembic upgrade head`).
 - The API exposes `/health` and `/ready` probes.
 - The frontend is served as an SPA with a `/* → /index.html` rewrite.
 
-The full operational checklist (required environment variables, Google OAuth, Cloudinary, and post-deploy smoke tests) lives in [`DEPLOY.md`](./DEPLOY.md).
+The full operational checklist (required environment variables, Neon, Google OAuth, Cloudinary, SMTP, and post-deploy smoke tests) lives in [`DEPLOY.md`](./DEPLOY.md).
 
 ---
 
@@ -499,8 +532,7 @@ The core SaaS architecture and inventory workflow are implemented, and the app i
 - permission and workspace isolation testing;
 - concurrent inventory operation testing;
 - expanded automated test coverage;
-- production monitoring and backups;
-- account recovery flows.
+- production monitoring and backups.
 
 ---
 
@@ -518,6 +550,7 @@ The core SaaS architecture and inventory workflow are implemented, and the app i
 - [x] Negative stock validation
 - [x] Low-stock monitoring
 - [x] Replenishment workflow
+- [x] Replenishment handoff chat and data retention
 - [x] Activity & stock movement audit trail
 - [x] Product soft delete
 - [x] QR Code, barcode, and label generation
@@ -525,11 +558,13 @@ The core SaaS architecture and inventory workflow are implemented, and the app i
 - [x] Profile photo upload with crop editor
 - [x] Light and dark themes
 - [x] Mobile-responsive interface
-- [x] Production deployment (Render)
+- [x] Password recovery and backup recovery e-mail
+- [x] Password strength policy
+- [x] Terms of Use, Privacy Policy, and LGPD data rights (PDF export, account deletion)
+- [x] Production deployment (Render + Neon)
 - [ ] Complete end-to-end QA
 - [ ] Expanded automated test coverage
 - [ ] Production monitoring and backups
-- [ ] Password recovery and email verification
 
 ---
 

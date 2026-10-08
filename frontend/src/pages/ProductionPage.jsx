@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import Pagination from '../components/ui/Pagination'
 import AssigneeAvatars from '../components/replenishment/AssigneeAvatars'
 import ReplenishmentChatModal from '../components/replenishment/ReplenishmentChatModal'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
@@ -12,11 +13,12 @@ import {
   getReplenishmentQuantity,
   needsReplenishment,
 } from '../lib/replenishment'
-import { listProducts } from '../services/productService'
+import { usePagination } from '../lib/pagination'
+import { listAllProducts } from '../services/productService'
 import {
   assignReplenishmentToMe,
   createReplenishment,
-  listReplenishments,
+  listAllReplenishments,
   unassignReplenishmentFromMe,
   updateReplenishment,
 } from '../services/replenishmentService'
@@ -44,6 +46,7 @@ const requestFilters = [
 
 const activeRequestStatuses = new Set(['open', 'in_progress', 'completed'])
 const REPLENISHMENT_REFRESH_INTERVAL_MS = 30000
+const REPLENISHMENT_PAGE_SIZE = 12
 const PRODUCTS_QUERY_KEY = (workspaceId) => ['products', workspaceId, 'active']
 const REPLENISHMENTS_QUERY_KEY = (workspaceId) => [
   'replenishments',
@@ -95,19 +98,20 @@ function ProductionPage({
   const [isSaving, setIsSaving] = useState(false)
   const [updatingRequestId, setUpdatingRequestId] = useState(null)
   const [requestFilter, setRequestFilter] = useState('open')
+  const [focusRequestId, setFocusRequestId] = useState(null)
 
   // refetchInterval + refetchOnWindowFocus (default on) replace the manual
   // 10s poll + visibilitychange/focus listeners this page used to hand-roll;
   // React Query also dedupes overlapping fetches on its own.
   const productsQuery = useQuery({
     queryKey: PRODUCTS_QUERY_KEY(workspaceId),
-    queryFn: () => listProducts(workspaceId, { limit: 100, status: 'active' }),
+    queryFn: () => listAllProducts(workspaceId, { status: 'active' }),
     enabled: Boolean(workspaceId),
     refetchInterval: REPLENISHMENT_REFRESH_INTERVAL_MS,
   })
   const requestsQuery = useQuery({
     queryKey: REPLENISHMENTS_QUERY_KEY(workspaceId),
-    queryFn: () => listReplenishments(workspaceId, { limit: 100, status: 'all' }),
+    queryFn: () => listAllReplenishments(workspaceId, { status: 'all' }),
     enabled: Boolean(workspaceId),
     refetchInterval: REPLENISHMENT_REFRESH_INTERVAL_MS,
   })
@@ -143,30 +147,13 @@ function ProductionPage({
       return undefined
     }
 
-    let scrollTimeoutId
     const timeoutId = window.setTimeout(() => {
       setRequestFilter(navigationIntent.status ?? 'open')
-
-      scrollTimeoutId = window.setTimeout(() => {
-        const target = document.getElementById(
-          `replenishment-request-${navigationIntent.requestId}`,
-        )
-        const prefersReducedMotion = window.matchMedia(
-          '(prefers-reduced-motion: reduce)',
-        ).matches
-
-        target?.scrollIntoView({
-          block: 'center',
-          behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        })
-        onNavigationIntentHandled?.()
-      }, 0)
+      setFocusRequestId(navigationIntent.requestId ?? null)
+      onNavigationIntentHandled?.()
     }, 0)
 
-    return () => {
-      window.clearTimeout(timeoutId)
-      window.clearTimeout(scrollTimeoutId)
-    }
+    return () => window.clearTimeout(timeoutId)
   }, [navigationIntent, onNavigationIntentHandled, workspaceId])
 
   const displayRequests = useMemo(() => {
@@ -222,9 +209,68 @@ function ProductionPage({
     [displayRequests, requestFilter],
   )
 
-  const visibleItemCount =
-    filteredRequests.length +
-    (requestFilter === 'open' ? lowStockProductsWithoutActiveRequest.length : 0)
+  // Suggestions (low-stock products with no request yet) come first, then the
+  // requests, in one list so the board can be paginated as a whole.
+  const boardItems = useMemo(
+    () => [
+      ...(requestFilter === 'open'
+        ? lowStockProductsWithoutActiveRequest.map((product) => ({ product }))
+        : []),
+      ...filteredRequests.map((requestItem) => ({ requestItem })),
+    ],
+    [filteredRequests, lowStockProductsWithoutActiveRequest, requestFilter],
+  )
+  const boardListRef = useRef(null)
+  const boardPagination = usePagination(
+    boardItems,
+    REPLENISHMENT_PAGE_SIZE,
+    `${workspaceId}-${requestFilter}`,
+    boardListRef,
+  )
+  const { goToItem: goToBoardItem } = boardPagination
+  const pageSuggestions = boardPagination.pageItems
+    .filter((item) => item.product)
+    .map((item) => item.product)
+  const pageRequests = boardPagination.pageItems
+    .filter((item) => item.requestItem)
+    .map((item) => item.requestItem)
+  const visibleItemCount = boardItems.length
+
+  // Opening a specific request (e.g. from the dashboard) jumps to the page
+  // that holds it, then scrolls it into view.
+  useEffect(() => {
+    if (
+      !focusRequestId ||
+      !boardItems.some((item) => item.requestItem?.id === focusRequestId)
+    ) {
+      return undefined
+    }
+
+    let scrollTimeoutId
+    const timeoutId = window.setTimeout(() => {
+      goToBoardItem((item) => item.requestItem?.id === focusRequestId)
+
+      scrollTimeoutId = window.setTimeout(() => {
+        const target = document.getElementById(
+          `replenishment-request-${focusRequestId}`,
+        )
+        const prefersReducedMotion = window.matchMedia(
+          '(prefers-reduced-motion: reduce)',
+        ).matches
+
+        target?.scrollIntoView({
+          block: 'center',
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+        })
+        setFocusRequestId(null)
+      }, 0)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.clearTimeout(scrollTimeoutId)
+    }
+  }, [boardItems, focusRequestId, goToBoardItem])
 
   function openCreationModal(product) {
     setCreationModal({ product })
@@ -403,7 +449,10 @@ function ProductionPage({
               <button
                 className={requestFilter === filter.value ? 'is-active' : ''}
                 key={filter.value}
-                onClick={() => setRequestFilter(filter.value)}
+                onClick={() => {
+                  setFocusRequestId(null)
+                  setRequestFilter(filter.value)
+                }}
                 type="button"
               >
                 <span>{filter.label}</span>
@@ -412,11 +461,16 @@ function ProductionPage({
             ))}
           </div>
 
-          <div className="replenishment-status-content" key={requestFilter}>
+          <div
+            className="replenishment-status-content"
+            key={requestFilter}
+            ref={boardListRef}
+          >
             {visibleItemCount ? (
+              <>
               <div className="replenishment-request-grid">
                 {requestFilter === 'open'
-                  ? lowStockProductsWithoutActiveRequest.map((product) => (
+                  ? pageSuggestions.map((product) => (
                       <article
                         className="replenishment-request-card replenishment-request-card--suggestion"
                         key={`product-${product.id}`}
@@ -458,7 +512,7 @@ function ProductionPage({
                       </article>
                     ))
                   : null}
-                {filteredRequests.map((requestItem) => {
+                {pageRequests.map((requestItem) => {
                   const status =
                     requestStatus[requestItem.status] ?? requestStatus.open
                   const assignees = requestItem.assignees ?? []
@@ -632,6 +686,14 @@ function ProductionPage({
                   )
                 })}
               </div>
+              <Pagination
+                itemLabel="necessidades"
+                onPageChange={boardPagination.setPage}
+                page={boardPagination.page}
+                pageSize={boardPagination.pageSize}
+                totalItems={boardPagination.totalItems}
+              />
+              </>
             ) : (
               <div className="stock-empty">
                 <h2>Nenhuma necessidade neste status.</h2>

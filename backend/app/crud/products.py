@@ -153,7 +153,9 @@ def list_products(
     if search:
         query = query.filter(models.Product.name.ilike(f"%{search}%"))
 
-    query = query.order_by(models.Product.name.asc())
+    # `id` breaks ties (deleted products can share a name) so page boundaries
+    # stay stable when the client walks every page.
+    query = query.order_by(models.Product.name.asc(), models.Product.id.asc())
 
     return paginate_query(query, page, limit).all()
 
@@ -184,7 +186,7 @@ def list_low_stock_products(
         .filter(models.Product.is_active.is_(True))
         .filter(models.Product.quantity > 0)
         .filter(models.Product.quantity < models.Product.minimum_quantity)
-        .order_by(models.Product.quantity.asc())
+        .order_by(models.Product.quantity.asc(), models.Product.id.asc())
     )
 
     return paginate_query(query, page, limit).all()
