@@ -7,6 +7,7 @@ function SelectMenu({
   disabled = false,
   onChange,
   options,
+  placeholder,
   portal = false,
   value,
 }) {
@@ -19,7 +20,10 @@ function SelectMenu({
   const selectedIndex = options.findIndex(
     (option) => String(option.value) === String(value),
   )
-  const selectedOption = options[selectedIndex] ?? options[0]
+  // With a placeholder (e.g. an action menu), nothing selected shows the
+  // placeholder instead of falling back to the first option.
+  const selectedOption =
+    options[selectedIndex] ?? (placeholder ? null : options[0])
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -182,7 +186,7 @@ function SelectMenu({
         type="button"
         onClick={() => (isOpen ? setIsOpen(false) : openMenu())}
       >
-        <span>{selectedOption?.label ?? ''}</span>
+        <span>{selectedOption?.label ?? placeholder ?? ''}</span>
         <span className="select-chevron" aria-hidden="true" />
       </button>
 
