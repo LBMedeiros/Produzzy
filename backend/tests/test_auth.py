@@ -66,7 +66,7 @@ def assert_token_payload_has_safe_user(data, expected_email, expected_name):
 
 def test_login_returns_token_user_and_working_token(client):
     email = unique_email("login-contract")
-    password = "strong-password"
+    password = "Strong-password1!"
     register_response = client.post(
         "/auth/register",
         json={
@@ -99,7 +99,7 @@ def test_login_returns_token_user_and_working_token(client):
 
 def test_oauth_token_login_returns_token_user_and_working_token(client):
     email = unique_email("token-contract")
-    password = "strong-password"
+    password = "Strong-password1!"
     register_response = client.post(
         "/auth/register",
         json={
@@ -137,7 +137,7 @@ def test_auth_token_logs_internal_timing_without_sensitive_data(
     monkeypatch,
 ):
     email = unique_email("token-timing")
-    password = "strong-password"
+    password = "Strong-password1!"
     logged_messages = []
 
     def capture_log(message, *args):
@@ -207,7 +207,7 @@ def test_register_normalizes_email_and_name_before_login(client):
         json={
             "name": "  Normalized User  ",
             "email": raw_email,
-            "password": "strong-password",
+            "password": "Strong-password1!",
         },
     )
 
@@ -219,7 +219,7 @@ def test_register_normalizes_email_and_name_before_login(client):
         "/auth/login",
         json={
             "email": f"  {normalized_email.upper()}  ",
-            "password": "strong-password",
+            "password": "Strong-password1!",
         },
     )
 
@@ -232,7 +232,7 @@ def test_register_rejects_blank_name_after_trim(client):
         json={
             "name": "   ",
             "email": unique_email("blank-name"),
-            "password": "strong-password",
+            "password": "Strong-password1!",
         },
     )
 
@@ -723,7 +723,7 @@ def test_google_login_creates_user_without_local_password(client, monkeypatch):
         "/auth/login",
         json={
             "email": me_response.json()["email"],
-            "password": "strong-password",
+            "password": "Strong-password1!",
         },
     )
 

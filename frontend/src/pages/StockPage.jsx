@@ -1702,8 +1702,8 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             ariaLabel="Ações de categorias"
             className="category-action-select"
             onChange={handleCategoryAction}
+            placeholder="Categorias"
             options={[
-              { disabled: true, label: 'Categorias', value: '' },
               { label: 'Nova categoria', value: 'create' },
               { label: 'Editar categorias', value: 'edit' },
             ]}

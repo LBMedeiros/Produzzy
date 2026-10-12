@@ -1906,6 +1906,14 @@ a {
   font-weight: 700;
 }
 
+/* Action menu: grow to fit its longest option and align to the button's
+   right edge, instead of squeezing options into the button's width. */
+.category-action-select .select-menu__menu {
+  left: auto;
+  width: max-content;
+  min-width: 100%;
+}
+
 .select-menu {
   position: relative;
   min-width: 0;

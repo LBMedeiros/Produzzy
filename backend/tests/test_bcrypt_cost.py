@@ -23,7 +23,7 @@ def test_new_user_hash_uses_cost_10(client):
     email = "cost10@example.com"
     resp = client.post(
         "/auth/register",
-        json={"name": "Cost Ten", "email": email, "password": "strong-password"},
+        json={"name": "Cost Ten", "email": email, "password": "Strong-password1!"},
     )
     assert resp.status_code == 201, resp.text
     assert _stored_hash(email).startswith("$2b$10$")
@@ -31,7 +31,7 @@ def test_new_user_hash_uses_cost_10(client):
 
 def test_legacy_cost_12_hash_still_logs_in_and_is_upgraded(client):
     email = "legacy@example.com"
-    password = "strong-password"
+    password = "Strong-password1!"
 
     client.post(
         "/auth/register",
