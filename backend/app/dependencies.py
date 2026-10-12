@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
 from app.database import SessionLocal
-from app.services.security_service import decode_access_token
+from app.services.security_service import decode_access_token, session_fingerprint
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
@@ -34,7 +34,9 @@ def get_current_user(
         payload = decode_access_token(token)
         email: str | None = payload.get("sub")
 
-        if email is None:
+        # Reset/verification links are signed with the same key but are not
+        # sessions; they carry a "type" claim.
+        if email is None or payload.get("type"):
             raise credentials_exception
 
         token_data = schemas.TokenData(email=email)
@@ -49,4 +51,20 @@ def get_current_user(
     if not user.is_active:
         raise credentials_exception
 
+    # A password change ends every session issued before it.
+    fingerprint = payload.get("fp")
+
+    if fingerprint is not None and fingerprint != session_fingerprint(
+        user.hashed_password
+    ):
+        raise credentials_exception
+
     return user
+
+
+def get_token_payload(token: str = Depends(oauth2_scheme)) -> dict:
+    """Claims of the current (already validated) session token."""
+    try:
+        return decode_access_token(token)
+    except JWTError:
+        return {}

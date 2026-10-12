@@ -127,6 +127,11 @@ PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES = get_int_env(
     "PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES",
     60,
 )
+# Lifetime of the session when the user ticks "Lembrar de mim".
+PRODUZZY_REMEMBER_ME_EXPIRE_DAYS = get_int_env(
+    "PRODUZZY_REMEMBER_ME_EXPIRE_DAYS",
+    30,
+)
 PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS = get_int_env(
     "PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS",
     5,

@@ -142,6 +142,7 @@ class UserLogin(BaseModel):
         pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
     )
     password: str = Field(min_length=1, max_length=128)
+    remember_me: bool = False
 
     @field_validator("email", mode="before")
     @classmethod
@@ -152,6 +153,7 @@ class UserLogin(BaseModel):
 class GoogleAuthCode(BaseModel):
     code: str = Field(min_length=1)
     redirect_uri: str = Field(min_length=1, max_length=500)
+    remember_me: bool = False
 
 
 class UserResponse(BaseModel):
@@ -429,6 +431,16 @@ class ProductUpdate(BaseModel):
         return normalize_present_required_name(value)
 
 
+class ProductLastMovement(BaseModel):
+    movement_type: str
+    quantity: int
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProductResponse(BaseModel):
     id: int
     workspace_id: Optional[int] = None
@@ -443,6 +455,8 @@ class ProductResponse(BaseModel):
     deleted_by_category_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # Filled on list endpoints only (see crud.attach_last_movements).
+    last_movement: Optional[ProductLastMovement] = None
 
     model_config = ConfigDict(from_attributes=True)
 

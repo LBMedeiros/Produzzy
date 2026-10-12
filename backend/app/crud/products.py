@@ -157,7 +157,36 @@ def list_products(
     # stay stable when the client walks every page.
     query = query.order_by(models.Product.name.asc(), models.Product.id.asc())
 
-    return paginate_query(query, page, limit).all()
+    return attach_last_movements(paginate_query(query, page, limit).all(), db)
+
+def attach_last_movements(products: list, db: Session):
+    """Set `product.last_movement` to each product's most recent stock
+    movement, in one query for the whole page (PostgreSQL DISTINCT ON)."""
+    product_ids = [product.id for product in products]
+
+    if not product_ids:
+        return products
+
+    latest_movements = (
+        db.query(models.StockMovement)
+        .options(joinedload(models.StockMovement.user))
+        .filter(models.StockMovement.product_id.in_(product_ids))
+        .distinct(models.StockMovement.product_id)
+        .order_by(
+            models.StockMovement.product_id,
+            models.StockMovement.created_at.desc(),
+            models.StockMovement.id.desc(),
+        )
+        .all()
+    )
+    movements_by_product_id = {
+        movement.product_id: movement for movement in latest_movements
+    }
+
+    for product in products:
+        product.last_movement = movements_by_product_id.get(product.id)
+
+    return products
 
 # Upper bound on how many products a single label/QR sheet renders. Each item
 # is a PIL render, so this caps CPU/memory per request; it is far above a
@@ -189,7 +218,7 @@ def list_low_stock_products(
         .order_by(models.Product.quantity.asc(), models.Product.id.asc())
     )
 
-    return paginate_query(query, page, limit).all()
+    return attach_last_movements(paginate_query(query, page, limit).all(), db)
 
 def update_product(
     product_id: int,

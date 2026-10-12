@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
@@ -8,6 +9,7 @@ from app.config import (
     PRODUZZY_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,
     PRODUZZY_JWT_ALGORITHM,
     PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+    PRODUZZY_REMEMBER_ME_EXPIRE_DAYS,
     PRODUZZY_SECRET_KEY,
 )
 
@@ -55,6 +57,33 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode.update({"exp": expire})
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def session_fingerprint(hashed_password: str | None) -> str:
+    """Short digest of the current password hash, embedded in session tokens
+    so every session ends when the password changes."""
+    return hashlib.sha256((hashed_password or "").encode("utf-8")).hexdigest()[:16]
+
+
+def create_session_token(
+    subject: str,
+    hashed_password: str | None,
+    remember_me: bool = False,
+):
+    expires_delta = (
+        timedelta(days=PRODUZZY_REMEMBER_ME_EXPIRE_DAYS)
+        if remember_me
+        else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+
+    return create_access_token(
+        data={
+            "sub": subject,
+            "fp": session_fingerprint(hashed_password),
+            "rm": bool(remember_me),
+        },
+        expires_delta=expires_delta,
+    )
 
 
 def decode_access_token(token: str):

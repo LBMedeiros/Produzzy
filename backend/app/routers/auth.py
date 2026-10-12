@@ -1,11 +1,11 @@
 import logging
-from datetime import timedelta
 from time import perf_counter
 
 from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     Request,
     UploadFile,
@@ -26,7 +26,7 @@ from app.config import (
     PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS,
     PRODUZZY_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
 )
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user, get_db, get_token_payload
 from app.services.rate_limit_service import (
     build_rate_limit_key,
     ensure_rate_limit_allowed,
@@ -39,9 +39,8 @@ from app.services import (
     google_auth_service,
 )
 from app.services.security_service import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    create_access_token,
     create_email_verification_token,
+    create_session_token,
 )
 
 
@@ -60,13 +59,14 @@ def elapsed_ms(started_at: float):
 def create_token_for_user(
     user: models.User,
     auth_timings: dict[str, int] | None = None,
+    remember_me: bool = False,
 ):
     token_started_at = perf_counter()
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    access_token = create_access_token(
-        data={"sub": user.email},
-        expires_delta=access_token_expires,
+    access_token = create_session_token(
+        user.email,
+        user.hashed_password,
+        remember_me=remember_me,
     )
 
     if auth_timings is not None:
@@ -115,7 +115,11 @@ def authenticate_password_login(
             PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
             lambda: crud.authenticate_user(login_data, db, auth_timings),
         )
-        response = create_token_for_user(user, auth_timings)
+        response = create_token_for_user(
+            user,
+            auth_timings,
+            remember_me=login_data.remember_me,
+        )
     except (HTTPException, DomainError):
         auth_timings["total_auth_ms"] = elapsed_ms(total_started_at)
         log_password_login_timing("failure", key, auth_timings)
@@ -211,11 +215,13 @@ def login_user(
 def login_for_swagger(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
+    remember_me: bool = Form(default=False),
     db: Session = Depends(get_db),
 ):
     login_data = schemas.UserLogin(
         email=form_data.username,
         password=form_data.password,
+        remember_me=remember_me,
     )
 
     return authenticate_password_login(login_data, request, db)
@@ -257,7 +263,7 @@ def login_with_google(
         )
         raise
 
-    return create_token_for_user(user)
+    return create_token_for_user(user, remember_me=google_data.remember_me)
 
 
 GENERIC_PASSWORD_RESET_MESSAGE = (
@@ -446,21 +452,31 @@ def update_current_user_profile(
 def change_current_user_email(
     email_data: schemas.UserEmailChange,
     current_user: models.User = Depends(get_current_user),
+    token_payload: dict = Depends(get_token_payload),
     db: Session = Depends(get_db),
 ):
     updated_user = crud.change_current_user_email(current_user, email_data, db)
 
-    return create_token_for_user(updated_user)
+    return create_token_for_user(
+        updated_user,
+        remember_me=bool(token_payload.get("rm")),
+    )
 
 
-@router.post("/me/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/me/change-password", response_model=schemas.Token)
 def change_current_user_password(
     password_data: schemas.UserPasswordChange,
     current_user: models.User = Depends(get_current_user),
+    token_payload: dict = Depends(get_token_payload),
     db: Session = Depends(get_db),
 ):
     crud.change_current_user_password(current_user, password_data, db)
-    return None
+
+    # The new password ends every other session; hand this one a fresh token.
+    return create_token_for_user(
+        current_user,
+        remember_me=bool(token_payload.get("rm")),
+    )
 
 
 @router.post("/me/recovery-email", response_model=schemas.UserResponse)
