@@ -62,7 +62,7 @@ function getFriendlyError(error) {
     return 'Não foi possível conectar ao servidor.'
   }
 
-  return error?.message ?? 'Não foi possível carregar as necessidades de reposição.'
+  return error?.message ?? 'Não foi possível carregar as reposições.'
 }
 
 function formatNumber(value) {
@@ -426,7 +426,7 @@ function ProductionPage({
       ) : null}
 
       {isLoading ? (
-        <div className="stock-loading">Carregando necessidades de reposição...</div>
+        <div className="stock-loading">Carregando reposições...</div>
       ) : (
         <Card
           action={
