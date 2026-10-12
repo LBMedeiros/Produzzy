@@ -92,7 +92,7 @@ def client(migrated_test_database):
 @pytest.fixture()
 def user_factory(client):
     def create_user(email: str | None = None, name: str = "Test User"):
-        password = "strong-password"
+        password = "Strong-password1!"
         email_value = email or unique_email()
 
         register_response = client.post(
