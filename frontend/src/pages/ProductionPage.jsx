@@ -45,7 +45,6 @@ const requestFilters = [
 ]
 
 const activeRequestStatuses = new Set(['open', 'in_progress', 'completed'])
-const REPLENISHMENT_REFRESH_INTERVAL_MS = 30000
 const REPLENISHMENT_PAGE_SIZE = 12
 const PRODUCTS_QUERY_KEY = (workspaceId) => ['products', workspaceId, 'active']
 const REPLENISHMENTS_QUERY_KEY = (workspaceId) => [
@@ -100,20 +99,18 @@ function ProductionPage({
   const [requestFilter, setRequestFilter] = useState('open')
   const [focusRequestId, setFocusRequestId] = useState(null)
 
-  // refetchInterval + refetchOnWindowFocus (default on) replace the manual
-  // 10s poll + visibilitychange/focus listeners this page used to hand-roll;
-  // React Query also dedupes overlapping fetches on its own.
+  // No timed polling: the board refreshes when the user comes back to the
+  // tab (refetchOnWindowFocus, once the 30s staleTime passes), after each
+  // action here, and on "Atualizar dados".
   const productsQuery = useQuery({
     queryKey: PRODUCTS_QUERY_KEY(workspaceId),
     queryFn: () => listAllProducts(workspaceId, { status: 'active' }),
     enabled: Boolean(workspaceId),
-    refetchInterval: REPLENISHMENT_REFRESH_INTERVAL_MS,
   })
   const requestsQuery = useQuery({
     queryKey: REPLENISHMENTS_QUERY_KEY(workspaceId),
     queryFn: () => listAllReplenishments(workspaceId, { status: 'all' }),
     enabled: Boolean(workspaceId),
-    refetchInterval: REPLENISHMENT_REFRESH_INTERVAL_MS,
   })
 
   const products = useMemo(

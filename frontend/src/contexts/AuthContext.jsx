@@ -253,7 +253,10 @@ export function AuthProvider({ children }) {
   }, [])
 
   const changePassword = useCallback(async (data) => {
-    return changePasswordRequest(data)
+    const result = await changePasswordRequest(data)
+    setToken(result.access_token)
+
+    return result
   }, [])
 
   const setRecoveryEmail = useCallback(async (recoveryEmail, currentPassword) => {

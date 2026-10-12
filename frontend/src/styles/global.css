@@ -4821,7 +4821,8 @@ a {
 }
 
 .replenishment-request-card__header h3 {
-  overflow-wrap: anywhere;
+  /* Break inside a word only when the word alone doesn't fit the line. */
+  overflow-wrap: break-word;
   margin: 3px 0 0;
   color: var(--text);
   font-size: 17px;
@@ -6622,22 +6623,11 @@ a {
     flex-direction: column;
   }
 
-  .replenishment-request-card__header--open {
-    align-items: center;
-    flex-direction: row;
-  }
-
   .replenishment-request-card__header > .badge,
   .replenishment-request-card__badges {
     max-width: 100%;
     align-self: flex-start;
     justify-content: flex-start;
-  }
-
-  .replenishment-request-card__header--open > .badge,
-  .replenishment-request-card__header--open .replenishment-request-card__badges--open {
-    align-self: center;
-    justify-content: flex-end;
   }
 
   .replenishment-request-card__details {

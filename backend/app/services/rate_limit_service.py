@@ -14,9 +14,24 @@ _attempts_by_scope_and_key: dict[tuple[str, str], list[float]] = {}
 _lock = Lock()
 
 
+def get_client_ip(request: Request) -> str:
+    """Best-effort IP of the real client.
+
+    Behind the hosting proxy every request arrives from the proxy's address, so
+    keying on it would share one bucket among all users. The proxy appends the
+    address it saw to X-Forwarded-For; only that last entry is trustworthy
+    (anything before it can be sent by the client)."""
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    forwarded_hosts = [host.strip() for host in forwarded_for.split(",") if host.strip()]
+
+    if forwarded_hosts:
+        return forwarded_hosts[-1]
+
+    return request.client.host if request.client else "unknown"
+
+
 def build_rate_limit_key(request: Request, identifier: str):
-    client_host = request.client.host if request.client else "unknown"
-    material = f"{client_host}:{identifier.strip().lower()}"
+    material = f"{get_client_ip(request)}:{identifier.strip().lower()}"
 
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 

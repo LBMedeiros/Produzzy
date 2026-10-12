@@ -185,16 +185,6 @@ function formatMovementSummary(movement) {
   )}`
 }
 
-function indexLatestMovementsByProduct(movements) {
-  return movements.reduce((latestMovements, movement) => {
-    if (!latestMovements[movement.product_id]) {
-      latestMovements[movement.product_id] = movement
-    }
-
-    return latestMovements
-  }, {})
-}
-
 function formatLinkedProducts(count) {
   if (count === 0) {
     return 'Nenhum produto vinculado'
@@ -272,7 +262,6 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [actionProductId, setActionProductId] = useState(null)
-  const [latestMovementsByProductId, setLatestMovementsByProductId] = useState({})
   const [readyReplenishments, setReadyReplenishments] = useState([])
   const [replenishmentProduct, setReplenishmentProduct] = useState(null)
   const [replenishmentError, setReplenishmentError] = useState('')
@@ -385,35 +374,32 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     setError('')
 
     try {
-      const [categoryItems, readyItems] = await Promise.all([
+      // Fetched in parallel. Each product already carries its latest movement
+      // (`last_movement`), so no separate movements request is needed.
+      const productRequest =
+        activeFilter === 'history'
+          ? Promise.resolve([])
+          : activeFilter === 'low-stock'
+            ? listAllLowStockProducts(workspaceId)
+            : listAllProducts(workspaceId, {
+                status: activeFilter === 'deleted' ? 'deleted' : 'active',
+              })
+      const [categoryItems, readyItems, productItems] = await Promise.all([
         listCategories(workspaceId),
         listAllReplenishments(workspaceId, {
           status: 'completed',
         }),
+        productRequest,
       ])
       setCategories(categoryItems)
       setReadyReplenishments(uniqueReplenishmentsByProduct(readyItems))
 
       if (activeFilter === 'history') {
         setProducts([])
-        setLatestMovementsByProductId({})
         await loadWorkspaceHistory({ page: 1 })
         return
       }
 
-      const productRequest =
-        activeFilter === 'low-stock'
-          ? listAllLowStockProducts(workspaceId)
-          : listAllProducts(workspaceId, {
-              status: activeFilter === 'deleted' ? 'deleted' : 'active',
-            })
-      const [productItems, recentMovementItems] = await Promise.all([
-        productRequest,
-        listWorkspaceStockMovements(workspaceId, {
-          limit: 100,
-          page: 1,
-        }),
-      ])
       const nextProducts =
         activeFilter === 'low-stock'
           ? productItems.filter((product) => product.quantity > 0)
@@ -422,13 +408,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             : productItems
 
       setProducts(nextProducts)
-      setLatestMovementsByProductId(
-        indexLatestMovementsByProduct(recentMovementItems),
-      )
     } catch (loadError) {
       setError(getFriendlyError(loadError))
       setReadyReplenishments([])
-      setLatestMovementsByProductId({})
     } finally {
       setIsLoading(false)
     }
@@ -1425,7 +1407,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   }
 
   function renderLatestMovement(product) {
-    const movement = latestMovementsByProductId[product.id]
+    const movement = product.last_movement
 
     if (!movement) {
       return <span className="last-movement-cell__empty">Sem movimentação</span>

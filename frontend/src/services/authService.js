@@ -13,6 +13,7 @@ export async function login(email, password, options = {}) {
   formData.set('grant_type', 'password')
   formData.set('client_id', '')
   formData.set('client_secret', '')
+  formData.set('remember_me', options.rememberMe ? 'true' : 'false')
 
   const tokenData = await request('/auth/token', {
     body: formData,
@@ -32,6 +33,7 @@ export async function loginWithGoogle(code, redirectUri, options = {}) {
     body: {
       code,
       redirect_uri: redirectUri,
+      remember_me: Boolean(options.rememberMe),
     },
     headers: {
       'X-Requested-With': 'XmlHttpRequest',
@@ -144,11 +146,17 @@ export async function changeEmail(data) {
   return result
 }
 
-export function changePassword(data) {
-  return request('/auth/me/change-password', {
+// A password change ends every other session; the API returns a fresh token
+// for this one, kept in the same storage ("remember me" or not).
+export async function changePassword(data) {
+  const result = await request('/auth/me/change-password', {
     body: data,
     method: 'POST',
   })
+
+  replaceStoredToken(result.access_token)
+
+  return result
 }
 
 export function uploadAvatar(file) {
