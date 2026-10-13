@@ -309,6 +309,8 @@ class WorkspaceResponse(BaseModel):
     owner_id: int
     current_user_role: Optional[str] = None
     current_user_title: Optional[str] = None
+    # Active members (pending invites excluded); filled on the list endpoint.
+    member_count: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -323,6 +325,7 @@ class WorkspaceMemberResponse(BaseModel):
     title: Optional[str] = None
     user_name: Optional[str] = None
     user_email: Optional[str] = None
+    user_avatar_url: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
