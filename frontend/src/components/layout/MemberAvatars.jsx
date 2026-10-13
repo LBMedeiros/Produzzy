@@ -1,6 +1,4 @@
-function MemberAvatars({ members, onToggle, isOpen }) {
-  const memberCount = members.length
-
+function MemberAvatars({ count: memberCount, onToggle, isOpen }) {
   return (
     <button
       className={`member-avatars ${isOpen ? 'is-open' : ''}`}

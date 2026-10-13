@@ -411,6 +411,10 @@ class WorkspaceMember(Base):
         return self.user.name
 
     @property
+    def user_avatar_url(self):
+        return self.user.avatar_url if self.user else None
+
+    @property
     def user_email(self):
         if self.user is None:
             return None

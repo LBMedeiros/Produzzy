@@ -74,6 +74,7 @@ const replenishmentStatusLabels = {
 function normalizeMember(member) {
   return {
     ...member,
+    avatar_url: member.user_avatar_url ?? null,
     email: member.user_email ?? '',
     initials: getInitials(member.user_name, 'US'),
     name: member.user_name ?? member.user_email ?? 'Membro',
@@ -92,7 +93,7 @@ function normalizeInvite(invite) {
     isInvite: true,
     name: isLinkInvite ? 'Link de convite' : 'Convite pendente',
     role: invite.role,
-    status: 'Convidada',
+    status: 'Pendente',
   }
 }
 
@@ -252,24 +253,13 @@ function Header({ onNavigated }) {
     [],
   )
 
-  const avatarMembers = useMemo(() => {
-    if (workspaceMembers.length) {
-      return workspaceMembers
-    }
-
-    if (!user) {
-      return []
-    }
-
-    return [
-      {
-        id: `current-${user.id}`,
-        avatar_url: user.avatar_url,
-        initials: getInitials(user.name),
-        name: user.name,
-      },
-    ]
-  }, [user, workspaceMembers])
+  // Active members only (pending invites are not members yet). Before the
+  // team is loaded, use the count the workspace list already carries, so the
+  // number doesn't jump when the popover opens.
+  const memberCount =
+    membersWorkspaceId === workspaceId
+      ? workspaceMembers.filter((member) => !member.isInvite).length
+      : (activeWorkspace?.member_count ?? (user ? 1 : 0))
 
   const searchQuery = searchTerm.trim()
   const canSearch = searchQuery.length >= GLOBAL_SEARCH_MIN_LENGTH
@@ -1057,7 +1047,7 @@ function Header({ onNavigated }) {
 
           <div className="topbar__members" ref={membersContainerRef}>
             <MemberAvatars
-              members={avatarMembers}
+              count={memberCount}
               isOpen={isMembersOpen}
               onToggle={() => {
                 setIsMembersOpen((value) => {

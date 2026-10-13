@@ -50,10 +50,20 @@ def attach_current_user_roles(
     titles_by_workspace_id = {
         membership.workspace_id: membership.title for membership in memberships
     }
+    member_counts_by_workspace_id = dict(
+        db.query(
+            models.WorkspaceMember.workspace_id,
+            func.count(models.WorkspaceMember.id),
+        )
+        .filter(models.WorkspaceMember.workspace_id.in_(workspace_ids))
+        .group_by(models.WorkspaceMember.workspace_id)
+        .all()
+    )
 
     for workspace in workspaces:
         workspace.current_user_role = roles_by_workspace_id.get(workspace.id)
         workspace.current_user_title = titles_by_workspace_id.get(workspace.id)
+        workspace.member_count = member_counts_by_workspace_id.get(workspace.id, 0)
 
     return workspaces
 
