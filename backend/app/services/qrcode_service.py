@@ -6,7 +6,7 @@ from pathlib import Path
 import barcode
 import qrcode
 from barcode.writer import ImageWriter
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
 ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -798,8 +798,8 @@ PRINT_SHEET_MAX_LABELS = 120
 _A4_MM = (210, 297)
 _SHEET_MARGIN_MM = 8
 _SHEET_GAP_MM = 3
-_CARD_HEIGHT_MM = 34
-_CARD_QR_MM = 26
+_CARD_HEIGHT_MM = 30
+_CARD_QR_MM = 24
 
 
 def ellipsize_to_width(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str:
@@ -835,17 +835,37 @@ def draw_barcode_bars(
     return len(modules) * module_px
 
 
+def fit_label_name(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_width: int,
+    dpi: int,
+):
+    """Same bold size on every label (9 pt), up to two lines; only very long
+    names shrink (down to 8 pt) and then get an ellipsis."""
+    for size_pt in (9, 8.5, 8):
+        font = load_font(pt_to_px(size_pt, dpi), bold=True)
+        lines = wrap_text_without_truncation(draw, text, font, max_width)
+        if len(lines) <= 2:
+            return font, lines
+
+    return font, [
+        lines[0],
+        ellipsize_to_width(draw, " ".join(lines[1:]), font, max_width),
+    ]
+
+
 def generate_print_label_card_pil(
     data: str,
     product_name: str,
-    product_category: str | None,
     product_id: int,
     width: int,
     height: int,
     dpi: int = PRINT_SHEET_DPI,
 ) -> Image.Image:
     """Single label with both codes: QR Code (brand icon in the centre) on the
-    left; name, category and the Code128 barcode on the right."""
+    left; the product name on top and the Code128 barcode at the bottom on the
+    right, both lined up with the QR Code's edges."""
     card = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(card)
     border_width = max(2, width // 240)
@@ -860,53 +880,45 @@ def generate_print_label_card_pil(
 
     qr_size = min(mm_to_px(_CARD_QR_MM, dpi), height - padding * 2)
     qr_image = resize_qrcode(generate_qrcode_pil(data), qr_size)
-    card.paste(qr_image, (padding, (height - qr_size) // 2))
+    qr_left = padding
+    qr_top = (height - qr_size) // 2
+    card.paste(qr_image, (qr_left, qr_top))
 
-    right_left = padding + qr_size + mm_to_px(1.5, dpi)
+    # The QR image has a white quiet zone: align to its dark modules instead.
+    dark_box = ImageOps.invert(qr_image.convert("L")).getbbox() or (0, 0, qr_size, qr_size)
+    content_top = qr_top + dark_box[1]
+    content_bottom = qr_top + dark_box[3]
+    right_left = qr_left + dark_box[2] + mm_to_px(2.8, dpi)
     right_width = width - right_left - padding
-    top = padding + mm_to_px(1, dpi)
 
-    name_font, name_lines = fit_wrapped_text(
-        draw,
-        product_name,
-        max_width=right_width,
-        initial_size=pt_to_px(9.5, dpi),
-        min_size=pt_to_px(7, dpi),
-        max_lines=2,
-    )
-    if len(name_lines) > 2:
-        name_lines = [
-            name_lines[0],
-            ellipsize_to_width(draw, " ".join(name_lines[1:]), name_font, right_width),
-        ]
-    name_line_height = round(getattr(name_font, "size", 16) * 1.18)
+    name_font, name_lines = fit_label_name(draw, str(product_name).strip(), right_width, dpi)
+    name_line_height = round(getattr(name_font, "size", 16) * 1.2)
+    # textbbox top offset: put the cap line exactly on the QR's top edge.
+    name_offset = draw.textbbox((0, 0), "A", font=name_font)[1]
 
     for index, line in enumerate(name_lines):
-        draw.text((right_left, top + index * name_line_height), line, fill=TEXT_COLOR, font=name_font)
-
-    top += len(name_lines) * name_line_height + mm_to_px(0.6, dpi)
-
-    if product_category:
-        category_font = load_font(pt_to_px(6.5, dpi))
         draw.text(
-            (right_left, top),
-            ellipsize_to_width(draw, product_category, category_font, right_width),
-            fill=MUTED_COLOR,
-            font=category_font,
+            (right_left, content_top - name_offset + index * name_line_height),
+            line,
+            fill=TEXT_COLOR,
+            font=name_font,
         )
 
     barcode_value = get_product_barcode_value(product_id)
-    digits_font = load_font(pt_to_px(6.5, dpi), bold=True)
-    digits_height = getattr(digits_font, "size", 12)
-    digits_top = height - padding - mm_to_px(0.5, dpi) - digits_height
-    bars_height = mm_to_px(8, dpi)
-    bars_top = digits_top - mm_to_px(0.8, dpi) - bars_height
+    digits_font = load_font(pt_to_px(7, dpi), bold=True)
+    digits_box = draw.textbbox((0, 0), barcode_value, font=digits_font)
+    digits_top = content_bottom - digits_box[3]
+    bars_bottom = digits_top + digits_box[1] - mm_to_px(1, dpi)
+    name_bottom = content_top + len(name_lines) * name_line_height
+    # Bars as tall as possible (up to 9 mm) while keeping air below the name.
+    bars_height = max(mm_to_px(5, dpi), min(mm_to_px(9, dpi), bars_bottom - name_bottom - mm_to_px(2, dpi)))
+    bars_top = bars_bottom - bars_height
     bars_width = draw_barcode_bars(
         draw, barcode_value, right_left, bars_top, right_width, bars_height
     )
-    digits_width = text_size(draw, barcode_value, digits_font)[0]
+    digits_width = digits_box[2] - digits_box[0]
     draw.text(
-        (right_left + max(0, (bars_width - digits_width) // 2), digits_top),
+        (right_left + max(0, (bars_width - digits_width) // 2) - digits_box[0], digits_top),
         barcode_value,
         fill=MUTED_COLOR,
         font=digits_font,
@@ -919,8 +931,8 @@ def generate_print_sheet_pages(
     dpi: int = PRINT_SHEET_DPI,
     columns: int = PRINT_SHEET_COLUMNS,
 ) -> list[Image.Image]:
-    """One A4 image per page. `items`: data, product_name, product_category,
-    product_id (already repeated for copies)."""
+    """One A4 image per page. `items`: data, product_name, product_id
+    (already repeated for copies)."""
     sheet_width = mm_to_px(_A4_MM[0], dpi)
     sheet_height = mm_to_px(_A4_MM[1], dpi)
     margin = mm_to_px(_SHEET_MARGIN_MM, dpi)
@@ -941,7 +953,6 @@ def generate_print_sheet_pages(
         card = generate_print_label_card_pil(
             data=item["data"],
             product_name=item["product_name"],
-            product_category=item.get("product_category"),
             product_id=item["product_id"],
             width=card_width,
             height=card_height,

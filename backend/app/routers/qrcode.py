@@ -187,7 +187,6 @@ def generate_products_print_sheet(
                     product_id=product.id,
                 )
             ),
-            "product_category": product.category,
             "product_id": product.id,
             "product_name": product.name,
         }
