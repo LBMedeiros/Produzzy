@@ -193,6 +193,11 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
       return
     }
 
+    if (!individualEmail.trim()) {
+      setError('Informe o e-mail da pessoa que você quer convidar.')
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -369,9 +374,9 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
               </div>
             </>
           ) : (
-            <form className="workspace-form" onSubmit={handleCreateIndividualInvite}>
+            <form noValidate className="workspace-form" onSubmit={handleCreateIndividualInvite}>
               <label>
-                Email
+                E-mail
                 <input
                   autoComplete="email"
                   disabled={isSubmitting}

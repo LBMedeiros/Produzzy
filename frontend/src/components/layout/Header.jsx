@@ -741,7 +741,7 @@ function Header({ onNavigated }) {
     }
 
     if (member.role === 'owner' || member.user_id === activeWorkspace.owner_id) {
-      setMembersError('Não é possível remover o owner por esta ação.')
+      setMembersError('Não é possível remover o dono por esta ação.')
       return
     }
 

@@ -14,6 +14,11 @@ function CreateWorkspacePage() {
     event.preventDefault()
     setFormError('')
 
+    if (!name.trim()) {
+      setFormError('Informe o nome do workspace.')
+      return
+    }
+
     try {
       await createWorkspace(name)
     } catch (error) {
@@ -38,7 +43,7 @@ function CreateWorkspacePage() {
           </p>
         </div>
 
-        <form className="workspace-form" onSubmit={handleSubmit}>
+        <form noValidate className="workspace-form" onSubmit={handleSubmit}>
           <label>
             Nome do workspace
             <input

@@ -14,7 +14,9 @@
   --surface-elevated: #f5f8fc;
   --text: #0f172a;
   --muted: #5b6b82;
-  --faint: #8a99ae;
+  /* Tertiary text: darker than the prototype's #8a99ae so small text keeps
+     >= 4.5:1 on every surface (Fase 7). */
+  --faint: #60708a;
   --border: #e2e8f0;
   --success: #16a34a;
   --success-soft: rgba(22, 163, 74, 0.1);
@@ -23,6 +25,11 @@
   --danger: #dc2626;
   --danger-soft: rgba(220, 38, 38, 0.1);
   --chart-out: #94a3b8;
+  /* Status colours for *text* (pills, labels): the base tones stay for fills,
+     bars and dots; text uses darker shades in light mode for contrast. */
+  --success-text: #166534;
+  --warning-text: #92400e;
+  --danger-text: #b91c1c;
   --primary-button-bg: #2563eb;
   --primary-button-hover: #1d4ed8;
   --primary-button-active: #1e40af;
@@ -226,37 +233,9 @@
   color: var(--text);
 }
 
-.login-page {
-  --bg: #f8fafc;
-  --card: #ffffff;
-  --surface: #ffffff;
-  --surface-elevated: #f8fafc;
-  --text: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --blue: #2563eb;
-  --blue-soft: #dbeafe;
-  --option-active-bg: #dbeafe;
-  --shadow: 0 16px 34px rgba(15, 23, 42, 0.07);
-  background: #f8fafc;
-  color: #0f172a;
-  color-scheme: light;
-}
-
-.login-panel {
-  background: #ffffff;
-  color: #0f172a;
-}
-
 .login-panel__brand strong,
-.login-panel__copy h1,
 .login-form label {
   color: #0f172a;
-}
-
-.login-panel__copy p,
-.login-panel__footer {
-  color: #64748b;
 }
 
 .auth-feedback {
@@ -302,14 +281,6 @@
   color: #94a3b8;
 }
 
-.login-page input:-webkit-autofill,
-.login-page input:-webkit-autofill:hover,
-.login-page input:-webkit-autofill:focus {
-  -webkit-text-fill-color: #0f172a;
-  box-shadow: 0 0 0 1000px #ffffff inset;
-  caret-color: #0f172a;
-}
-
 :root[data-theme="dark"] .badge--success {
   color: #86efac;
 }
@@ -348,7 +319,7 @@
   --surface-elevated: #12203a;
   --text: #e5edf7;
   --muted: #8a9bb3;
-  --faint: #5f7190;
+  --faint: #7c8ca6;
   --border: #1f2d44;
   --success: #4ade80;
   --success-soft: rgba(74, 222, 128, 0.14);
@@ -357,6 +328,9 @@
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.14);
   --chart-out: #64748b;
+  --success-text: #4ade80;
+  --warning-text: #fbbf24;
+  --danger-text: #f87171;
   --primary-button-bg: #3b82f6;
   --primary-button-hover: #2563eb;
   --primary-button-active: #1d4ed8;
@@ -496,8 +470,6 @@ a {
 .category-action-select:focus-visible,
 .table-actions button:focus-visible,
 .topbar__user:focus-visible,
-.login-panel__footer button:focus-visible,
-.login-panel__footer a:focus-visible,
 .workspace-form button:focus-visible,
 .workspace-switcher__button:focus-visible,
 .workspace-switcher__option:focus-visible,
@@ -647,17 +619,17 @@ a {
    status to communicate. */
 .badge--ok {
   background: var(--success-soft);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .badge--warn {
   background: var(--warning-soft);
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .badge--bad {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .badge--muted {
@@ -4280,32 +4252,6 @@ a {
   color: var(--muted);
 }
 
-.login-page {
-  display: grid;
-  width: 100%;
-  min-height: 100vh;
-  min-height: 100svh;
-  grid-template-columns: minmax(380px, 34%) minmax(0, 1fr);
-  overflow-x: clip;
-  background: var(--bg);
-}
-
-.login-panel {
-  display: grid;
-  min-width: 0;
-  min-height: 100vh;
-  min-height: 100svh;
-  align-content: center;
-  justify-items: center;
-  gap: 28px;
-  padding: 48px clamp(28px, 3.2vw, 56px);
-  background: #ffffff;
-}
-
-.login-panel > * {
-  width: min(100%, 440px);
-}
-
 .login-panel__brand {
   gap: 12px;
 }
@@ -4315,33 +4261,10 @@ a {
   font-size: 20px;
 }
 
-.login-panel__copy {
-  display: grid;
-  gap: 12px;
-}
-
-.login-panel__copy h1 {
-  font-size: 40px;
-  text-wrap: balance;
-}
-
-.login-panel__copy p {
-  color: var(--muted);
-  font-size: 16px;
-}
-
 .login-form {
   display: grid;
   width: 100%;
   gap: 16px;
-}
-
-/* Password requirements hint shown under the sign-up password field. */
-.login-hint {
-  margin-top: -8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
 }
 
 .login-field {
@@ -4488,11 +4411,6 @@ a {
   border-color: #2563eb;
 }
 
-.login-social {
-  display: grid;
-  gap: 10px;
-}
-
 .google-auth-button {
   display: inline-flex;
   width: 100%;
@@ -4545,185 +4463,6 @@ a {
   display: block;
   width: 20px;
   height: 20px;
-}
-
-.login-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: lowercase;
-}
-
-.login-divider::before,
-.login-divider::after {
-  height: 1px;
-  flex: 1;
-  background: #e2e8f0;
-  content: "";
-}
-
-.login-divider span {
-  white-space: nowrap;
-}
-
-.login-form__submit {
-  width: 100%;
-  margin-top: 6px;
-}
-
-.login-panel__footer {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.login-panel__footer button,
-.login-panel__footer a {
-  border: 0;
-  background: transparent;
-  color: var(--blue);
-  font-weight: 800;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.login-panel__footer--forgot {
-  margin-top: -12px;
-}
-
-.login-hero {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-  isolation: isolate;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 10% 12%, rgba(37, 99, 235, 0.3), transparent 34%),
-    radial-gradient(circle at 92% 88%, rgba(14, 165, 233, 0.16), transparent 32%),
-    linear-gradient(145deg, #0f172a 0%, #111c31 52%, #17223a 100%);
-  color: #ffffff;
-  padding: 56px clamp(32px, 4.5vw, 80px);
-}
-
-.login-hero::before {
-  position: absolute;
-  z-index: 0;
-  inset: 0 0 auto;
-  height: clamp(280px, 46%, 440px);
-  background:
-    radial-gradient(circle at 78% 8%, rgba(125, 211, 252, 0.2), transparent 32%),
-    linear-gradient(125deg, rgba(37, 99, 235, 0.58), rgba(14, 165, 233, 0.12));
-  clip-path: polygon(0 0, 100% 0, 100% 58%, 0 100%);
-  content: "";
-  pointer-events: none;
-}
-
-.login-hero::after {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px);
-  background-size: 44px 44px;
-  content: "";
-  mask-image: linear-gradient(to bottom right, rgba(0, 0, 0, 0.65), transparent 72%);
-  pointer-events: none;
-}
-
-.login-hero__content {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: min(100%, 720px);
-  gap: 30px;
-}
-
-.login-hero__header {
-  display: grid;
-  gap: 12px;
-}
-
-.login-hero__header span {
-  color: #93c5fd;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.login-hero__header h2 {
-  max-width: 680px;
-  color: #ffffff;
-  font-size: 46px;
-  line-height: 1.08;
-  letter-spacing: 0;
-  overflow-wrap: anywhere;
-  text-wrap: balance;
-}
-
-.login-hero__header p {
-  max-width: 640px;
-  color: #cbd5e1;
-  font-size: 17px;
-  line-height: 1.65;
-}
-
-.login-benefits {
-  display: grid;
-  gap: 12px;
-}
-
-.login-benefit {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 46px minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.48);
-  padding: 18px;
-  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.12);
-  backdrop-filter: blur(12px);
-}
-
-.login-benefit__icon {
-  display: grid;
-  width: 46px;
-  height: 46px;
-  place-items: center;
-  border: 1px solid rgba(147, 197, 253, 0.22);
-  border-radius: 10px;
-  background: rgba(37, 99, 235, 0.15);
-  color: #93c5fd;
-}
-
-.login-benefit__icon svg {
-  width: 24px;
-  height: 24px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.login-benefit h3 {
-  color: #ffffff;
-  font-size: 16px;
-}
-
-.login-benefit p {
-  margin-top: 4px;
-  color: #aebed3;
-  font-size: 14px;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
 }
 
 .loading-screen,
@@ -4885,46 +4624,6 @@ a {
   border-color: rgba(37, 99, 235, 0.24);
   background: var(--surface-elevated);
   color: var(--blue);
-}
-
-@media (max-width: 1280px) {
-  .login-panel {
-    gap: 24px;
-    padding-inline: 28px;
-  }
-
-  .login-hero {
-    padding: 44px clamp(28px, 4vw, 52px);
-  }
-
-  .login-hero::before {
-    height: clamp(260px, 44%, 390px);
-    clip-path: polygon(0 0, 100% 0, 100% 62%, 0 100%);
-  }
-
-  .login-hero__content {
-    gap: 24px;
-  }
-
-  .login-hero__header h2 {
-    font-size: 40px;
-  }
-
-  .login-hero__header p {
-    font-size: 15px;
-    line-height: 1.55;
-  }
-
-  .login-benefit {
-    grid-template-columns: 42px minmax(0, 1fr);
-    gap: 14px;
-    padding: 15px;
-  }
-
-  .login-benefit__icon {
-    width: 42px;
-    height: 42px;
-  }
 }
 
 @media (min-width: 640px) and (max-width: 1279px) {
@@ -5119,36 +4818,6 @@ a {
 
 }
 
-@media (max-width: 840px) {
-  .login-page {
-    grid-template-columns: 1fr;
-  }
-
-  .login-panel {
-    min-height: auto;
-    padding: 48px clamp(24px, 8vw, 64px);
-  }
-
-  .login-hero {
-    min-height: auto;
-    padding: 56px clamp(24px, 8vw, 64px);
-  }
-
-  .login-hero::before {
-    height: clamp(260px, 48%, 380px);
-    clip-path: polygon(0 0, 100% 0, 100% 64%, 0 100%);
-  }
-
-  .login-hero__content {
-    width: min(100%, 720px);
-  }
-
-  .login-hero__header h2 {
-    font-size: 40px;
-  }
-
-}
-
 @media (max-width: 860px) {
 
   .stock-toolbar {
@@ -5280,41 +4949,6 @@ a {
     padding: 16px;
   }
 
-  .login-panel,
-  .login-hero {
-    padding: 36px 18px;
-  }
-
-  .login-panel {
-    min-height: auto;
-    gap: 22px;
-  }
-
-  .login-hero::before {
-    height: min(280px, 52%);
-    clip-path: polygon(0 0, 100% 0, 100% 70%, 0 100%);
-  }
-
-  .login-hero__header h2 {
-    font-size: 32px;
-  }
-
-  .login-hero__header p {
-    font-size: 15px;
-  }
-
-  .login-benefit {
-    grid-template-columns: 40px minmax(0, 1fr);
-    align-items: start;
-    gap: 12px;
-    padding: 16px;
-  }
-
-  .login-benefit__icon {
-    width: 40px;
-    height: 40px;
-  }
-
   .settings-workspace-form,
   .settings-details,
   .settings-permission-list {
@@ -5387,54 +5021,6 @@ a {
 :root[data-theme="dark"] .api-url {
   background: var(--surface-elevated);
   color: var(--text);
-}
-
-:root[data-theme="dark"] .login-page {
-  --bg: #f8fafc;
-  --card: #ffffff;
-  --surface: #ffffff;
-  --surface-elevated: #f8fafc;
-  --text: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --blue: #2563eb;
-  --blue-soft: #dbeafe;
-  background: #f8fafc;
-  color: #0f172a;
-  color-scheme: light;
-}
-
-:root[data-theme="dark"] .login-page .login-panel,
-:root[data-theme="dark"] .login-page .login-form input {
-  background: #ffffff;
-  color: #0f172a;
-}
-
-:root[data-theme="dark"] .login-page .login-form input {
-  border-color: #e2e8f0;
-}
-
-:root[data-theme="dark"] .login-page .login-panel__brand strong,
-:root[data-theme="dark"] .login-page .login-panel__copy h1,
-:root[data-theme="dark"] .login-page .login-form label {
-  color: #0f172a;
-}
-
-:root[data-theme="dark"] .login-page .login-panel__copy p,
-:root[data-theme="dark"] .login-page .login-panel__footer {
-  color: #64748b;
-}
-
-:root[data-theme="dark"] .login-page .login-form input::placeholder {
-  color: #94a3b8;
-}
-
-:root[data-theme="dark"] .login-page input:-webkit-autofill,
-:root[data-theme="dark"] .login-page input:-webkit-autofill:hover,
-:root[data-theme="dark"] .login-page input:-webkit-autofill:focus {
-  -webkit-text-fill-color: #0f172a;
-  box-shadow: 0 0 0 1000px #ffffff inset;
-  caret-color: #0f172a;
 }
 
 @media (min-width: 640px) {
@@ -5559,20 +5145,6 @@ a {
   .table-wrap .data-table {
     min-width: 0;
   }
-}
-
-/* ---- Login panel: legal links ---- */
-.login-panel__legal {
-  font-size: 12px;
-  color: #64748b;
-  text-align: center;
-  line-height: 1.6;
-}
-
-.login-panel__legal a {
-  color: var(--blue);
-  font-weight: 700;
-  text-decoration: none;
 }
 
 /* ---- Public legal pages (Terms, Privacy) ---- */
@@ -5935,10 +5507,6 @@ a {
 .auth-landing .login-remember__box {
   border-color: var(--border);
   background: var(--surface);
-}
-
-.auth-landing .login-hint {
-  color: var(--muted);
 }
 
 /* Sign-up password checklist: each rule turns red -> green while typing. */
@@ -6911,11 +6479,11 @@ a {
 }
 
 .summary-tile--warn .summary-tile__value {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .summary-tile--bad .summary-tile__value {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .summary-tile__hint {
@@ -6924,11 +6492,11 @@ a {
 }
 
 .summary-tile__hint .is-up {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .summary-tile__hint .is-down {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .dashboard-grid {
@@ -7166,12 +6734,12 @@ a {
 }
 
 .activity-in {
-  color: var(--success);
+  color: var(--success-text);
   font-weight: 800;
 }
 
 .activity-out {
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 800;
 }
 
@@ -7255,7 +6823,7 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--success);
+  color: var(--success-text);
   font-weight: 800;
 }
 
@@ -7553,7 +7121,7 @@ a {
 }
 
 .board-card__time.is-stalled {
-  color: var(--warning);
+  color: var(--warning-text);
   font-weight: 750;
 }
 
@@ -8117,7 +7685,7 @@ a {
   border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
   background: transparent;
   box-shadow: none;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .settings-page .button--danger:hover:not(:disabled) {
@@ -8143,4 +7711,71 @@ a {
 .settings-col .settings-profile-photo__identity strong {
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+/* ===================================================================
+   Redesign · Fase 7 — acabamento (docs/redesign/REDESIGN.md §5)
+   =================================================================== */
+
+/* Visible keyboard focus on every control of the app (zero specificity, so
+   any component-specific focus style still wins). The login screen keeps
+   its own focus styles. */
+:where(
+    .app-shell,
+    .modal-backdrop,
+    .drawer-backdrop,
+    .bottom-tabs,
+    .mobile-search,
+    .workspace-empty-page,
+    .auth-page
+  )
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary-button-bg);
+  outline-offset: 2px;
+}
+
+/* Search fields drop the native outline; give them the same focus ring. */
+.search-field:focus-within,
+.labels-search:focus-within {
+  border-color: var(--primary-button-bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-button-bg) 35%, transparent);
+}
+
+.stock-search input:focus-visible {
+  border-color: var(--primary-button-bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-button-bg) 35%, transparent);
+  outline: 0;
+}
+
+/* "Esqueci a senha", "Nova senha" e confirmação de e-mail: same centred
+   card as the login (scoped, so the login itself is untouched). */
+.auth-page .auth-card__switch a {
+  color: var(--blue);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.auth-page .auth-card__switch a:hover {
+  text-decoration: underline;
+}
+
+.auth-page .auth-feedback .button {
+  width: 100%;
+}
+
+.movements-chart__empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* The feedback box was styled for the old light login panel: on the dark
+   auth card its texts need the card's tokens. */
+.auth-page .auth-feedback h2 {
+  color: var(--text);
+}
+
+.auth-page .auth-feedback p {
+  color: var(--muted);
 }

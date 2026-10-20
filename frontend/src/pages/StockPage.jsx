@@ -1267,6 +1267,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       return
     }
 
+    if (!categoryForm.name.trim()) {
+      setCategoryError('Informe o nome da categoria.')
+      return
+    }
+
     setIsSavingCategory(true)
     setCategoryError('')
     setSuccessMessage('')
@@ -1296,6 +1301,12 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     event.preventDefault()
 
     if (!workspaceId || !movementProduct) {
+      return
+    }
+
+    const movementQuantity = Number(movementForm.quantity)
+    if (!Number.isInteger(movementQuantity) || movementQuantity < 1) {
+      setMovementError('Informe uma quantidade inteira maior que zero.')
       return
     }
 
@@ -2208,7 +2219,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               </button>
             </div>
 
-            <form className="stock-form" onSubmit={handleMoveStock}>
+            <form noValidate className="stock-form" onSubmit={handleMoveStock}>
               {movementProduct.replenishmentRequestId ? (
                 <p className="stock-form__hint">
                   A quantidade veio como previsão da reposição. Confirme os dados
@@ -2295,7 +2306,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               </button>
             </div>
 
-            <form className="stock-form" onSubmit={handleCreateCategory}>
+            <form noValidate className="stock-form" onSubmit={handleCreateCategory}>
               <label>
                 Nome
                 <input
@@ -2494,7 +2505,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                         </div>
                       </>
                     ) : editingCategoryId === category.id ? (
-                      <form
+                      <form noValidate
                         className="stock-form category-editor-form"
                         onSubmit={handleSaveCategoryEdit}
                       >

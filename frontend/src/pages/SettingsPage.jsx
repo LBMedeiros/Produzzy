@@ -83,7 +83,7 @@ function getWorkspaceUpdateError(error) {
 
 function getWorkspaceDeleteError(error) {
   if (error?.status === 403) {
-    return 'Apenas o owner principal pode excluir este workspace.'
+    return 'Apenas o Dono pode excluir este workspace.'
   }
 
   if (error?.status === 0) {
@@ -106,7 +106,7 @@ function getEmailChangeError(error) {
     return 'Não foi possível conectar ao servidor.'
   }
 
-  return error?.message ?? 'Não foi possível alterar o email.'
+  return error?.message ?? 'Não foi possível alterar o e-mail.'
 }
 
 function getAvatarError(error) {
@@ -141,7 +141,7 @@ function EmailChangeModal({ currentEmail, onClose, onSubmit }) {
     const normalizedEmail = email.trim()
 
     if (!normalizedEmail) {
-      setError('Informe o novo email.')
+      setError('Informe o novo e-mail.')
       return
     }
 
@@ -178,7 +178,7 @@ function EmailChangeModal({ currentEmail, onClose, onSubmit }) {
         <div className="workspace-modal__header">
           <div>
             <span>Ação sensível</span>
-            <h2 id="change-email-title">Alterar email</h2>
+            <h2 id="change-email-title">Alterar e-mail</h2>
           </div>
           <button
             aria-label="Fechar modal"
@@ -191,9 +191,9 @@ function EmailChangeModal({ currentEmail, onClose, onSubmit }) {
           </button>
         </div>
 
-        <form className="workspace-form" onSubmit={handleSubmit}>
+        <form noValidate className="workspace-form" onSubmit={handleSubmit}>
           <label>
-            Novo email
+            Novo e-mail
             <input
               autoComplete="email"
               disabled={isSaving}
@@ -241,7 +241,7 @@ function EmailChangeModal({ currentEmail, onClose, onSubmit }) {
 
           <div className="workspace-form__actions">
             <Button disabled={isSaving} type="submit">
-              {isSaving ? 'Alterando...' : 'Alterar email'}
+              {isSaving ? 'Alterando...' : 'Alterar e-mail'}
             </Button>
             <Button disabled={isSaving} onClick={onClose} variant="secondary">
               Cancelar
@@ -329,7 +329,7 @@ function PasswordChangeModal({ onClose, onSubmit }) {
           </button>
         </div>
 
-        <form className="workspace-form" onSubmit={handleSubmit}>
+        <form noValidate className="workspace-form" onSubmit={handleSubmit}>
           <label
             className="settings-password-label"
             htmlFor="settings-change-current-password"
@@ -754,7 +754,7 @@ function RecoveryEmailModal({ currentRecoveryEmail, onClose, onSubmit }) {
           </button>
         </div>
 
-        <form className="workspace-form" onSubmit={handleSubmit}>
+        <form noValidate className="workspace-form" onSubmit={handleSubmit}>
           <p className="settings-section__description">
             Um e-mail de backup. Depois de confirmado, ele também recebe o link
             de redefinição de senha caso você perca acesso ao principal.
@@ -876,7 +876,7 @@ function ProfileSettingsSection({
   async function handleEmailChange(data) {
     await changeEmail(data)
     setScope('profile')
-    setProfileFeedback('Email atualizado com sucesso.')
+    setProfileFeedback('E-mail atualizado com sucesso.')
     setProfileError('')
   }
 
@@ -979,7 +979,7 @@ function ProfileSettingsSection({
         title="Perfil"
         eyebrow="Minha conta"
       >
-        <form className="settings-profile-form" onSubmit={handleProfileSubmit}>
+        <form noValidate className="settings-profile-form" onSubmit={handleProfileSubmit}>
           <label>
             Nome
             <input
@@ -1280,7 +1280,7 @@ function WorkspaceSettingsSection({
         Informações do workspace ativo e identificação da sua organização.
       </p>
 
-      <form
+      <form noValidate
         className="settings-workspace-form"
         onSubmit={handleWorkspaceSubmit}
       >
@@ -1745,7 +1745,7 @@ function SettingsPage() {
             </div>
             {!canEditWorkspace && !isResolvingRole ? (
               <p className="settings-section__hint">
-                Apenas o owner principal pode excluir este workspace.
+                Apenas o Dono pode excluir este workspace.
               </p>
             ) : null}
           </Card>

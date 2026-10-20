@@ -112,7 +112,7 @@ function ReplenishmentCreationModal({
             </div>
           </div>
 
-          <form className="stock-form" onSubmit={handleSubmit}>
+          <form noValidate className="stock-form" onSubmit={handleSubmit}>
             <label>
               Tipo de reposição
               <SelectMenu

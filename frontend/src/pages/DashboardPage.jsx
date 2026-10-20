@@ -385,6 +385,11 @@ function DashboardPage({ onNavigate }) {
                 </div>
                 <div className="movements-chart-wrap">
                   <MovementsChart days={movementsByDay} />
+                  {movementsByDay.every((day) => day.total === 0) ? (
+                    <p className="movements-chart__empty">
+                      Nenhuma movimentação nos últimos 7 dias.
+                    </p>
+                  ) : null}
                 </div>
               </section>
 
