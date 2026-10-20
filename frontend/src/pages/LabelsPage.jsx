@@ -1,184 +1,30 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
-import ActionMenu from '../components/ui/ActionMenu'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
-import DataTable from '../components/ui/DataTable'
 import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
-import SelectMenu from '../components/ui/SelectMenu'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { usePagination } from '../lib/pagination'
-
-// The "Produtos ativos" catalog shows at most this many rows per page.
-const LABEL_PRODUCTS_PAGE_SIZE = 10
+import { getPrintSheet } from '../services/labelService'
+import { listAllProducts } from '../services/productService'
 
 // The scanner pulls in the ZXing decoder, so it loads only when first opened.
 const QrScannerModal = lazy(() => import('../components/labels/QrScannerModal'))
 
-// QR-code glyph (three finder squares + modules) for the QR scan action.
-function QrIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="currentColor"
-      fillRule="evenodd"
-      height="16"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M3 3h8v8H3V3zm2 2v4h4V5H5z" />
-      <path d="M13 3h8v8h-8V3zm2 2v4h4V5h-4z" />
-      <path d="M3 13h8v8H3v-8zm2 2v4h4v-4H5z" />
-      <path d="M13 13h3v3h-3zM18 13h3v2h-3zM13 18h3v3h-3zM18 17h3v4h-2v-2h-1z" />
-    </svg>
-  )
-}
+// Product picker shows at most this many rows per page.
+const LABEL_PRODUCTS_PAGE_SIZE = 10
+const MAX_LABELS = 120
+const MAX_COPIES = 20
+const PREVIEW_DEBOUNCE_MS = 350
 
-// Vertical bars for the barcode scan action.
-function BarcodeIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="currentColor"
-      height="16"
-      viewBox="0 0 24 24"
-      width="16"
-    >
-      <path d="M3 5h2v14H3zM7 5h1v14H7zM10 5h2v14h-2zM14 5h1v14h-1zM16 5h3v14h-3zM21 5h1v14h-1z" />
-    </svg>
-  )
+function normalize(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
 }
-
-// Line illustration: a phone reading the QR/barcode on a package.
-function ScanIllustration() {
-  return (
-    <svg fill="none" role="img" viewBox="0 0 220 150" aria-hidden="true">
-      <rect
-        height="78"
-        rx="8"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        width="80"
-        x="26"
-        y="46"
-      />
-      <path d="M26 70h80" opacity="0.6" stroke="currentColor" strokeWidth="2" />
-      <path d="M66 46v24" opacity="0.6" stroke="currentColor" strokeWidth="2" />
-      <g fill="var(--blue)">
-        <rect height="11" rx="1.5" width="11" x="43" y="83" />
-        <rect height="11" rx="1.5" width="11" x="58" y="83" />
-        <rect height="11" rx="1.5" width="11" x="43" y="98" />
-        <rect height="6" rx="1" width="6" x="61" y="100" />
-        <rect height="6" rx="1" width="6" x="73" y="87" />
-        <rect height="8" rx="1" width="8" x="73" y="99" />
-      </g>
-      <rect
-        fill="var(--card)"
-        height="104"
-        rx="12"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        width="60"
-        x="130"
-        y="34"
-      />
-      <rect
-        height="72"
-        opacity="0.5"
-        rx="6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        width="44"
-        x="138"
-        y="46"
-      />
-      <g stroke="var(--blue)" strokeLinecap="round" strokeWidth="2.5">
-        <path d="M147 62v-7h7" />
-        <path d="M173 62v-7h-7" />
-        <path d="M147 102v7h7" />
-        <path d="M173 102v7h-7" />
-      </g>
-      <path
-        d="M130 74 106 66M130 92 106 100"
-        opacity="0.85"
-        stroke="var(--blue)"
-        strokeDasharray="4 5"
-        strokeWidth="2"
-      />
-    </svg>
-  )
-}
-
-// Line illustration: a printer producing a sheet of QR/label tags.
-function PrintIllustration() {
-  return (
-    <svg fill="none" role="img" viewBox="0 0 220 150" aria-hidden="true">
-      <rect
-        fill="var(--card)"
-        height="70"
-        rx="6"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        width="88"
-        x="66"
-        y="18"
-      />
-      <g fill="var(--blue)">
-        <rect height="14" rx="2" width="14" x="78" y="30" />
-        <rect height="14" rx="2" width="14" x="103" y="30" />
-        <rect height="14" rx="2" width="14" x="128" y="30" />
-        <rect height="14" rx="2" width="14" x="78" y="54" />
-        <rect height="14" rx="2" width="14" x="103" y="54" />
-        <rect height="14" rx="2" width="14" x="128" y="54" />
-      </g>
-      <path
-        d="M46 96h128a8 8 0 0 1 8 8v22a8 8 0 0 1-8 8H46a8 8 0 0 1-8-8v-22a8 8 0 0 1 8-8Z"
-        fill="var(--card)"
-        stroke="currentColor"
-        strokeWidth="2.5"
-      />
-      <rect
-        fill="var(--card)"
-        height="10"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth="2"
-        width="88"
-        x="66"
-        y="91"
-      />
-      <path
-        d="M52 120h18"
-        opacity="0.6"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="2"
-      />
-      <circle cx="162" cy="119" fill="var(--blue)" r="3.5" />
-    </svg>
-  )
-}
-import {
-  getLabelsSheet,
-  getProductLabel,
-  getProductQrCode,
-  getQrCodesSheet,
-} from '../services/labelService'
-import { listAllProducts } from '../services/productService'
 
 function getFriendlyError(error) {
-  if (error?.status === 400 || error?.status === 422) {
-    return 'Selecione um produto válido antes de gerar QR Code ou etiqueta.'
-  }
-
   if (error?.status === 403) {
     return 'Você não tem permissão para gerar etiquetas neste workspace.'
   }
@@ -187,16 +33,17 @@ function getFriendlyError(error) {
     return 'Não foi possível conectar ao servidor.'
   }
 
-  return error?.message ?? 'Não foi possível concluir a ação.'
+  return error?.message ?? 'Não foi possível gerar as etiquetas.'
 }
 
-function sanitizeFileName(value) {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
+function pluralize(count, singular, plural) {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+function getValidId(value) {
+  const numericId = Number(value)
+
+  return Number.isInteger(numericId) && numericId > 0 ? numericId : null
 }
 
 function downloadBlob(blob, fileName) {
@@ -208,18 +55,6 @@ function downloadBlob(blob, fileName) {
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
-}
-
-function getValidId(value) {
-  const numericId = Number(value)
-
-  return Number.isInteger(numericId) && numericId > 0 ? numericId : null
-}
-
-function formatProductCode(productId) {
-  const numericProductId = getValidId(productId)
-
-  return numericProductId ? String(numericProductId).padStart(9, '0') : '—'
 }
 
 /**
@@ -258,326 +93,237 @@ function parseScannedProductRef(rawValue) {
 
   return null
 }
+// Prints the real sheet PNG: pages are A4 stacked, so at 210mm wide the
+// browser breaks pages exactly at each 297mm.
+function printSheetImage(url) {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  iframe.srcdoc = `<!doctype html><html><head><title>Etiquetas Produzzy</title><style>@page{size:A4;margin:0}html,body{margin:0}img{display:block;width:210mm}</style></head><body><img src="${url}" alt=""></body></html>`
+  iframe.onload = () => {
+    const image = iframe.contentDocument?.querySelector('img')
+    const run = () => {
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+      window.setTimeout(() => iframe.remove(), 60000)
+    }
+
+    if (image && !image.complete) {
+      image.onload = run
+    } else {
+      run()
+    }
+  }
+  document.body.appendChild(iframe)
+}
+
+function ScanIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+      <path d="M7 12h10" />
+    </svg>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  )
+}
 
 function LabelsPage({ onNavigate }) {
   const { activeWorkspace } = useWorkspace()
   const workspaceId = activeWorkspace?.id
-  const [scannerMode, setScannerMode] = useState(null)
-  const [utilityTab, setUtilityTab] = useState('scan')
   const [products, setProducts] = useState([])
-  const [selectedProductId, setSelectedProductId] = useState('')
-  const [selectedOutputType, setSelectedOutputType] = useState('qr')
-  const [qrBlob, setQrBlob] = useState(null)
-  const [labelBlob, setLabelBlob] = useState(null)
-  const [qrPreviewUrl, setQrPreviewUrl] = useState('')
-  const [labelPreviewUrl, setLabelPreviewUrl] = useState('')
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
-  const [isLoadingQr, setIsLoadingQr] = useState(false)
-  const [isLoadingLabel, setIsLoadingLabel] = useState(false)
-  const [isLoadingLabelsSheet, setIsLoadingLabelsSheet] = useState(false)
-  const [isLoadingQrCodesSheet, setIsLoadingQrCodesSheet] = useState(false)
+  const [search, setSearch] = useState('')
+  const [selectedIds, setSelectedIds] = useState([])
+  const [code, setCode] = useState('qr')
+  const [copies, setCopies] = useState(1)
+  const [preview, setPreview] = useState({ pages: 0, url: '' })
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [error, setError] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
-  const qrPreviewUrlRef = useRef('')
-  const labelPreviewUrlRef = useRef('')
-  const productListRef = useRef(null)
-  const productPagination = usePagination(
-    products,
-    LABEL_PRODUCTS_PAGE_SIZE,
-    workspaceId,
-    productListRef,
-  )
-
-  const clearPreviews = useCallback(() => {
-    if (qrPreviewUrlRef.current) {
-      URL.revokeObjectURL(qrPreviewUrlRef.current)
-      qrPreviewUrlRef.current = ''
-    }
-
-    if (labelPreviewUrlRef.current) {
-      URL.revokeObjectURL(labelPreviewUrlRef.current)
-      labelPreviewUrlRef.current = ''
-    }
-
-    setQrPreviewUrl('')
-    setLabelPreviewUrl('')
-    setQrBlob(null)
-    setLabelBlob(null)
-  }, [])
-
-  const selectedProduct = useMemo(() => {
-    const numericProductId = getValidId(selectedProductId)
-
-    if (!numericProductId) {
-      return null
-    }
-
-    return products.find((product) => product.id === numericProductId) ?? null
-  }, [products, selectedProductId])
+  const previewUrlRef = useRef('')
+  const listRef = useRef(null)
 
   const loadProducts = useCallback(async () => {
     const numericWorkspaceId = getValidId(workspaceId)
 
     if (!numericWorkspaceId) {
       setProducts([])
-      setSelectedProductId('')
       setIsLoadingProducts(false)
       return
     }
 
-    clearPreviews()
     setIsLoadingProducts(true)
     setError('')
 
     try {
-      const activeProducts = await listAllProducts(numericWorkspaceId, {
-        status: 'active',
-      })
+      const activeProducts = await listAllProducts(numericWorkspaceId, { status: 'active' })
       setProducts(activeProducts)
-      setSelectedProductId((currentProductId) => {
-        if (
-          currentProductId &&
-          activeProducts.some(
-            (product) => String(product.id) === String(currentProductId),
-          )
-        ) {
-          return currentProductId
-        }
-
-        return activeProducts[0]?.id ? String(activeProducts[0].id) : ''
-      })
+      setSelectedIds((current) =>
+        current.filter((id) => activeProducts.some((product) => product.id === id)),
+      )
     } catch (loadError) {
       setError(getFriendlyError(loadError))
     } finally {
       setIsLoadingProducts(false)
     }
-  }, [clearPreviews, workspaceId])
+  }, [workspaceId])
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      loadProducts()
-    }, 0)
+    const timeoutId = window.setTimeout(loadProducts, 0)
 
     return () => window.clearTimeout(timeoutId)
   }, [loadProducts])
 
+  const visibleProducts = useMemo(() => {
+    const term = normalize(search.trim())
+
+    return term
+      ? products.filter(
+          (product) =>
+            normalize(product.name).includes(term) ||
+            normalize(product.category).includes(term) ||
+            String(product.id) === term,
+        )
+      : products
+  }, [products, search])
+
+  const pagination = usePagination(
+    visibleProducts,
+    LABEL_PRODUCTS_PAGE_SIZE,
+    `${workspaceId}-${search.trim()}`,
+    listRef,
+  )
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  // Sheet keeps the order of the product list, not the click order.
+  const orderedSelection = useMemo(
+    () => products.filter((product) => selectedSet.has(product.id)).map((product) => product.id),
+    [products, selectedSet],
+  )
+  const labelCount = orderedSelection.length * copies
+  const isOverLimit = labelCount > MAX_LABELS
+  const allVisibleSelected =
+    visibleProducts.length > 0 && visibleProducts.every((product) => selectedSet.has(product.id))
+
+  // Live preview: the real sheet from the API (QR Codes with the logo).
   useEffect(() => {
+    const numericWorkspaceId = getValidId(workspaceId)
+
+    // Nothing to generate: the view hides the (stale) preview on its own.
+    if (!numericWorkspaceId || !orderedSelection.length || isOverLimit) {
+      return undefined
+    }
+
+    let cancelled = false
+    const timeoutId = window.setTimeout(async () => {
+      setIsLoadingPreview(true)
+      setError('')
+
+      try {
+        const blob = await getPrintSheet(numericWorkspaceId, {
+          code,
+          copies,
+          productIds: orderedSelection,
+        })
+        if (cancelled) {
+          return
+        }
+
+        const url = URL.createObjectURL(blob)
+        const image = new Image()
+        image.onload = () => {
+          if (cancelled) {
+            URL.revokeObjectURL(url)
+            return
+          }
+
+          if (previewUrlRef.current) {
+            URL.revokeObjectURL(previewUrlRef.current)
+          }
+          previewUrlRef.current = url
+          setPreview({
+            pages: Math.max(1, Math.round(image.naturalHeight / (image.naturalWidth * (297 / 210)))),
+            url,
+          })
+          setIsLoadingPreview(false)
+        }
+        image.src = url
+      } catch (previewError) {
+        if (!cancelled) {
+          setError(getFriendlyError(previewError))
+          setIsLoadingPreview(false)
+        }
+      }
+    }, PREVIEW_DEBOUNCE_MS)
+
     return () => {
-      if (qrPreviewUrlRef.current) {
-        URL.revokeObjectURL(qrPreviewUrlRef.current)
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [code, copies, isOverLimit, orderedSelection, workspaceId])
+
+  useEffect(
+    () => () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
       }
+    },
+    [],
+  )
 
-      if (labelPreviewUrlRef.current) {
-        URL.revokeObjectURL(labelPreviewUrlRef.current)
-      }
-    }
-  }, [])
-
-  function requireSelectedProduct(product = selectedProduct) {
-    const productId = getValidId(product?.id)
-
-    if (!product || !productId) {
-      setError('Selecione um produto válido antes de gerar QR Code ou etiqueta.')
-      return false
-    }
-
-    return true
+  function toggleProduct(productId) {
+    setSelectedIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId],
+    )
   }
 
-  function setQrPreview(blob) {
-    if (qrPreviewUrlRef.current) {
-      URL.revokeObjectURL(qrPreviewUrlRef.current)
-    }
+  function toggleAllVisible() {
+    const visibleIds = visibleProducts.map((product) => product.id)
 
-    const previewUrl = URL.createObjectURL(blob)
-    qrPreviewUrlRef.current = previewUrl
-    setQrBlob(blob)
-    setQrPreviewUrl(previewUrl)
+    setSelectedIds((current) =>
+      allVisibleSelected
+        ? current.filter((id) => !visibleIds.includes(id))
+        : [...new Set([...current, ...visibleIds])],
+    )
   }
 
-  function setLabelPreview(blob) {
-    if (labelPreviewUrlRef.current) {
-      URL.revokeObjectURL(labelPreviewUrlRef.current)
-    }
-
-    const previewUrl = URL.createObjectURL(blob)
-    labelPreviewUrlRef.current = previewUrl
-    setLabelBlob(blob)
-    setLabelPreviewUrl(previewUrl)
-  }
-
-  async function handleGenerateQrCode(product = selectedProduct) {
+  async function handleDownloadPdf() {
     const numericWorkspaceId = getValidId(workspaceId)
 
-    if (!numericWorkspaceId || !requireSelectedProduct(product)) {
-      return null
-    }
-
-    const productId = getValidId(product.id)
-
-    if (!productId) {
-      setError('Selecione um produto válido antes de gerar QR Code ou etiqueta.')
-      return null
-    }
-
-    if (String(productId) !== String(selectedProductId)) {
-      clearPreviews()
-    }
-    setSelectedProductId(String(productId))
-    setSelectedOutputType('qr')
-    setIsLoadingQr(true)
-    setError('')
-    setSuccessMessage('')
-
-    try {
-      const blob = await getProductQrCode(numericWorkspaceId, productId)
-      setQrPreview(blob)
-      setSuccessMessage('QR Code gerado com sucesso.')
-
-      return blob
-    } catch (generateError) {
-      setError(getFriendlyError(generateError))
-      return null
-    } finally {
-      setIsLoadingQr(false)
-    }
-  }
-
-  async function handleGenerateLabel(product = selectedProduct) {
-    const numericWorkspaceId = getValidId(workspaceId)
-
-    if (!numericWorkspaceId || !requireSelectedProduct(product)) {
-      return null
-    }
-
-    const productId = getValidId(product.id)
-
-    if (!productId) {
-      setError('Selecione um produto válido antes de gerar QR Code ou etiqueta.')
-      return null
-    }
-
-    if (String(productId) !== String(selectedProductId)) {
-      clearPreviews()
-    }
-    setSelectedProductId(String(productId))
-    setSelectedOutputType('label')
-    setIsLoadingLabel(true)
-    setError('')
-    setSuccessMessage('')
-
-    try {
-      const blob = await getProductLabel(numericWorkspaceId, productId)
-      setLabelPreview(blob)
-      setSuccessMessage('Etiqueta gerada com sucesso.')
-
-      return blob
-    } catch (generateError) {
-      setError(getFriendlyError(generateError))
-      return null
-    } finally {
-      setIsLoadingLabel(false)
-    }
-  }
-
-  async function handleDownloadQrCode() {
-    const blob = qrBlob ?? (await handleGenerateQrCode())
-
-    if (blob && selectedProduct) {
-      downloadBlob(
-        blob,
-        `qrcode-${sanitizeFileName(selectedProduct.name)}-${selectedProduct.id}.png`,
-      )
-    }
-  }
-
-  async function handleDownloadLabel() {
-    const blob = labelBlob ?? (await handleGenerateLabel())
-
-    if (blob && selectedProduct) {
-      downloadBlob(
-        blob,
-        `etiqueta-${sanitizeFileName(selectedProduct.name)}-${selectedProduct.id}.png`,
-      )
-    }
-  }
-
-  async function handleGenerateSelected() {
-    if (selectedOutputType === 'label') {
-      return handleGenerateLabel()
-    }
-
-    return handleGenerateQrCode()
-  }
-
-  async function handleDownloadSelected() {
-    if (selectedOutputType === 'label') {
-      return handleDownloadLabel()
-    }
-
-    return handleDownloadQrCode()
-  }
-
-  async function handleDownloadLabelsSheet() {
-    const numericWorkspaceId = getValidId(workspaceId)
-
-    if (!numericWorkspaceId) {
+    if (!numericWorkspaceId || !orderedSelection.length || isOverLimit) {
       return
     }
 
-    setIsLoadingLabelsSheet(true)
+    setIsDownloading(true)
     setError('')
-    setSuccessMessage('')
 
     try {
-      const blob = await getLabelsSheet(numericWorkspaceId)
-      downloadBlob(blob, `etiquetas-workspace-${numericWorkspaceId}.png`)
-      setSuccessMessage('Etiquetas para impressão baixadas com sucesso.')
+      const blob = await getPrintSheet(numericWorkspaceId, {
+        code,
+        copies,
+        format: 'pdf',
+        productIds: orderedSelection,
+      })
+      downloadBlob(blob, code === 'barcode' ? 'codigos-de-barras-produzzy.pdf' : 'etiquetas-produzzy.pdf')
     } catch (downloadError) {
       setError(getFriendlyError(downloadError))
     } finally {
-      setIsLoadingLabelsSheet(false)
+      setIsDownloading(false)
     }
   }
 
-  async function handleDownloadQrCodesSheet() {
-    const numericWorkspaceId = getValidId(workspaceId)
-
-    if (!numericWorkspaceId) {
-      return
-    }
-
-    setIsLoadingQrCodesSheet(true)
-    setError('')
-    setSuccessMessage('')
-
-    try {
-      const blob = await getQrCodesSheet(numericWorkspaceId)
-      downloadBlob(blob, `qrcodes-workspace-${numericWorkspaceId}.png`)
-      setSuccessMessage('QR Codes para impressão baixados com sucesso.')
-    } catch (downloadError) {
-      setError(getFriendlyError(downloadError))
-    } finally {
-      setIsLoadingQrCodesSheet(false)
-    }
-  }
-
-  function handleSelectProduct(productId) {
-    const numericProductId = getValidId(productId)
-
-    setSelectedProductId(numericProductId ? String(numericProductId) : '')
-    setError('')
-    setSuccessMessage('')
-    clearPreviews()
-  }
-
-  function handleSelectProductForPreview(product) {
-    handleSelectProduct(product.id)
-  }
-
-  const closeScanner = useCallback(() => {
-    setScannerMode(null)
-  }, [])
+  const closeScanner = useCallback(() => setScannerOpen(false), [])
 
   const handleScanDetected = useCallback(
     (rawValue) => {
@@ -593,9 +339,7 @@ function LabelsPage({ onNavigate }) {
         return 'Este código pertence a outro workspace.'
       }
 
-      setScannerMode(null)
-      setError('')
-      setSuccessMessage('')
+      setScannerOpen(false)
       onNavigate?.('stock', {
         type: 'product-movement',
         workspaceId: numericWorkspaceId,
@@ -607,290 +351,201 @@ function LabelsPage({ onNavigate }) {
     [onNavigate, workspaceId],
   )
 
-  function getProductActionItems(product) {
-    return [
-      {
-        id: 'qr',
-        label: 'Gerar QR Code',
-        onClick: () => handleGenerateQrCode(product),
-      },
-      {
-        id: 'label',
-        label: 'Gerar etiqueta',
-        onClick: () => handleGenerateLabel(product),
-      },
-    ]
-  }
-
-  const activePreviewUrl =
-    selectedOutputType === 'label' ? labelPreviewUrl : qrPreviewUrl
-  const activePreviewAlt =
-    selectedOutputType === 'label'
-      ? 'Etiqueta real do produto'
-      : 'QR Code real do produto'
-  const activePreviewTitle =
-    selectedOutputType === 'label' ? 'Etiqueta' : 'QR Code'
-  const hasActivePreview = Boolean(activePreviewUrl)
-  const isGeneratingSelected =
-    selectedOutputType === 'label' ? isLoadingLabel : isLoadingQr
-  const activeDownloadLabel =
-    selectedOutputType === 'label' ? 'Baixar etiqueta' : 'Baixar QR Code'
-
-  const columns = [
-    {
-      key: 'name',
-      label: 'Produto',
-      mobilePrimary: true,
-      render: (product) => (
-        <button
-          className="product-cell product-cell--button"
-          type="button"
-          onClick={() => handleSelectProductForPreview(product)}
-        >
-          <strong>{product.name}</strong>
-          <span>Código: {formatProductCode(product.id)}</span>
-        </button>
-      ),
-    },
-    { key: 'category', label: 'Categoria' },
-    {
-      key: 'actions',
-      label: 'Ações',
-      render: (product) => (
-        <div className="label-product-actions">
-          <ActionMenu
-            items={getProductActionItems(product)}
-            label={`Ações de ${product.name}`}
-          />
-        </div>
-      ),
-    },
-  ]
+  const canPrint = Boolean(orderedSelection.length) && !isOverLimit
+  const printLabel = canPrint ? `Imprimir ${pluralize(labelCount, 'etiqueta', 'etiquetas')}` : 'Imprimir'
 
   return (
     <div className="page-stack">
       <PageHeader
-        subtitle="Gere etiquetas e códigos para os produtos ativos do workspace"
-        title="Etiquetas e QR Codes"
-      />
-
-      {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
-      {successMessage ? (
-        <p className="stock-feedback stock-feedback--success">{successMessage}</p>
-      ) : null}
-
-      <section className="content-grid labels-top-grid">
-        <Card
-          className="labels-actions-card"
-          title="Escanear e imprimir"
-          eyebrow="Ações de código"
-        >
-          <div className="labels-actions">
-            <div
-              className="segmented-control"
-              role="tablist"
-              aria-label="Ação de código"
-            >
-              <button
-                aria-selected={utilityTab === 'scan'}
-                className={utilityTab === 'scan' ? 'is-active' : ''}
-                role="tab"
-                type="button"
-                onClick={() => setUtilityTab('scan')}
-              >
-                Escanear
-              </button>
-              <button
-                aria-selected={utilityTab === 'print'}
-                className={utilityTab === 'print' ? 'is-active' : ''}
-                role="tab"
-                type="button"
-                onClick={() => setUtilityTab('print')}
-              >
-                Imprimir
-              </button>
-            </div>
-
-            <div className="labels-actions__art">
-              {utilityTab === 'scan' ? (
-                <ScanIllustration />
-              ) : (
-                <PrintIllustration />
-              )}
-            </div>
-
-            {utilityTab === 'scan' ? (
-              <div className="labels-actions__panel">
-                <p>
-                  Leia o código de um produto para movimentar o estoque
-                  (entrada/saída) direto por aqui.
-                </p>
-                <div className="labels-actions__buttons">
-                  <Button icon={<QrIcon />} onClick={() => setScannerMode('qr')}>
-                    QR Code
-                  </Button>
-                  <Button
-                    icon={<BarcodeIcon />}
-                    onClick={() => setScannerMode('barcode')}
-                  >
-                    Código de barras
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="labels-actions__panel">
-                <p>Gere arquivos de identificação para todos os produtos ativos.</p>
-                <div className="labels-actions__buttons">
-                  <Button
-                    disabled={isLoadingQrCodesSheet || !products.length}
-                    onClick={handleDownloadQrCodesSheet}
-                    variant="secondary"
-                  >
-                    {isLoadingQrCodesSheet ? 'Baixando...' : 'Baixar QR Codes'}
-                  </Button>
-                  <Button
-                    disabled={isLoadingLabelsSheet || !products.length}
-                    onClick={handleDownloadLabelsSheet}
-                    variant="secondary"
-                  >
-                    {isLoadingLabelsSheet ? 'Baixando...' : 'Baixar etiquetas'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="label-generator-card" title="Gerador individual">
-          <div className="label-preview-stack">
-            <div className="stock-form stock-form--select">
-              <span>Produto</span>
-              <SelectMenu
-                ariaLabel="Produto"
-                disabled={isLoadingProducts || !products.length}
-                onChange={handleSelectProduct}
-                options={
-                  products.length
-                    ? products.map((product) => ({
-                        label: product.name,
-                        value: product.id,
-                      }))
-                    : [{ label: 'Nenhum produto ativo', value: '' }]
-                }
-                value={selectedProductId}
-              />
-            </div>
-
-            <div className="label-type-field">
-              <span>Tipo</span>
-              <div className="segmented-control" role="tablist" aria-label="Tipo de arquivo">
-                <button
-                  aria-selected={selectedOutputType === 'qr'}
-                  className={selectedOutputType === 'qr' ? 'is-active' : ''}
-                  role="tab"
-                  type="button"
-                  onClick={() => setSelectedOutputType('qr')}
-                >
-                  QR Code
-                </button>
-                <button
-                  aria-selected={selectedOutputType === 'label'}
-                  className={selectedOutputType === 'label' ? 'is-active' : ''}
-                  role="tab"
-                  type="button"
-                  onClick={() => setSelectedOutputType('label')}
-                >
-                  Etiqueta
-                </button>
-              </div>
-            </div>
-
+        actions={
+          <>
             <Button
-              className="label-generate-button"
-              disabled={isGeneratingSelected || !selectedProduct}
-              onClick={handleGenerateSelected}
+              disabled={!canPrint || isDownloading}
+              onClick={handleDownloadPdf}
               variant="secondary"
             >
-              {isGeneratingSelected ? 'Gerando...' : 'Gerar'}
+              {isDownloading ? 'Gerando PDF...' : 'Baixar PDF'}
             </Button>
-
-            <p className="label-preview-title">Prévia</p>
-
-            <div className="real-preview-single">
-              <div
-                className={`real-preview-card ${
-                  selectedOutputType === 'label'
-                    ? 'real-preview-card--label'
-                    : 'real-preview-card--qr'
-                } ${hasActivePreview ? '' : 'real-preview-card--empty'}`}
-              >
-                <h3>
-                  {activePreviewTitle} -{' '}
-                  {selectedProduct?.name ?? 'Selecione um produto'}
-                </h3>
-                {hasActivePreview ? (
-                  <img alt={activePreviewAlt} src={activePreviewUrl} />
-                ) : (
-                  <div className="real-preview-placeholder">
-                    <strong>Nenhuma prévia ainda</strong>
-                    <span>Gere um QR Code ou etiqueta para visualizar.</span>
-                  </div>
-                )}
-                {hasActivePreview && selectedProduct ? (
-                  <small className="real-preview-card__code">
-                    Código: {formatProductCode(selectedProduct.id)}
-                  </small>
-                ) : null}
-                {hasActivePreview ? (
-                  <button
-                    disabled={!selectedProduct || isGeneratingSelected}
-                    type="button"
-                    onClick={handleDownloadSelected}
-                  >
-                    {activeDownloadLabel}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </Card>
-      </section>
-
-      <Card
-        className="label-products-card"
-        title="Produtos ativos"
-        eyebrow="Catálogo"
-      >
-        {isLoadingProducts ? (
-          <div className="stock-loading">Carregando produtos...</div>
-        ) : products.length ? (
-          <>
-            <div className="labels-product-table" ref={productListRef}>
-              <DataTable columns={columns} rows={productPagination.pageItems} />
-            </div>
-            <Pagination
-              itemLabel="produtos"
-              onPageChange={productPagination.setPage}
-              page={productPagination.page}
-              pageSize={productPagination.pageSize}
-              totalItems={productPagination.totalItems}
-            />
+            <Button
+              disabled={!canPrint || !preview.url || isLoadingPreview}
+              onClick={() => printSheetImage(preview.url)}
+            >
+              {printLabel}
+            </Button>
           </>
-        ) : (
-          <div className="stock-empty">
-            <h2>Nenhum produto ativo</h2>
-            <p>Cadastre produtos ativos no Estoque para gerar etiquetas.</p>
-          </div>
-        )}
-      </Card>
+        }
+        subtitle="Gere QR Codes e códigos de barras para imprimir e escanear"
+        title="Etiquetas"
+      />
 
-      {scannerMode ? (
+      <button className="scan-button" onClick={() => setScannerOpen(true)} type="button">
+        <span className="scan-button__icon">
+          <ScanIcon />
+        </span>
+        <span className="scan-button__text">
+          <strong>Escanear etiqueta</strong>
+          <span>Movimente um produto pela câmera</span>
+        </span>
+        <span aria-hidden="true" className="scan-button__go">
+          ›
+        </span>
+      </button>
+
+      {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
+
+      <div className="labels-layout">
+        <section aria-labelledby="labels-products-title" className="dashboard-panel">
+          <div className="dashboard-panel__head">
+            <h2 id="labels-products-title">
+              Produtos
+              <span className="dashboard-panel__count">
+                {pluralize(orderedSelection.length, 'selecionado', 'selecionados')}
+              </span>
+            </h2>
+            {visibleProducts.length ? (
+              <button className="dashboard-panel__link" onClick={toggleAllVisible} type="button">
+                {allVisibleSelected ? 'Limpar seleção' : 'Selecionar todos'}
+              </button>
+            ) : null}
+          </div>
+
+          <label className="labels-search">
+            <SearchIcon />
+            <input
+              aria-label="Buscar produto"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar produto"
+              type="search"
+              value={search}
+            />
+          </label>
+
+          {isLoadingProducts ? (
+            <p className="labels-state">Carregando produtos...</p>
+          ) : visibleProducts.length ? (
+            <>
+              <ul className="label-pick" ref={listRef}>
+                {pagination.pageItems.map((product) => {
+                  const isSelected = selectedSet.has(product.id)
+
+                  return (
+                    <li key={product.id}>
+                      <button
+                        aria-checked={isSelected}
+                        className={`label-pick__item${isSelected ? ' is-selected' : ''}`}
+                        onClick={() => toggleProduct(product.id)}
+                        role="checkbox"
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="label-pick__check">
+                          {isSelected ? '✓' : ''}
+                        </span>
+                        <span className="label-pick__name">
+                          <strong>{product.name}</strong>
+                          <span>
+                            {product.category} · ID {product.id}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="labels-pagination">
+                <Pagination
+                  itemLabel="produtos"
+                  onPageChange={(page) => pagination.setPage(page, { scroll: false })}
+                  page={pagination.page}
+                  pageSize={pagination.pageSize}
+                  totalItems={pagination.totalItems}
+                />
+              </div>
+            </>
+          ) : (
+            <p className="labels-state">
+              {search.trim()
+                ? 'Nenhum produto encontrado.'
+                : 'Cadastre produtos ativos no Estoque para gerar etiquetas.'}
+            </p>
+          )}
+
+          <div aria-label="Opções da etiqueta" className="label-options">
+            <button
+              aria-pressed={code === 'qr'}
+              className={`filter-pill${code === 'qr' ? ' is-active' : ''}`}
+              onClick={() => setCode('qr')}
+              type="button"
+            >
+              QR Code
+            </button>
+            <button
+              aria-pressed={code === 'barcode'}
+              className={`filter-pill${code === 'barcode' ? ' is-active' : ''}`}
+              onClick={() => setCode('barcode')}
+              type="button"
+            >
+              Código de barras
+            </button>
+            <span className="label-copies">
+              <button
+                aria-label="Menos cópias"
+                disabled={copies <= 1}
+                onClick={() => setCopies((value) => Math.max(1, value - 1))}
+                type="button"
+              >
+                −
+              </button>
+              <span aria-live="polite">{pluralize(copies, 'cópia', 'cópias')}</span>
+              <button
+                aria-label="Mais cópias"
+                disabled={copies >= MAX_COPIES}
+                onClick={() => setCopies((value) => Math.min(MAX_COPIES, value + 1))}
+                type="button"
+              >
+                +
+              </button>
+            </span>
+          </div>
+        </section>
+
+        <section aria-labelledby="labels-preview-title" className="dashboard-panel">
+          <div className="dashboard-panel__head">
+            <h2 id="labels-preview-title">Prévia da folha</h2>
+            <span className="dashboard-panel__count">A4 · 3 colunas</span>
+          </div>
+          <div className="sheet-preview">
+            {isOverLimit ? (
+              <p className="labels-state">
+                São {labelCount} etiquetas — o máximo por vez é {MAX_LABELS}. Selecione menos
+                produtos ou cópias.
+              </p>
+            ) : !orderedSelection.length ? (
+              <p className="labels-state">
+                Selecione produtos ao lado para ver a folha que será impressa.
+              </p>
+            ) : preview.url ? (
+              <>
+                <div className={`sheet-preview__paper${isLoadingPreview ? ' is-loading' : ''}`}>
+                  <img alt="Prévia real da folha de etiquetas" src={preview.url} />
+                </div>
+                <div className="sheet-preview__meta">
+                  <span>
+                    {pluralize(labelCount, 'etiqueta', 'etiquetas')} ·{' '}
+                    {pluralize(preview.pages, 'folha', 'folhas')}
+                  </span>
+                  <span>Escaneie para movimentar</span>
+                </div>
+              </>
+            ) : (
+              <p className="labels-state">Gerando prévia...</p>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {scannerOpen ? (
         <Suspense fallback={null}>
-          <QrScannerModal
-            mode={scannerMode}
-            onClose={closeScanner}
-            onDetect={handleScanDetected}
-          />
+          <QrScannerModal mode="both" onClose={closeScanner} onDetect={handleScanDetected} />
         </Suspense>
       ) : null}
     </div>

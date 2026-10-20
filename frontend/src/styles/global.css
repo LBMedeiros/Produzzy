@@ -169,8 +169,6 @@
 :root[data-theme="dark"] .user-menu,
 :root[data-theme="dark"] .workspace-modal,
 :root[data-theme="dark"] .stock-panel,
-:root[data-theme="dark"] .real-preview-card,
-:root[data-theme="dark"] .label-preview,
 :root[data-theme="dark"] .workspace-empty-card {
   background: var(--card);
   border-color: var(--border);
@@ -2151,11 +2149,6 @@ a {
   align-self: start;
 }
 
-.labels-top-grid {
-  align-items: stretch;
-  grid-template-columns: repeat(2, minmax(300px, 1fr));
-}
-
 .feature-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -2173,7 +2166,6 @@ a {
   color: var(--muted);
 }
 
-.label-preview,
 .audit-list,
 .settings-list,
 .security-note {
@@ -3311,100 +3303,6 @@ a {
   font-size: 13px;
 }
 
-.printed-label {
-  display: grid;
-  width: 100%;
-  max-width: 260px;
-  min-height: 330px;
-  place-items: center;
-  gap: 14px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background:
-    linear-gradient(#ffffff, #ffffff) padding-box,
-    linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(15, 23, 42, 0.16)) border-box;
-  padding: 22px;
-  text-align: center;
-}
-
-.printed-label__brand {
-  justify-self: stretch;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
-  color: var(--blue);
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.printed-label strong,
-.printed-label span,
-.printed-label small {
-  display: block;
-}
-
-.printed-label span,
-.printed-label small {
-  color: var(--muted);
-}
-
-.label-preview-stack {
-  display: grid;
-  align-content: start;
-  gap: 13px;
-}
-
-/* Unified left card: a segmented control (Escanear | Imprimir) over an
-   illustration and a contextual panel, mirroring the generator's "Tipo"
-   switch. The card stretches to the generator's height and the illustration
-   fills the middle, so both top-row cards read as a matched pair. */
-.labels-actions-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.labels-actions {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.labels-actions__art {
-  display: grid;
-  flex: 1;
-  place-items: center;
-  min-height: 120px;
-  padding: 8px 0;
-  color: var(--muted);
-}
-
-.labels-actions__art svg {
-  width: 100%;
-  max-width: 240px;
-  height: auto;
-  max-height: 170px;
-}
-
-.labels-actions__panel {
-  display: grid;
-  gap: 12px;
-}
-
-.labels-actions__panel p {
-  margin: 0;
-  color: var(--muted);
-}
-
-.labels-actions__buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.labels-actions__buttons .button {
-  flex: 1 1 140px;
-}
-
 .qr-scanner-modal {
   width: min(440px, 100%);
 }
@@ -3483,240 +3381,11 @@ a {
   font-size: 13px;
 }
 
-.label-type-field {
-  display: grid;
-  gap: 8px;
-}
-
-.label-type-field > span {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.segmented-control {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-elevated);
-  padding: 5px;
-}
-
-.segmented-control button {
-  min-height: 36px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.segmented-control button:hover {
-  border-color: rgba(37, 99, 235, 0.18);
-  background: var(--surface);
-}
-
-.segmented-control button:focus-visible {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
-  outline: none;
-}
-
-.segmented-control button.is-active {
-  border-color: rgba(37, 99, 235, 0.22);
-  background: var(--primary-button-bg);
-  color: #ffffff;
-}
-
-.label-generate-button.button {
-  width: 100%;
-}
-
-.label-preview-title {
-  margin: 4px 0 -2px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.real-preview-single {
-  display: grid;
-  align-items: start;
-  justify-items: center;
-  min-width: 0;
-}
-
-.real-preview-single .real-preview-card {
-  min-width: 0;
-  width: 100%;
-  max-width: 240px;
-}
-
-.label-product-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.labels-product-table .data-table {
-  min-width: 560px;
-}
-
-.labels-product-table .data-table th {
-  background: var(--surface-elevated);
-  font-size: 11px;
-  font-weight: 800;
-  padding-block: 10px;
-  text-transform: none;
-}
-
-.labels-product-table .data-table td {
-  padding-block: 16px;
-}
-
-.labels-product-table .product-cell {
-  gap: 4px;
-}
-
-.labels-product-table .product-cell strong {
-  font-size: 15px;
-}
-
-.labels-product-table .product-cell span {
-  font-size: 12px;
-}
-
-.labels-product-table .data-table th:last-child,
-.labels-product-table .data-table td:last-child {
-  width: 72px;
-  text-align: right;
-}
-
-.real-preview-card {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 12px;
-}
-
-.real-preview-card h3 {
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-.real-preview-card img,
-.real-preview-placeholder {
-  max-width: 100%;
-  min-width: 0;
-  width: 100%;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  background: var(--surface-elevated);
-}
-
-.real-preview-card img {
-  display: block;
-  justify-self: center;
-  height: auto;
-  max-height: 220px;
-  background: #ffffff;
-  object-fit: contain;
-  padding: 10px;
-}
-
-.real-preview-placeholder {
-  display: grid;
-  align-content: center;
-  gap: 6px;
-  min-height: 156px;
-  place-items: center;
-  color: var(--muted);
-  text-align: center;
-  padding: 12px;
-}
-
-.real-preview-placeholder strong {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.real-preview-placeholder span {
-  max-width: 220px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.45;
-}
-
-.real-preview-card--qr img {
-  aspect-ratio: 1;
-  max-width: 220px;
-}
-
-.real-preview-card--label img {
-  max-height: 180px;
-}
-
-.real-preview-card--empty .real-preview-placeholder {
-  aspect-ratio: auto;
-  min-height: 156px;
-}
-
-.real-preview-card button {
-  width: 100%;
-  min-height: 36px;
-  border: 1px solid var(--blue);
-  border-radius: 8px;
-  background: var(--primary-button-bg);
-  color: #ffffff;
-  font-weight: 800;
-}
-
-.real-preview-card button:hover {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #ffffff;
-}
-
-.real-preview-card button:disabled {
-  border-color: var(--border);
-  background: var(--surface-elevated);
-  color: var(--muted);
-}
-
-.real-preview-card__code,
 .product-code {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
-}
-
-.qr-grid {
-  width: 58px;
-  height: 58px;
-  border: 6px solid var(--navy);
-  background:
-    linear-gradient(90deg, var(--navy) 12px, transparent 12px) 0 0 / 24px 24px,
-    linear-gradient(var(--navy) 12px, transparent 12px) 0 0 / 24px 24px,
-    #ffffff;
-}
-
-.qr-grid--large {
-  width: 138px;
-  height: 138px;
-  border-width: 10px;
 }
 
 .settings-grid {
@@ -5548,7 +5217,6 @@ a {
 @media (max-width: 1180px) {
 
   .content-grid--label,
-  .labels-top-grid,
   .feature-grid,
   .feature-grid--three,
   .feature-grid--four,
@@ -5702,23 +5370,6 @@ a {
     width: 100%;
   }
 
-  /* Stack side-by-side buttons: flex-direction beats the `flex-basis: 140px`
-     that a plain `width: 100%` can't override, so labels never overflow. */
-  .labels-actions__buttons {
-    flex-direction: column;
-  }
-
-  .labels-actions__buttons .button {
-    width: 100%;
-    /* Undo the row's `flex: 1 1 140px`, whose 140px basis becomes a huge
-       HEIGHT once the row turns into a column. Size to content instead. */
-    flex: 0 0 auto;
-  }
-
-  .segmented-control {
-    width: 100%;
-  }
-
   .replenishment-modal__metrics {
     grid-template-columns: 1fr;
   }
@@ -5824,8 +5475,6 @@ a {
 :root[data-theme="dark"] .user-menu,
 :root[data-theme="dark"] .workspace-modal,
 :root[data-theme="dark"] .stock-panel,
-:root[data-theme="dark"] .real-preview-card,
-:root[data-theme="dark"] .label-preview,
 :root[data-theme="dark"] .workspace-empty-card {
   background: var(--card);
   border-color: var(--border);
@@ -8130,5 +7779,330 @@ a {
 
   .board__head {
     display: none;
+  }
+}
+
+/* ===================================================================
+   Redesign · Fase 5 — Etiquetas (docs/redesign/REDESIGN.md §3.2, §5)
+   =================================================================== */
+
+/* "Escanear etiqueta": filled blue, white icon tile, arrow on the right. */
+.scan-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8 60%, #1e40af);
+  box-shadow:
+    0 14px 30px rgba(37, 99, 235, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  cursor: pointer;
+  padding: 14px 16px;
+  text-align: left;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.scan-button:hover {
+  box-shadow:
+    0 18px 36px rgba(37, 99, 235, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.scan-button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.scan-button__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  color: #1d4ed8;
+}
+
+.scan-button__icon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.scan-button__text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.scan-button__text strong {
+  font-size: 16px;
+}
+
+.scan-button__text span {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+}
+
+.scan-button__go {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.labels-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.labels-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 18px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--faint);
+  padding: 0 12px;
+}
+
+.labels-search svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.labels-search input {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  outline: 0;
+}
+
+.labels-search:focus-within {
+  border-color: var(--primary-button-bg);
+}
+
+.labels-state {
+  color: var(--muted);
+  padding: 14px 18px;
+}
+
+.label-pick {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.label-pick__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 10px 18px;
+  text-align: left;
+}
+
+.label-pick li:first-child .label-pick__item {
+  border-top: 0;
+}
+
+.label-pick__item:hover {
+  background: var(--surface-elevated);
+}
+
+.label-pick__item:focus-visible {
+  outline: 2px solid var(--primary-button-bg);
+  outline-offset: -2px;
+}
+
+.label-pick__check {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border: 1.5px solid var(--faint);
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.label-pick__item.is-selected .label-pick__check {
+  border-color: var(--primary-button-bg);
+  background: var(--primary-button-bg);
+}
+
+.label-pick__name {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.label-pick__name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label-pick__name span {
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.labels-pagination {
+  padding: 0 18px;
+}
+
+.label-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 14px 18px 10px;
+}
+
+.label-copies {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 800;
+  padding: 2px;
+}
+
+.label-copies span {
+  min-width: 64px;
+  text-align: center;
+}
+
+.label-copies button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.label-copies button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Real sheet from the API, on a soft "paper" background. */
+.sheet-preview {
+  padding: 8px 18px 14px;
+}
+
+.sheet-preview__paper {
+  max-height: 560px;
+  overflow-y: auto;
+  border-radius: 10px;
+  background: #e9eef5;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  padding: 12px;
+  transition: opacity var(--motion-normal) var(--motion-ease);
+}
+
+.sheet-preview__paper.is-loading {
+  opacity: 0.55;
+}
+
+.sheet-preview__paper img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.sheet-preview__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--faint);
+  font-size: 12.5px;
+  margin-top: 10px;
+}
+
+@media (max-width: 1100px) {
+  .labels-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .labels-search {
+    margin-right: 14px;
+    margin-left: 14px;
+  }
+
+  .label-pick__item,
+  .labels-state {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .label-options,
+  .sheet-preview,
+  .labels-pagination {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-button {
+    transition: none;
+  }
+
+  .scan-button:hover {
+    transform: none;
   }
 }

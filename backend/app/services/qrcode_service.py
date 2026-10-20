@@ -786,3 +786,137 @@ def generate_products_qrcodes_sheet_image(
         sheet_image.paste(card, (x, y))
 
     return image_to_png_buffer(sheet_image, dpi=dpi)
+
+
+# --- Print sheet (docs/redesign Fase 5): selected products, QR or barcode,
+# N copies, A4 pages in 3 columns. QR codes keep the brand icon in the
+# centre (generate_qrcode_pil, error correction H).
+
+PRINT_SHEET_DPI = 200
+PRINT_SHEET_COLUMNS = 3
+PRINT_SHEET_MAX_LABELS = 120
+_A4_MM = (210, 297)
+_SHEET_MARGIN_MM = 8
+_SHEET_GAP_MM = 3
+_CARD_HEIGHT_MM = {"qr": 64, "barcode": 38}
+
+
+def generate_print_barcode_card_pil(
+    product_name: str,
+    product_category: str | None,
+    product_id: int,
+    width: int,
+    height: int,
+) -> Image.Image:
+    card = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(card)
+    border_width = max(2, width // 240)
+    padding = max(14, width // 22)
+    draw.rounded_rectangle(
+        (border_width, border_width, width - border_width - 1, height - border_width - 1),
+        radius=max(8, width // 28),
+        fill="white",
+        outline=BORDER_COLOR,
+        width=border_width,
+    )
+
+    name_font, name_lines = fit_wrapped_text(
+        draw,
+        product_name,
+        max_width=width - (padding * 2),
+        initial_size=max(20, width // 20),
+        min_size=max(12, width // 36),
+        max_lines=2,
+    )
+    line_height = max(text_size(draw, "Ag", name_font)[1], getattr(name_font, "size", 16))
+    top = padding
+
+    for index, line in enumerate(name_lines):
+        draw_centered_text(draw, line, top + index * line_height, width, name_font)
+
+    code_font = load_font(max(12, width // 36), bold=True)
+    barcode_value = get_product_barcode_value(product_id)
+    caption = f"{product_category} · {barcode_value}" if product_category else barcode_value
+    caption_height = text_size(draw, caption, code_font)[1]
+    caption_top = height - padding - caption_height
+    bar_top = top + len(name_lines) * line_height + max(8, padding // 2)
+    bar_bottom = caption_top - max(8, padding // 2)
+    barcode_image = resize_contained(
+        generate_product_barcode(product_id),
+        width - padding * 2,
+        max(1, bar_bottom - bar_top),
+    )
+    paste_centered(card, barcode_image, width // 2, (bar_top + bar_bottom) // 2)
+    draw_centered_text(draw, caption, caption_top, width, code_font, fill=MUTED_COLOR)
+    return card
+
+
+def generate_print_sheet_pages(
+    items: list[dict],
+    code: str = "qr",
+    dpi: int = PRINT_SHEET_DPI,
+    columns: int = PRINT_SHEET_COLUMNS,
+) -> list[Image.Image]:
+    """One A4 image per page. `items`: data, product_name, product_category,
+    product_id (already repeated for copies)."""
+    sheet_width = mm_to_px(_A4_MM[0], dpi)
+    sheet_height = mm_to_px(_A4_MM[1], dpi)
+    margin = mm_to_px(_SHEET_MARGIN_MM, dpi)
+    gap = mm_to_px(_SHEET_GAP_MM, dpi)
+    card_width = (sheet_width - margin * 2 - gap * (columns - 1)) // columns
+    card_height = mm_to_px(_CARD_HEIGHT_MM.get(code, _CARD_HEIGHT_MM["qr"]), dpi)
+    rows = max(1, (sheet_height - margin * 2 + gap) // (card_height + gap))
+    per_page = columns * rows
+    pages = []
+
+    for index, item in enumerate(items):
+        position = index % per_page
+        if position == 0:
+            pages.append(Image.new("RGB", (sheet_width, sheet_height), "white"))
+
+        x = margin + (position % columns) * (card_width + gap)
+        y = margin + (position // columns) * (card_height + gap)
+
+        if code == "barcode":
+            card = generate_print_barcode_card_pil(
+                product_name=item["product_name"],
+                product_category=item.get("product_category"),
+                product_id=item["product_id"],
+                width=card_width,
+                height=card_height,
+            )
+        else:
+            card = generate_print_qrcode_card_pil(
+                data=item["data"],
+                product_name=item["product_name"],
+                product_id=item["product_id"],
+                width=card_width,
+                height=card_height,
+            )
+        pages[-1].paste(card, (x, y))
+
+    return pages
+
+
+def pages_to_png_buffer(pages: list[Image.Image], dpi: int = PRINT_SHEET_DPI) -> BytesIO:
+    # Pages stacked into one tall PNG, like the other sheet endpoints.
+    width, height = pages[0].size
+    sheet = Image.new("RGB", (width, height * len(pages)), "white")
+
+    for index, page in enumerate(pages):
+        sheet.paste(page, (0, index * height))
+
+    return image_to_png_buffer(sheet, dpi=dpi)
+
+
+def pages_to_pdf_buffer(pages: list[Image.Image], dpi: int = PRINT_SHEET_DPI) -> BytesIO:
+    buffer = BytesIO()
+    pages[0].save(
+        buffer,
+        format="PDF",
+        save_all=True,
+        append_images=pages[1:],
+        resolution=dpi,
+    )
+    buffer.seek(0)
+    return buffer
