@@ -142,7 +142,6 @@ function LabelsPage({ onNavigate }) {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
-  const [code, setCode] = useState('qr')
   const [copies, setCopies] = useState(1)
   const [preview, setPreview] = useState({ pages: 0, url: '' })
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
@@ -214,7 +213,7 @@ function LabelsPage({ onNavigate }) {
   const allVisibleSelected =
     visibleProducts.length > 0 && visibleProducts.every((product) => selectedSet.has(product.id))
 
-  // Live preview: the real sheet from the API (QR Codes with the logo).
+  // Live preview: the real sheet from the API (QR Code with the logo + barcode).
   useEffect(() => {
     const numericWorkspaceId = getValidId(workspaceId)
 
@@ -230,7 +229,6 @@ function LabelsPage({ onNavigate }) {
 
       try {
         const blob = await getPrintSheet(numericWorkspaceId, {
-          code,
           copies,
           productIds: orderedSelection,
         })
@@ -269,7 +267,7 @@ function LabelsPage({ onNavigate }) {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [code, copies, isOverLimit, orderedSelection, workspaceId])
+  }, [copies, isOverLimit, orderedSelection, workspaceId])
 
   useEffect(
     () => () => {
@@ -310,12 +308,11 @@ function LabelsPage({ onNavigate }) {
 
     try {
       const blob = await getPrintSheet(numericWorkspaceId, {
-        code,
         copies,
         format: 'pdf',
         productIds: orderedSelection,
       })
-      downloadBlob(blob, code === 'barcode' ? 'codigos-de-barras-produzzy.pdf' : 'etiquetas-produzzy.pdf')
+      downloadBlob(blob, 'etiquetas-produzzy.pdf')
     } catch (downloadError) {
       setError(getFriendlyError(downloadError))
     } finally {
@@ -374,7 +371,7 @@ function LabelsPage({ onNavigate }) {
             </Button>
           </>
         }
-        subtitle="Gere QR Codes e códigos de barras para imprimir e escanear"
+        subtitle="Etiquetas com QR Code e código de barras para imprimir e escanear"
         title="Etiquetas"
       />
 
@@ -469,23 +466,15 @@ function LabelsPage({ onNavigate }) {
             </p>
           )}
 
+        </section>
+
+        <section aria-labelledby="labels-preview-title" className="dashboard-panel">
+          <div className="dashboard-panel__head">
+            <h2 id="labels-preview-title">Prévia da folha</h2>
+            <span className="dashboard-panel__count">A4 · 21 por folha</span>
+          </div>
           <div aria-label="Opções da etiqueta" className="label-options">
-            <button
-              aria-pressed={code === 'qr'}
-              className={`filter-pill${code === 'qr' ? ' is-active' : ''}`}
-              onClick={() => setCode('qr')}
-              type="button"
-            >
-              QR Code
-            </button>
-            <button
-              aria-pressed={code === 'barcode'}
-              className={`filter-pill${code === 'barcode' ? ' is-active' : ''}`}
-              onClick={() => setCode('barcode')}
-              type="button"
-            >
-              Código de barras
-            </button>
+            <span className="label-options__hint">QR Code e código de barras na mesma etiqueta</span>
             <span className="label-copies">
               <button
                 aria-label="Menos cópias"
@@ -505,13 +494,6 @@ function LabelsPage({ onNavigate }) {
                 +
               </button>
             </span>
-          </div>
-        </section>
-
-        <section aria-labelledby="labels-preview-title" className="dashboard-panel">
-          <div className="dashboard-panel__head">
-            <h2 id="labels-preview-title">Prévia da folha</h2>
-            <span className="dashboard-panel__count">A4 · 3 colunas</span>
           </div>
           <div className="sheet-preview">
             {isOverLimit ? (

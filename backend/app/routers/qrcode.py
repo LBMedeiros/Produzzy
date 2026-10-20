@@ -140,14 +140,14 @@ def generate_products_print_sheet(
     workspace_id: int,
     request: Request,
     product_ids: list[int] | None = Query(default=None),
-    code: Literal["qr", "barcode"] = Query(default="qr"),
     copies: int = Query(default=1, ge=1, le=20),
     output_format: Literal["png", "pdf"] = Query(default="png", alias="format"),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """A4 sheet (3 columns) for the selected products — QR codes (brand icon
-    in the centre) or barcodes, N copies each — as a PNG preview or a PDF."""
+    """A4 sheet (3 columns) for the selected products — one label each with
+    the QR Code (brand icon in the centre) and the barcode, N copies each — as
+    a PNG preview or a PDF."""
     crud.require_workspace_role(
         workspace_id,
         current_user,
@@ -193,7 +193,7 @@ def generate_products_print_sheet(
         }
         items.extend([item] * copies)
 
-    pages = generate_print_sheet_pages(items, code=code)
+    pages = generate_print_sheet_pages(items)
 
     if output_format == "pdf":
         return StreamingResponse(

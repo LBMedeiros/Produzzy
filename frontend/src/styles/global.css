@@ -3335,7 +3335,7 @@ a {
 }
 
 .settings-page {
-  width: min(100%, 1240px);
+  width: 100%;
 }
 
 .settings-section {
@@ -7044,18 +7044,38 @@ a {
   padding: 10px 4px;
 }
 
-.board__more {
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--blue);
-  cursor: pointer;
-  font-weight: 750;
-  padding: 9px;
+/* Each column scrolls on its own, so the board fits the screen instead of
+   growing into one long page. */
+.board__list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  max-height: max(360px, calc(100dvh - 300px));
+  margin: 0 -6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 6px 4px;
+  scrollbar-width: thin;
 }
 
-.board__more:hover {
-  background: var(--card);
+/* Product with no replenishment yet: name and "Repor" on one row. */
+.board-card--compact {
+  gap: 8px;
+}
+
+.board-card__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.board-card__row .board-card__head {
+  min-width: 0;
+}
+
+.board-card__row .button {
+  flex: 0 0 auto;
 }
 
 .board-card {
@@ -7212,6 +7232,14 @@ a {
     display: none;
     border: 0;
     background: none;
+    padding: 0;
+  }
+
+  /* Phone shows one stage at a time: the page scrolls, not the column. */
+  .board__list {
+    max-height: none;
+    margin: 0;
+    overflow: visible;
     padding: 0;
   }
 
@@ -7374,7 +7402,7 @@ a {
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  padding: 10px 18px;
+  padding: 8px 18px;
   text-align: left;
 }
 
@@ -7409,21 +7437,33 @@ a {
   background: var(--primary-button-bg);
 }
 
+/* One line per product: name, then categoria · ID (truncated first). */
 .label-pick__name {
-  display: grid;
+  display: flex;
+  flex: 1;
   min-width: 0;
-  gap: 2px;
+  align-items: baseline;
+  gap: 10px;
 }
 
 .label-pick__name strong {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .label-pick__name span {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
   color: var(--faint);
   font-size: 12.5px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .labels-pagination {
@@ -7435,8 +7475,13 @@ a {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  border-top: 1px solid var(--border);
-  padding: 14px 18px 10px;
+  padding: 4px 18px 6px;
+}
+
+.label-options__hint {
+  flex: 1 1 200px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .label-copies {
@@ -7481,7 +7526,7 @@ a {
 }
 
 .sheet-preview__paper {
-  max-height: 560px;
+  max-height: max(320px, calc(100dvh - 480px));
   overflow-y: auto;
   border-radius: 10px;
   background: #e9eef5;
