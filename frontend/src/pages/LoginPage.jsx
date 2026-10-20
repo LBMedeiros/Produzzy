@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import AuthHero from '../components/auth/AuthHero'
+import LoginShowcase from '../components/auth/LoginShowcase'
 import PasswordField from '../components/auth/PasswordField'
 import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
 import { getPasswordError, PASSWORD_HINT } from '../lib/password'
+import { useAuthLandingMotion } from '../lib/useAuthLandingMotion'
 import { resendVerification } from '../services/authService'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
@@ -146,6 +147,9 @@ function LoginPage() {
   const [resendState, setResendState] = useState('idle')
 
   const isRegisterMode = mode === 'register'
+  const landingRef = useRef(null)
+  const showcaseRef = useRef(null)
+  const scrollToSection = useAuthLandingMotion(landingRef)
 
   function updateField(field, value) {
     setForm((currentForm) => ({
@@ -296,6 +300,14 @@ function LoginPage() {
     }
   }
 
+  function openRegister() {
+    if (!isRegisterMode) {
+      toggleMode()
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   function toggleMode() {
     setMode((currentMode) => (currentMode === 'login' ? 'register' : 'login'))
     setVisiblePasswords({
@@ -307,197 +319,209 @@ function LoginPage() {
     setResendState('idle')
   }
 
+  const title = verificationNotice
+    ? 'Confirme seu e-mail'
+    : isRegisterMode
+      ? 'Crie sua conta'
+      : 'Bem-vindo de volta'
+  const subtitle = verificationNotice
+    ? 'Falta um passo: confirme seu e-mail para acessar sua conta.'
+    : isRegisterMode
+      ? 'Comece a organizar seu estoque em poucos minutos.'
+      : 'Entre para acessar seus workspaces.'
+
   return (
-    <main className="login-page">
-      <section className="login-panel">
-        <div className="login-panel__brand">
-          <BrandIcon />
-          <strong>Produzzy</strong>
-        </div>
-        <div className="login-panel__copy">
-          <h1>
-            {verificationNotice
-              ? 'Confirme seu e-mail'
-              : isRegisterMode
-                ? 'Crie sua conta'
-                : 'Entre no Produzzy'}
-          </h1>
-          <p>
-            {verificationNotice
-              ? 'Falta um passo: confirme seu e-mail para acessar sua conta.'
-              : 'Use Google ou seu email e senha para acessar seus workspaces.'}
-          </p>
-        </div>
+    <main className="auth-landing" ref={landingRef}>
+      <section className="auth-hero" data-hero>
+        <div className="auth-card" data-hero-card>
+          <div className="auth-card__brand">
+            <BrandIcon />
+            <strong>Produzzy</strong>
+          </div>
+          <div className="auth-card__copy">
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
+          </div>
 
-        {verificationNotice ? (
-          <>
-            <div className="auth-feedback" role="status">
-              <h2>
-                {verificationNotice.context === 'register'
-                  ? 'Conta criada! Confirme seu e-mail'
-                  : 'Confirmação pendente'}
-              </h2>
-              <p>
-                Enviamos um link de confirmação para{' '}
-                <strong>{verificationNotice.email}</strong>. Abra o e-mail e
-                clique no link para ativar o acesso — confira também o spam.
+          {verificationNotice ? (
+            <>
+              <div className="auth-feedback" role="status">
+                <h2>
+                  {verificationNotice.context === 'register'
+                    ? 'Conta criada! Confirme seu e-mail'
+                    : 'Confirmação pendente'}
+                </h2>
+                <p>
+                  Enviamos um link de confirmação para{' '}
+                  <strong>{verificationNotice.email}</strong>. Abra o e-mail e
+                  clique no link para ativar o acesso. Confira também o spam.
+                </p>
+                {resendState === 'sent' ? (
+                  <p className="form-success">
+                    Reenviamos o link. Verifique seu e-mail.
+                  </p>
+                ) : null}
+                {resendState === 'error' ? (
+                  <p className="form-error">
+                    Não foi possível reenviar agora. Tente novamente em instantes.
+                  </p>
+                ) : null}
+                <Button
+                  className="auth-form__submit"
+                  variant="secondary"
+                  disabled={resendState === 'sending'}
+                  onClick={handleResendVerification}
+                >
+                  {resendState === 'sending'
+                    ? 'Reenviando...'
+                    : 'Reenviar e-mail de confirmação'}
+                </Button>
+              </div>
+              <p className="auth-card__switch">
+                <button type="button" onClick={backToLogin}>
+                  Voltar para o login
+                </button>
               </p>
-              {resendState === 'sent' ? (
-                <p className="form-success">
-                  Reenviamos o link. Verifique seu e-mail.
-                </p>
-              ) : null}
-              {resendState === 'error' ? (
-                <p className="form-error">
-                  Não foi possível reenviar agora. Tente novamente em instantes.
-                </p>
-              ) : null}
-              <Button
-                className="login-form__submit"
-                variant="secondary"
-                disabled={resendState === 'sending'}
-                onClick={handleResendVerification}
+            </>
+          ) : (
+            <>
+              <button
+                aria-label="Continuar com Google"
+                className="google-auth-button"
+                disabled={isSubmitting || isGoogleSubmitting}
+                onClick={handleGoogleLogin}
+                type="button"
               >
-                {resendState === 'sending'
-                  ? 'Reenviando...'
-                  : 'Reenviar e-mail de confirmação'}
-              </Button>
-            </div>
-            <p className="login-panel__footer">
-              <button type="button" onClick={backToLogin}>
-                Voltar para o login
+                <span className="google-auth-button__icon">
+                  <GoogleIcon />
+                </span>
+                <span>
+                  {isGoogleSubmitting ? 'Conectando...' : 'Continuar com Google'}
+                </span>
               </button>
-            </p>
-          </>
-        ) : (
-          <>
-        <div className="login-social">
-          <button
-            aria-label="Continuar com Google"
-            className="google-auth-button"
-            disabled={isSubmitting || isGoogleSubmitting}
-            onClick={handleGoogleLogin}
-            type="button"
-          >
-            <span className="google-auth-button__icon">
-              <GoogleIcon />
-            </span>
-            <span>
-              {isGoogleSubmitting ? 'Conectando...' : 'Continuar com Google'}
-            </span>
-          </button>
-        </div>
 
-        <div className="login-divider" role="separator">
-          <span>ou continue com email</span>
-        </div>
+              <div className="auth-divider" role="separator">
+                <span>ou com e-mail</span>
+              </div>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          {isRegisterMode ? (
-            <label>
-              Nome
-              <input
-                autoComplete="name"
-                onChange={(event) => updateField('name', event.target.value)}
-                placeholder="Digite seu nome"
-                required
-                type="text"
-                value={form.name}
-              />
-            </label>
-          ) : null}
+              <form className="login-form auth-form" onSubmit={handleSubmit}>
+                {isRegisterMode ? (
+                  <label>
+                    Nome
+                    <input
+                      autoComplete="name"
+                      onChange={(event) => updateField('name', event.target.value)}
+                      placeholder="Seu nome"
+                      required
+                      type="text"
+                      value={form.name}
+                    />
+                  </label>
+                ) : null}
 
-          <label>
-            Email
-            <input
-              autoComplete="email"
-              onChange={(event) => updateField('email', event.target.value)}
-              placeholder="Digite seu email"
-              required
-              type="email"
-              value={form.email}
-            />
-          </label>
-          <PasswordField
-            autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
-            id="login-password"
-            isVisible={visiblePasswords.password}
-            label="Senha"
-            minLength={isRegisterMode ? 8 : 1}
-            placeholder="Digite sua senha"
-            value={form.password}
-            onChange={(event) => updateField('password', event.target.value)}
-            onToggle={() => togglePasswordVisibility('password')}
-          />
+                <label>
+                  E-mail
+                  <input
+                    autoComplete="email"
+                    onChange={(event) => updateField('email', event.target.value)}
+                    placeholder="voce@empresa.com"
+                    required
+                    type="email"
+                    value={form.email}
+                  />
+                </label>
+                <PasswordField
+                  action={
+                    !isRegisterMode ? (
+                      <Link className="auth-link" to="/forgot-password">
+                        Esqueceu a senha?
+                      </Link>
+                    ) : null
+                  }
+                  autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
+                  id="login-password"
+                  isVisible={visiblePasswords.password}
+                  label="Senha"
+                  minLength={isRegisterMode ? 8 : 1}
+                  placeholder={isRegisterMode ? 'Crie uma senha' : 'Sua senha'}
+                  value={form.password}
+                  onChange={(event) => updateField('password', event.target.value)}
+                  onToggle={() => togglePasswordVisibility('password')}
+                />
 
-          {isRegisterMode ? <p className="login-hint">{PASSWORD_HINT}</p> : null}
+                {isRegisterMode ? <p className="login-hint">{PASSWORD_HINT}</p> : null}
 
-          {isRegisterMode ? (
-            <PasswordField
-              autoComplete="new-password"
-              id="login-confirm-password"
-              isVisible={visiblePasswords.confirmPassword}
-              label="Confirmar senha"
-              minLength="8"
-              placeholder="Repita sua senha"
-              value={form.confirmPassword}
-              onChange={(event) =>
-                updateField('confirmPassword', event.target.value)
-              }
-              onToggle={() => togglePasswordVisibility('confirmPassword')}
-            />
-          ) : null}
+                {isRegisterMode ? (
+                  <PasswordField
+                    autoComplete="new-password"
+                    id="login-confirm-password"
+                    isVisible={visiblePasswords.confirmPassword}
+                    label="Confirmar senha"
+                    minLength="8"
+                    placeholder="Repita a senha"
+                    value={form.confirmPassword}
+                    onChange={(event) =>
+                      updateField('confirmPassword', event.target.value)
+                    }
+                    onToggle={() => togglePasswordVisibility('confirmPassword')}
+                  />
+                ) : null}
 
-          {!isRegisterMode ? (
-            <label className="login-remember">
-              <input
-                checked={rememberMe}
-                type="checkbox"
-                onChange={(event) => setRememberMe(event.target.checked)}
-              />
-              <span className="login-remember__box" aria-hidden="true"></span>
-              <span>Lembrar de mim</span>
-            </label>
-          ) : null}
+                {!isRegisterMode ? (
+                  <label className="login-remember">
+                    <input
+                      checked={rememberMe}
+                      type="checkbox"
+                      onChange={(event) => setRememberMe(event.target.checked)}
+                    />
+                    <span className="login-remember__box" aria-hidden="true"></span>
+                    <span>Lembrar de mim por 30 dias</span>
+                  </label>
+                ) : null}
 
-          {error ? <p className="form-error">{error}</p> : null}
+                {error ? <p className="form-error">{error}</p> : null}
 
-          <Button
-            className="login-form__submit"
-            disabled={isSubmitting || isGoogleSubmitting}
-            type="submit"
-          >
-            {isSubmitting
-              ? 'Aguarde...'
-              : isRegisterMode
-                ? 'Criar conta'
-                : 'Entrar'}
-          </Button>
-        </form>
+                <Button
+                  className="auth-form__submit"
+                  disabled={isSubmitting || isGoogleSubmitting}
+                  type="submit"
+                >
+                  {isSubmitting
+                    ? 'Aguarde...'
+                    : isRegisterMode
+                      ? 'Criar conta'
+                      : 'Entrar'}
+                </Button>
+              </form>
 
-        <p className="login-panel__footer">
-          {isRegisterMode ? 'Já tem uma conta?' : 'Novo por aqui?'}{' '}
-          <button type="button" onClick={toggleMode}>
-            {isRegisterMode ? 'Entrar agora' : 'Criar conta'}
-          </button>
-        </p>
+              <p className="auth-card__switch">
+                {isRegisterMode ? 'Já tem uma conta?' : 'Novo por aqui?'}{' '}
+                <button type="button" onClick={toggleMode}>
+                  {isRegisterMode ? 'Entrar' : 'Criar conta'}
+                </button>
+              </p>
+            </>
+          )}
 
-        {!isRegisterMode ? (
-          <p className="login-panel__footer login-panel__footer--forgot">
-            <Link to="/forgot-password">Esqueceu sua senha?</Link>
+          <p className="auth-card__legal">
+            Ao continuar, você concorda com os{' '}
+            <Link to="/termos">Termos de Uso</Link> e a{' '}
+            <Link to="/privacidade">Política de Privacidade</Link>.
           </p>
-        ) : null}
-          </>
-        )}
+        </div>
 
-        <p className="login-panel__legal">
-          Ao continuar, você concorda com os{' '}
-          <Link to="/termos">Termos de Uso</Link> e a{' '}
-          <Link to="/privacidade">Política de Privacidade</Link>.
-        </p>
+        <button
+          className="auth-more"
+          data-hero-hint
+          onClick={() => scrollToSection(showcaseRef.current)}
+          type="button"
+        >
+          Conheça o Produzzy
+          <span aria-hidden="true">↓</span>
+        </button>
       </section>
 
-      <AuthHero />
+      <LoginShowcase onCreateAccount={openRegister} sectionRef={showcaseRef} />
     </main>
   )
 }

@@ -9,6 +9,7 @@ function PasswordVisibilityIcon({ isVisible }) {
 }
 
 function PasswordField({
+  action,
   autoComplete,
   id,
   isVisible,
@@ -23,7 +24,14 @@ function PasswordField({
 
   return (
     <div className="login-field">
-      <label htmlFor={id}>{label}</label>
+      {action ? (
+        <span className="login-field__label-row">
+          <label htmlFor={id}>{label}</label>
+          {action}
+        </span>
+      ) : (
+        <label htmlFor={id}>{label}</label>
+      )}
       <span className="login-password-field">
         <input
           autoComplete={autoComplete}
