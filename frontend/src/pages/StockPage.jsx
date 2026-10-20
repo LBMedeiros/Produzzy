@@ -4,6 +4,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
+import PageHeader from '../components/ui/PageHeader'
 import ModalPortal from '../components/ui/ModalPortal'
 import Pagination from '../components/ui/Pagination'
 import SelectMenu from '../components/ui/SelectMenu'
@@ -1701,28 +1702,28 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
   return (
     <div className="page-stack">
-      <div className="page-heading">
-        <div>
-          <h1>Estoque</h1>
-          <p>Gerencie produtos, categorias e quantidades do workspace</p>
-        </div>
-        <div className="page-heading__actions">
-          <SelectMenu
-            ariaLabel="Ações de categorias"
-            className="category-action-select"
-            onChange={handleCategoryAction}
-            placeholder="Categorias"
-            options={[
-              { label: 'Nova categoria', value: 'create' },
-              { label: 'Editar categorias', value: 'edit' },
-            ]}
-            value={categoryAction}
-          />
-          <Button icon="+" onClick={openCreateProduct}>
-            Novo produto
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        actions={
+          <>
+            <SelectMenu
+              ariaLabel="Ações de categorias"
+              className="category-action-select"
+              onChange={handleCategoryAction}
+              placeholder="Categorias"
+              options={[
+                { label: 'Nova categoria', value: 'create' },
+                { label: 'Editar categorias', value: 'edit' },
+              ]}
+              value={categoryAction}
+            />
+            <Button icon="+" onClick={openCreateProduct}>
+              Novo produto
+            </Button>
+          </>
+        }
+        subtitle="Gerencie produtos, categorias e quantidades do workspace"
+        title="Estoque"
+      />
 
       <Card
         action={
