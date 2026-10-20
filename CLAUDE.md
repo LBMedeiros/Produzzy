@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `AGENTS.md` at the repo root contains the authoritative, detailed domain rules (permission matrix, stock invariants, replenishment state machine, soft-delete semantics, audit-log constraints, change/validation policy). Follow it. This file covers the parts not in `AGENTS.md`: commands and cross-file architecture.
 
+**UI redesign in progress:** `docs/redesign/REDESIGN.md` is the spec for the new look of the authenticated app (phased plan, tokens, components, responsive rules) and `docs/redesign/prototipo.html` is the visual reference (open it in a browser). Follow them for any UI work, one phase per PR.
+
 `.atlas/` holds product/roadmap notes (`PRODUCT.md`, `ROADMAP.md`, `STATE.md`) and logs written by a separate automation tool — read for product context, don't treat as code.
 
 ## Layout
@@ -44,10 +46,10 @@ npm run build      # run after any frontend change
 
 ## Backend architecture
 
-Request flow: `routers/<domain>.py` → `crud.py` → SQLAlchemy models.
+Request flow: `routers/<domain>.py` → `crud` → SQLAlchemy models.
 
 - **Routers are thin.** They live under `/workspaces/{workspace_id}/...` (except `auth`), resolve `get_current_user` / `get_db` from `dependencies.py`, call `crud.require_workspace_role(workspace_id, user, db, <ROLE_SET>)`, then delegate to a `crud` function. Add new endpoints following this exact shape.
-- **`crud.py` (~3k lines) is the business layer** — all permission checks, `workspace_id` filtering, stock-movement recording, soft delete, replenishment transitions, and audit logging. Role sets are module constants (`READ_ROLES`, `PRODUCT_WRITE_ROLES`, `STOCK_WRITE_ROLES`, etc.); reuse them, don't inline role lists.
+- **`app/crud/` is the business layer** — a package split by domain (`users`, `workspaces`, `invites`, `products`, `stock`, `categories`, `replenishment`, `dashboard`, `search`, `audit`, shared helpers in `base`), all re-exported from `app/crud/__init__.py` so routers call `crud.<function>`. It holds all permission checks, `workspace_id` filtering, stock-movement recording, soft delete, replenishment transitions, and audit logging. Role sets are module constants (`READ_ROLES`, `PRODUCT_WRITE_ROLES`, `STOCK_WRITE_ROLES`, etc.); reuse them, don't inline role lists.
 - **`main.py`** builds the app, CORS from `PRODUZZY_ALLOWED_ORIGINS`, an HTTP-timing middleware (`X-Process-Time-Ms`), and `/health` + `/ready` probes. Register every new router here.
 - **`config.py`** reads all `PRODUZZY_*` env vars (loaded from `backend/.env`). Never print or edit secrets; only touch `.env.example` when a documented public var actually changes.
 - **`database.py`** — `engine`, `SessionLocal`, `Base`, plus Postgres connection-pool tuning from `DB_POOL_*` env vars. PostgreSQL is the real target; do not design around SQLite.
@@ -56,7 +58,7 @@ Request flow: `routers/<domain>.py` → `crud.py` → SQLAlchemy models.
 
 ## Frontend architecture
 
-- **No routing library.** `App.jsx` composes providers (`ThemeProvider` → `AuthProvider` → `WorkspaceProvider`) and does its own navigation: `activePage` state maps through `pageComponents` to a `pages/*` screen; `AppLayout` + `Sidebar` switch pages via `onNavigate`. The only URL-driven views are invite links (`/invites/:token/accept`, `/join/:token`), parsed from `window.location.pathname` and cleared with `history.replaceState`.
+- **Routing is `react-router-dom`.** `App.jsx` composes providers (`ThemeProvider` → `AuthProvider` → `WorkspaceProvider`) and declares the routes: public ones (`/login`, `/forgot-password`, `/reset-password/:token`, `/verify-email/:token`, `/termos`, `/privacidade`, invite links `/invites/:token/accept` and `/join/:token`) and the authenticated ones inside `AppLayout` (`/dashboard`, `/stock`, `/production`, `/labels`, `/settings`). `Sidebar` uses `NavLink`. Server state uses TanStack Query (`@tanstack/react-query`) on some pages.
 - **Contexts** (`contexts/`): `AuthContext` (session/user, login/logout), `WorkspaceContext` (workspace list + `activeWorkspace`, remounted per-user via a `key`), `ThemeContext` (persisted light/dark).
 - **Data access is layered**: `pages`/`components` call `services/<domain>Service.js`, which call `request` / `requestBlob` from `lib/api.js`. `lib/api.js` owns the base URL (`VITE_API_URL`), bearer-token storage (session vs. local storage = "remember me"), 401 handling (`onUnauthorized` clears token + notifies), and a `ApiError` with a PT-BR message map. Add new endpoints as a service function, not a raw `fetch`.
 - `components/ui/` reusable primitives, `components/layout/` shell + workspace modals/menus, `components/replenishment/` the replenishment flow. `lib/formatters.js` and `lib/replenishment.js` hold shared display/domain helpers. All styling is `src/styles/global.css` — match existing patterns, no CSS-in-JS or UI kit.
