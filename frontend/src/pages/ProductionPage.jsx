@@ -153,6 +153,50 @@ function ProductionPage({
     return () => window.clearTimeout(timeoutId)
   }, [navigationIntent, onNavigationIntentHandled, workspaceId])
 
+  // "+ Nova reposição" (quick action): open the creation form for the picked
+  // product, or jump to its replenishment if one is already active.
+  useEffect(() => {
+    if (
+      navigationIntent?.type !== 'replenishment-create' ||
+      navigationIntent.workspaceId !== workspaceId ||
+      !productsQuery.data ||
+      !requestsQuery.data
+    ) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const activeRequest = requestsQuery.data.find(
+        (requestItem) =>
+          requestItem.product_id === navigationIntent.productId &&
+          activeRequestStatuses.has(requestItem.status),
+      )
+      const product = productsQuery.data.find(
+        (item) => item.id === navigationIntent.productId,
+      )
+
+      if (activeRequest) {
+        setRequestFilter(activeRequest.status)
+        setFocusRequestId(activeRequest.id)
+        setSuccessMessage('Este produto já tem uma reposição em andamento.')
+      } else if (product) {
+        setCreationModal({ product })
+        setFormError('')
+        setSuccessMessage('')
+      }
+
+      onNavigationIntentHandled?.()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    navigationIntent,
+    onNavigationIntentHandled,
+    productsQuery.data,
+    requestsQuery.data,
+    workspaceId,
+  ])
+
   const displayRequests = useMemo(() => {
     const seenActiveProductIds = new Set()
 

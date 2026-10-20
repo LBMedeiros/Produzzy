@@ -791,7 +791,7 @@ function Header({ onNavigated }) {
   }
 
   function handleWorkspaceKeyDown(event) {
-    if (!workspaces.length) {
+    if (!workspaces.length || event.target.closest?.('.workspace-switcher__create')) {
       return
     }
 
@@ -914,7 +914,7 @@ function Header({ onNavigated }) {
                 ? `workspace-option-${workspaces[workspaceMenuIndex].id}`
                 : undefined
             }
-            aria-controls="workspace-switcher-menu"
+            aria-controls="workspace-switcher-list"
             aria-expanded={isWorkspaceMenuOpen}
             aria-haspopup="listbox"
             aria-label="Selecionar workspace"
@@ -937,28 +937,47 @@ function Header({ onNavigated }) {
                 isWorkspaceMenuOpen ? 'is-open' : ''
               }`}
               id="workspace-switcher-menu"
-              role="listbox"
             >
-              {workspaces.map((workspace, index) => (
-                <button
-                  aria-selected={workspace.id === activeWorkspace?.id}
-                  className={[
-                    'workspace-switcher__option',
-                    workspace.id === activeWorkspace?.id ? 'is-selected' : '',
-                    workspaceMenuIndex === index ? 'is-active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  id={`workspace-option-${workspace.id}`}
-                  key={workspace.id}
-                  role="option"
-                  type="button"
-                  onClick={() => handleWorkspaceSelect(workspace)}
-                  onMouseEnter={() => setWorkspaceMenuIndex(index)}
-                >
-                  <span>{workspace.name}</span>
-                </button>
-              ))}
+              <div
+                aria-label="Workspaces"
+                className="workspace-switcher__list"
+                id="workspace-switcher-list"
+                role="listbox"
+              >
+                {workspaces.map((workspace, index) => (
+                  <button
+                    aria-selected={workspace.id === activeWorkspace?.id}
+                    className={[
+                      'workspace-switcher__option',
+                      workspace.id === activeWorkspace?.id ? 'is-selected' : '',
+                      workspaceMenuIndex === index ? 'is-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    id={`workspace-option-${workspace.id}`}
+                    key={workspace.id}
+                    role="option"
+                    type="button"
+                    onClick={() => handleWorkspaceSelect(workspace)}
+                    onMouseEnter={() => setWorkspaceMenuIndex(index)}
+                  >
+                    <span>{workspace.name}</span>
+                  </button>
+                ))}
+              </div>
+              {/* "Criar workspace" lives here (docs/redesign §4.1), not as a
+                  highlighted button in the topbar. */}
+              <button
+                className="workspace-switcher__create"
+                type="button"
+                onClick={() => {
+                  closeWorkspaceMenu()
+                  setIsCreateWorkspaceOpen(true)
+                }}
+              >
+                <span aria-hidden="true">+</span>
+                Criar workspace
+              </button>
             </div>
           ) : null}
         </div>
@@ -1022,14 +1041,6 @@ function Header({ onNavigated }) {
               <path d="m20 20-3.5-3.5" />
             </svg>
           </button>
-
-          <Button
-            className="topbar__create"
-            icon="+"
-            onClick={() => setIsCreateWorkspaceOpen(true)}
-          >
-            Criar workspace
-          </Button>
 
           {canManageRoles ? (
             <Button
@@ -1111,7 +1122,18 @@ function Header({ onNavigated }) {
               <span className="select-chevron" aria-hidden="true"></span>
             </button>
             {isUserMenuOpen ? (
-              <UserMenu user={user} onClose={() => setIsUserMenuOpen(false)} />
+              <UserMenu
+                onInvite={
+                  canManageRoles
+                    ? () => {
+                        setIsShareOpen(true)
+                        setIsUserMenuOpen(false)
+                      }
+                    : undefined
+                }
+                user={user}
+                onClose={() => setIsUserMenuOpen(false)}
+              />
             ) : null}
           </div>
         </div>

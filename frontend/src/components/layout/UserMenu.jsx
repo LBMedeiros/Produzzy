@@ -39,7 +39,24 @@ function MoonIcon() {
   )
 }
 
-function UserMenu({ user, onClose }) {
+function InviteIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" />
+    </svg>
+  )
+}
+
+function UserMenu({ user, onClose, onInvite }) {
   const navigate = useNavigate()
   const { logout } = useAuth()
   const { resolvedTheme, setThemePreference } = useTheme()
@@ -100,6 +117,20 @@ function UserMenu({ user, onClose }) {
         <SettingsIcon />
         <span>Configurações</span>
       </button>
+
+      {/* On phones the team popover and "Compartilhar" are hidden from the
+          one-line header, so inviting people is reachable from here. */}
+      {onInvite ? (
+        <button
+          className="user-menu__item user-menu__item--phone"
+          onClick={onInvite}
+          role="menuitem"
+          type="button"
+        >
+          <InviteIcon />
+          <span>Convidar pessoas</span>
+        </button>
+      ) : null}
 
       <div className="user-menu__row">
         <span>Tema</span>

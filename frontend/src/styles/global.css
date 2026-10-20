@@ -178,11 +178,11 @@
 }
 
 :root[data-theme="dark"] .topbar {
-  background: rgba(15, 27, 45, 0.94);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
 }
 
 :root[data-theme="dark"] .sidebar {
-  background: #07111f;
+  background: var(--card);
   border-color: var(--border);
 }
 
@@ -779,8 +779,9 @@ a {
   align-self: start;
   overflow-y: auto;
   padding: 22px 16px;
-  background: var(--navy);
-  color: #e2e8f0;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
   transition:
     background-color var(--motion-theme) var(--motion-ease),
     border-color var(--motion-theme) var(--motion-ease),
@@ -848,7 +849,7 @@ a {
 .sidebar__user strong {
   display: block;
   overflow: hidden;
-  color: #ffffff;
+  color: var(--text);
   font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -858,7 +859,7 @@ a {
 .sidebar__user-text span {
   display: block;
   overflow: hidden;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -875,10 +876,10 @@ a {
   width: 100%;
   min-height: 38px;
   place-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #cbd5e1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
   font-weight: 900;
   margin-bottom: 20px;
   transition:
@@ -888,9 +889,8 @@ a {
 }
 
 .sidebar__collapse:hover {
-  border-color: rgba(191, 219, 254, 0.35);
-  background: rgba(37, 99, 235, 0.18);
-  color: #ffffff;
+  background: var(--surface-elevated);
+  color: var(--text);
 }
 
 .sidebar.is-collapsed .sidebar__collapse {
@@ -911,9 +911,9 @@ a {
   align-items: center;
   gap: 12px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
-  color: #cbd5e1;
+  color: var(--muted);
   padding: 0 10px;
   text-align: left;
   text-decoration: none;
@@ -936,9 +936,9 @@ a {
   height: 38px;
   flex: 0 0 38px;
   place-items: center;
-  border-radius: 8px;
-  background: rgba(148, 163, 184, 0.14);
-  color: #bfdbfe;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
 }
 
 .sidebar.is-collapsed .sidebar__item span {
@@ -965,22 +965,20 @@ a {
   transform: rotate(180deg);
 }
 
-.sidebar__item:hover,
-.sidebar__item.is-active {
-  border-color: rgba(96, 165, 250, 0.22);
-  background: rgba(37, 99, 235, 0.16);
-  color: #ffffff;
+.sidebar__item:hover {
+  background: var(--surface-elevated);
+  color: var(--text);
 }
 
-.sidebar__item.is-active span {
-  background: rgba(37, 99, 235, 0.9);
-  color: #ffffff;
+.sidebar__item.is-active {
+  background: var(--blue-soft);
+  color: var(--blue);
 }
 
 .sidebar__user {
   gap: 10px;
   margin-top: auto;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border-top: 1px solid var(--border);
   padding-top: 18px;
   width: 100%;
 }
@@ -1041,7 +1039,7 @@ a {
   min-height: 68px;
   gap: 16px;
   border-bottom: 1px solid var(--border);
-  background: rgba(248, 250, 252, 0.92);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
   padding: 0 24px;
   backdrop-filter: blur(14px);
 }
@@ -1425,7 +1423,7 @@ a {
   padding: 12px 16px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1100px) {
   .topbar__search-trigger {
     display: inline-flex;
   }
@@ -1633,7 +1631,7 @@ a {
   width: 100%;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1100px) {
   .members-popover__invite {
     display: block;
   }
@@ -6117,7 +6115,7 @@ a {
   }
 }
 
-@media (min-width: 861px) and (max-width: 1279px) {
+@media (min-width: 640px) and (max-width: 1279px) {
   .app-shell {
     grid-template-columns: 82px minmax(0, 1fr);
   }
@@ -6151,15 +6149,6 @@ a {
     gap: 8px;
   }
 
-  .topbar__create {
-    width: 42px;
-    min-width: 42px;
-    padding-inline: 0;
-  }
-
-  .topbar__create > span:last-child {
-    display: none;
-  }
 
   .member-avatars {
     padding-inline: 8px;
@@ -6216,14 +6205,14 @@ a {
   }
 }
 
-@media (min-width: 861px) and (max-width: 1100px) {
+@media (min-width: 640px) and (max-width: 1100px) {
   .search-field,
   .topbar__share {
     display: none;
   }
 }
 
-@media (min-width: 861px) {
+@media (min-width: 640px) {
   .app-shell .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -6277,8 +6266,8 @@ a {
   .app-shell.is-sidebar-overlay-open .sidebar {
     width: 264px;
     align-items: stretch;
-    border-right: 1px solid rgba(148, 163, 184, 0.22);
-    background: var(--navy);
+    border-right: 1px solid var(--border);
+    background: var(--card);
     padding: 22px 16px;
     box-shadow: 24px 0 48px rgba(2, 6, 23, 0.28);
   }
@@ -6470,155 +6459,7 @@ a {
 }
 
 @media (max-width: 860px) {
-  .app-shell {
-    grid-template-columns: minmax(0, 1fr);
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
-  }
 
-  .app-shell.is-sidebar-collapsed {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .sidebar {
-    /* Pin the top bar (logo + page navigation) so the pages stay reachable
-       while scrolling — no need to go back to the top. Above the topbar
-       (z-index 50) but below modals (z-index 60). */
-    position: sticky;
-    top: 0;
-    z-index: 55;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    height: auto;
-    min-height: auto;
-    overflow: visible;
-    padding: 12px 16px;
-    align-items: stretch;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
-  }
-
-  .sidebar.is-collapsed {
-    align-items: stretch;
-    padding: 16px;
-  }
-
-  .sidebar.is-collapsed .brand__text {
-    display: block;
-  }
-
-  .sidebar__collapse {
-    display: none;
-  }
-
-  .brand {
-    margin-bottom: 10px;
-  }
-
-  /* Icon-only 5-column grid across the whole top-bar range (≤860px): every
-     item gets an equal track, so the row can never overflow or clip the last
-     item (e.g. "Configurações"). Labels stay hidden — the icons keep their
-     aria-label/title — mirroring the small-screen navigation. */
-  .sidebar__nav {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    max-width: 100%;
-    min-width: 0;
-    gap: 6px;
-  }
-
-  .sidebar__item {
-    min-width: 0;
-    min-height: 44px;
-    justify-content: center;
-    gap: 8px;
-    padding-inline: 0;
-  }
-
-  .sidebar__item span {
-    width: 34px;
-    height: 34px;
-    flex-basis: 34px;
-  }
-
-  .sidebar .sidebar__item strong,
-  .sidebar.is-collapsed .sidebar__item strong {
-    display: none;
-  }
-
-  .sidebar.is-collapsed .sidebar__item {
-    justify-content: center;
-    padding: 0 12px;
-  }
-
-  .sidebar__user {
-    display: none;
-  }
-
-  .topbar {
-    /* `relative` (not `static`) so its z-index takes effect: this makes the
-       topbar a stacking context above the page content, so its member/user
-       popovers float on top instead of being painted behind the Dashboard. */
-    position: relative;
-    z-index: 50;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    flex-wrap: wrap;
-    min-height: auto;
-    gap: 12px;
-    padding: 16px;
-  }
-
-  .app-shell__main {
-    grid-column: 1;
-    height: auto;
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .workspace-switcher {
-    min-width: 100%;
-  }
-
-  .search-field,
-  .topbar__share {
-    display: none;
-  }
-
-  .topbar__actions {
-    /* becomes the positioning anchor for the members popover (below), since it
-       spans the full row width — so the popover aligns to the viewport edge and
-       fits on screen instead of overflowing off the left. */
-    position: relative;
-    width: 100%;
-    justify-content: flex-start;
-    gap: 8px;
-    margin-left: 0;
-  }
-
-  /* Anchor the members popover to the full-width actions row (not the small
-     members button, which sits mid-row and pushes the popover off-screen). */
-  .topbar__members {
-    position: static;
-  }
-
-  .members-popover {
-    left: 0;
-    right: 0;
-    width: auto;
-  }
-
-  .topbar__create {
-    width: 42px;
-    min-width: 42px;
-    padding-inline: 0;
-  }
-
-  .topbar__create > span:last-child {
-    display: none;
-  }
 
   .stock-toolbar {
     grid-template-columns: 1fr;
@@ -6648,7 +6489,6 @@ a {
   .card__header {
     align-items: flex-start;
   }
-
 }
 
 @media (max-width: 560px) {
@@ -6969,10 +6809,10 @@ a {
   caret-color: #0f172a;
 }
 
-@media (min-width: 861px) {
+@media (min-width: 640px) {
   :root[data-theme="dark"] .app-shell.is-sidebar-overlay-open .sidebar {
     border-right-color: var(--border);
-    background: #07111f;
+    background: var(--card);
   }
 
   :root[data-theme="dark"] .app-shell.is-sidebar-overlay-open .sidebar-backdrop {
@@ -8070,5 +7910,316 @@ a {
   .auth-form__reveal,
   .password-requirements {
     animation: none;
+  }
+}
+
+/* ===================================================================
+   Redesign · Fase 1 — estrutura (docs/redesign/REDESIGN.md §4)
+   Computador (>= 640px): trilho de ícones + topo. Celular (< 640px):
+   cabeçalho de uma linha, menu fixo no rodapé e botão "+" flutuante.
+   =================================================================== */
+
+:root {
+  --bottom-tabs-height: 62px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Workspace switcher: list of workspaces + "Criar workspace" at the end. */
+.workspace-switcher__list {
+  display: grid;
+  gap: 4px;
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+}
+
+.workspace-switcher__create {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 7px 7px;
+  background: transparent;
+  color: var(--blue);
+  cursor: pointer;
+  font-weight: 750;
+  margin-top: 2px;
+  padding: 8px 10px 4px;
+  text-align: left;
+}
+
+.workspace-switcher__create span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.workspace-switcher__create:hover {
+  background: var(--surface-elevated);
+}
+
+.workspace-switcher__create:focus-visible {
+  outline: 2px solid var(--primary-button-bg);
+  outline-offset: -2px;
+}
+
+/* Phone-only pieces stay hidden on larger screens. */
+.bottom-tabs,
+.fab,
+.user-menu__item--phone {
+  display: none;
+}
+
+/* Product picker (first step of the "+" quick actions). */
+.product-picker {
+  width: min(520px, 100%);
+  gap: 14px;
+}
+
+.product-picker__search {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 12px;
+}
+
+.product-picker__list {
+  display: grid;
+  max-height: min(420px, 55vh);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-picker__item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 160px);
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 12px 4px;
+  text-align: left;
+}
+
+.product-picker__list li:first-child .product-picker__item {
+  border-top: 0;
+}
+
+.product-picker__item:hover,
+.product-picker__item:focus-visible {
+  background: var(--surface-elevated);
+  outline: 0;
+}
+
+.product-picker__name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.product-picker__name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-picker__name span {
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.product-picker__state {
+  color: var(--muted);
+  padding: 8px 0;
+}
+
+@media (max-width: 639px) {
+  /* --- Shell: no sidebar, page scrolls, content clears the bottom menu --- */
+  .app-shell,
+  .app-shell.is-sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 100vh;
+    min-height: 100svh;
+    overflow: visible;
+  }
+
+  .sidebar,
+  .sidebar-backdrop {
+    display: none;
+  }
+
+  .app-shell__main {
+    grid-column: 1;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .page-content {
+    padding: 16px 14px calc(var(--bottom-tabs-height) + var(--safe-bottom) + 88px);
+  }
+
+  /* --- One-line header: workspace switcher, search, avatar --- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    flex-wrap: nowrap;
+    min-height: 0;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .workspace-switcher {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .search-field,
+  .topbar__share,
+  .topbar__members {
+    display: none;
+  }
+
+  .topbar__actions {
+    flex: 0 0 auto;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .topbar__search-trigger {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .topbar__user {
+    min-height: 40px;
+    gap: 0;
+    padding: 2px;
+  }
+
+  .topbar__user strong,
+  .topbar__user .select-chevron {
+    display: none;
+  }
+
+  .user-menu {
+    position: fixed;
+    top: 62px;
+    right: 14px;
+    left: auto;
+    width: min(300px, calc(100vw - 28px));
+  }
+
+  .user-menu__item--phone {
+    display: flex;
+  }
+
+  /* --- Bottom tab bar, glued to the bottom on every screen --- */
+  .bottom-tabs {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 55;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    min-height: var(--bottom-tabs-height);
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+    backdrop-filter: blur(12px);
+    padding: 8px 6px max(10px, var(--safe-bottom));
+  }
+
+  .bottom-tabs__item {
+    display: grid;
+    min-width: 0;
+    justify-items: center;
+    align-content: center;
+    gap: 3px;
+    border-radius: 10px;
+    color: var(--faint);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .bottom-tabs__item span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bottom-tabs__item.is-active {
+    color: var(--blue);
+  }
+
+  .bottom-tabs__item:focus-visible {
+    outline: 2px solid var(--primary-button-bg);
+    outline-offset: 2px;
+  }
+
+  /* --- Floating "+" above the bottom menu --- */
+  .fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(var(--bottom-tabs-height) + var(--safe-bottom) + 16px);
+    z-index: 56;
+    display: grid;
+    width: 54px;
+    height: 54px;
+    place-items: center;
+    border: 0;
+    border-radius: 16px;
+    background: var(--primary-button-bg);
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.45);
+    color: #ffffff;
+    cursor: pointer;
+    transition: transform var(--motion-fast) var(--motion-ease);
+  }
+
+  .fab:hover {
+    transform: translateY(-1px);
+  }
+
+  .fab:focus-visible {
+    outline: 3px solid var(--blue-soft);
+    outline-offset: 3px;
+  }
+
+  .fab svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 2.4;
+  }
+
+  .product-picker__item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (max-width: 639px) and (prefers-reduced-motion: reduce) {
+  .fab {
+    transition: none;
   }
 }
