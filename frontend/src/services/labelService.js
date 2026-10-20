@@ -74,8 +74,8 @@ export function getQrCodesSheet(workspaceId) {
 // 'png' (preview) or 'pdf' (download). Max 120 labels per request.
 export function getPrintSheet(workspaceId, options = {}) {
   const validWorkspaceId = parseId(workspaceId, 'Workspace')
-  const { code = 'qr', copies = 1, format = 'png', productIds = [] } = options
-  const query = new URLSearchParams({ code, copies: String(copies), format })
+  const { copies = 1, format = 'png', productIds = [] } = options
+  const query = new URLSearchParams({ copies: String(copies), format })
 
   productIds.forEach((productId) => {
     query.append('product_ids', String(parseId(productId, 'Produto')))

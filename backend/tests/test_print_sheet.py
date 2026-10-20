@@ -48,24 +48,18 @@ def test_print_sheet_selected_products_copies_and_formats(
     assert png_pages(response) == 1
     assert response.headers["x-sheet-pages"] == "1"
 
-    # 3 columns × 4 rows of QR cards per A4 page: 2 products × 7 copies = 2 pages.
+    # One label (QR Code + barcode) per copy, 3 columns × 7 rows = 21 per A4
+    # page: 2 products × 11 copies = 22 labels = 2 pages.
     response = client.get(
         sheet_url(workspace["id"]),
-        params={"product_ids": [first["id"], second["id"]], "copies": 7},
+        params={"product_ids": [first["id"], second["id"]], "copies": 11},
         headers=owner["headers"],
     )
     assert png_pages(response) == 2
 
-    barcode = client.get(
-        sheet_url(workspace["id"]),
-        params={"product_ids": [first["id"]], "code": "barcode"},
-        headers=owner["headers"],
-    )
-    assert png_pages(barcode) == 1
-
     pdf = client.get(
         sheet_url(workspace["id"]),
-        params={"product_ids": [first["id"], second["id"]], "copies": 7, "format": "pdf"},
+        params={"product_ids": [first["id"], second["id"]], "copies": 11, "format": "pdf"},
         headers=owner["headers"],
     )
     assert pdf.status_code == 200, pdf.text

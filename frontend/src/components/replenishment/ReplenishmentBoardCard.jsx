@@ -72,21 +72,21 @@ function ReplenishmentBoardCard({
 }) {
   if (product) {
     return (
-      <article className="board-card">
-        <div className="board-card__head">
-          <h3>{product.name}</h3>
-          <span>{product.category} · sem reposição aberta</span>
+      <article className="board-card board-card--compact">
+        <div className="board-card__row">
+          <div className="board-card__head">
+            <h3>{product.name}</h3>
+            <span>{product.category} · sem reposição aberta</span>
+          </div>
+          <Button onClick={() => onCreate(product)} size="sm">
+            Repor
+          </Button>
         </div>
         <StockLevel
           minimum={product.minimum_quantity}
           quantity={product.quantity}
           showReplenish
         />
-        <div className="board-card__actions">
-          <Button onClick={() => onCreate(product)} size="sm">
-            Repor
-          </Button>
-        </div>
       </article>
     )
   }

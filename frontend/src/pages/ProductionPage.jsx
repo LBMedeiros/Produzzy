@@ -34,7 +34,6 @@ const HISTORY_FILTERS = [
   { label: 'Estocadas', value: 'stocked' },
   { label: 'Canceladas', value: 'canceled' },
 ]
-const COLUMN_PAGE_SIZE = 12
 
 const activeRequestStatuses = new Set(['open', 'in_progress', 'completed'])
 const HISTORY_PAGE_SIZE = 12
@@ -77,7 +76,6 @@ function ProductionPage({
   // 'history' shows stocked/canceled requests.
   const [stage, setStage] = useState('open')
   const [historyFilter, setHistoryFilter] = useState('stocked')
-  const [columnLimits, setColumnLimits] = useState({})
   const now = useMemo(() => new Date(), [])
   const [focusRequestId, setFocusRequestId] = useState(null)
 
@@ -248,12 +246,8 @@ function ProductionPage({
   )
   const { goToItem: goToHistoryItem } = historyPagination
 
-  function getColumnLimit(status) {
-    return columnLimits[status] ?? COLUMN_PAGE_SIZE
-  }
-
   // Opening a specific request (e.g. from the dashboard): make sure its card
-  // is rendered (column "Mostrar mais" or history page), then scroll to it.
+  // is rendered (history page), then scroll to it inside its column.
   useEffect(() => {
     if (!focusRequestId) {
       return undefined
@@ -267,18 +261,7 @@ function ProductionPage({
 
     let scrollTimeoutId
     const timeoutId = window.setTimeout(() => {
-      if (columns[target.status]) {
-        const index = columns[target.status].findIndex(
-          (item) => item.requestItem?.id === focusRequestId,
-        )
-        setColumnLimits((current) => ({
-          ...current,
-          [target.status]: Math.max(
-            current[target.status] ?? COLUMN_PAGE_SIZE,
-            index + 1,
-          ),
-        }))
-      } else {
+      if (!columns[target.status]) {
         goToHistoryItem((item) => item.id === focusRequestId)
       }
 
@@ -585,7 +568,6 @@ function ProductionPage({
         <div className="board">
           {BOARD_COLUMNS.map((column) => {
             const items = columns[column.value]
-            const limit = getColumnLimit(column.value)
 
             return (
               <section
@@ -598,23 +580,7 @@ function ProductionPage({
                   <span className="dashboard-panel__count">{items.length}</span>
                 </h2>
                 {items.length ? (
-                  <>
-                    {items.slice(0, limit).map(renderBoardItem)}
-                    {items.length > limit ? (
-                      <button
-                        className="board__more"
-                        onClick={() =>
-                          setColumnLimits((current) => ({
-                            ...current,
-                            [column.value]: limit + COLUMN_PAGE_SIZE,
-                          }))
-                        }
-                        type="button"
-                      >
-                        Mostrar mais ({items.length - limit})
-                      </button>
-                    ) : null}
-                  </>
+                  <div className="board__list">{items.map(renderBoardItem)}</div>
                 ) : (
                   <p className="board__empty">
                     {column.value === 'open'

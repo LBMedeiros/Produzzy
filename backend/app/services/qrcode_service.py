@@ -798,20 +798,58 @@ PRINT_SHEET_MAX_LABELS = 120
 _A4_MM = (210, 297)
 _SHEET_MARGIN_MM = 8
 _SHEET_GAP_MM = 3
-_CARD_HEIGHT_MM = {"qr": 64, "barcode": 38}
+_CARD_HEIGHT_MM = 34
+_CARD_QR_MM = 26
 
 
-def generate_print_barcode_card_pil(
+def ellipsize_to_width(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> str:
+    text = str(text or "").strip()
+
+    if text_size(draw, text, font)[0] <= max_width:
+        return text
+
+    while text and text_size(draw, f"{text}…", font)[0] > max_width:
+        text = text[:-1]
+
+    return f"{text.rstrip()}…"
+
+
+def draw_barcode_bars(
+    draw: ImageDraw.ImageDraw,
+    barcode_value: str,
+    left: int,
+    top: int,
+    max_width: int,
+    height: int,
+) -> int:
+    """Code128 drawn with a whole number of pixels per module, so the bars stay
+    sharp (no resampling). Returns the drawn width."""
+    modules = barcode.get("code128", barcode_value).build()[0]
+    module_px = max(1, max_width // len(modules))
+
+    for index, module in enumerate(modules):
+        if module == "1":
+            x = left + index * module_px
+            draw.rectangle((x, top, x + module_px - 1, top + height - 1), fill="black")
+
+    return len(modules) * module_px
+
+
+def generate_print_label_card_pil(
+    data: str,
     product_name: str,
     product_category: str | None,
     product_id: int,
     width: int,
     height: int,
+    dpi: int = PRINT_SHEET_DPI,
 ) -> Image.Image:
+    """Single label with both codes: QR Code (brand icon in the centre) on the
+    left; name, category and the Code128 barcode on the right."""
     card = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(card)
     border_width = max(2, width // 240)
-    padding = max(14, width // 22)
+    padding = mm_to_px(2.5, dpi)
     draw.rounded_rectangle(
         (border_width, border_width, width - border_width - 1, height - border_width - 1),
         radius=max(8, width // 28),
@@ -820,40 +858,64 @@ def generate_print_barcode_card_pil(
         width=border_width,
     )
 
+    qr_size = min(mm_to_px(_CARD_QR_MM, dpi), height - padding * 2)
+    qr_image = resize_qrcode(generate_qrcode_pil(data), qr_size)
+    card.paste(qr_image, (padding, (height - qr_size) // 2))
+
+    right_left = padding + qr_size + mm_to_px(1.5, dpi)
+    right_width = width - right_left - padding
+    top = padding + mm_to_px(1, dpi)
+
     name_font, name_lines = fit_wrapped_text(
         draw,
         product_name,
-        max_width=width - (padding * 2),
-        initial_size=max(20, width // 20),
-        min_size=max(12, width // 36),
+        max_width=right_width,
+        initial_size=pt_to_px(9.5, dpi),
+        min_size=pt_to_px(7, dpi),
         max_lines=2,
     )
-    line_height = max(text_size(draw, "Ag", name_font)[1], getattr(name_font, "size", 16))
-    top = padding
+    if len(name_lines) > 2:
+        name_lines = [
+            name_lines[0],
+            ellipsize_to_width(draw, " ".join(name_lines[1:]), name_font, right_width),
+        ]
+    name_line_height = round(getattr(name_font, "size", 16) * 1.18)
 
     for index, line in enumerate(name_lines):
-        draw_centered_text(draw, line, top + index * line_height, width, name_font)
+        draw.text((right_left, top + index * name_line_height), line, fill=TEXT_COLOR, font=name_font)
 
-    code_font = load_font(max(12, width // 36), bold=True)
+    top += len(name_lines) * name_line_height + mm_to_px(0.6, dpi)
+
+    if product_category:
+        category_font = load_font(pt_to_px(6.5, dpi))
+        draw.text(
+            (right_left, top),
+            ellipsize_to_width(draw, product_category, category_font, right_width),
+            fill=MUTED_COLOR,
+            font=category_font,
+        )
+
     barcode_value = get_product_barcode_value(product_id)
-    caption = f"{product_category} · {barcode_value}" if product_category else barcode_value
-    caption_height = text_size(draw, caption, code_font)[1]
-    caption_top = height - padding - caption_height
-    bar_top = top + len(name_lines) * line_height + max(8, padding // 2)
-    bar_bottom = caption_top - max(8, padding // 2)
-    barcode_image = resize_contained(
-        generate_product_barcode(product_id),
-        width - padding * 2,
-        max(1, bar_bottom - bar_top),
+    digits_font = load_font(pt_to_px(6.5, dpi), bold=True)
+    digits_height = getattr(digits_font, "size", 12)
+    digits_top = height - padding - mm_to_px(0.5, dpi) - digits_height
+    bars_height = mm_to_px(8, dpi)
+    bars_top = digits_top - mm_to_px(0.8, dpi) - bars_height
+    bars_width = draw_barcode_bars(
+        draw, barcode_value, right_left, bars_top, right_width, bars_height
     )
-    paste_centered(card, barcode_image, width // 2, (bar_top + bar_bottom) // 2)
-    draw_centered_text(draw, caption, caption_top, width, code_font, fill=MUTED_COLOR)
+    digits_width = text_size(draw, barcode_value, digits_font)[0]
+    draw.text(
+        (right_left + max(0, (bars_width - digits_width) // 2), digits_top),
+        barcode_value,
+        fill=MUTED_COLOR,
+        font=digits_font,
+    )
     return card
 
 
 def generate_print_sheet_pages(
     items: list[dict],
-    code: str = "qr",
     dpi: int = PRINT_SHEET_DPI,
     columns: int = PRINT_SHEET_COLUMNS,
 ) -> list[Image.Image]:
@@ -864,7 +926,7 @@ def generate_print_sheet_pages(
     margin = mm_to_px(_SHEET_MARGIN_MM, dpi)
     gap = mm_to_px(_SHEET_GAP_MM, dpi)
     card_width = (sheet_width - margin * 2 - gap * (columns - 1)) // columns
-    card_height = mm_to_px(_CARD_HEIGHT_MM.get(code, _CARD_HEIGHT_MM["qr"]), dpi)
+    card_height = mm_to_px(_CARD_HEIGHT_MM, dpi)
     rows = max(1, (sheet_height - margin * 2 + gap) // (card_height + gap))
     per_page = columns * rows
     pages = []
@@ -876,23 +938,15 @@ def generate_print_sheet_pages(
 
         x = margin + (position % columns) * (card_width + gap)
         y = margin + (position // columns) * (card_height + gap)
-
-        if code == "barcode":
-            card = generate_print_barcode_card_pil(
-                product_name=item["product_name"],
-                product_category=item.get("product_category"),
-                product_id=item["product_id"],
-                width=card_width,
-                height=card_height,
-            )
-        else:
-            card = generate_print_qrcode_card_pil(
-                data=item["data"],
-                product_name=item["product_name"],
-                product_id=item["product_id"],
-                width=card_width,
-                height=card_height,
-            )
+        card = generate_print_label_card_pil(
+            data=item["data"],
+            product_name=item["product_name"],
+            product_category=item.get("product_category"),
+            product_id=item["product_id"],
+            width=card_width,
+            height=card_height,
+            dpi=dpi,
+        )
         pages[-1].paste(card, (x, y))
 
     return pages
