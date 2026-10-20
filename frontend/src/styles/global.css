@@ -1,24 +1,28 @@
 :root {
   --navy: #0f172a;
   --navy-soft: #17223a;
-  --blue: #2563eb;
-  --blue-soft: #dbeafe;
+  /* Redesign palette (docs/redesign/REDESIGN.md §3.1). --blue is the accent
+     text/link colour; filled actions use --primary-button-bg. */
+  --blue: #1d4ed8;
+  --blue-soft: rgba(37, 99, 235, 0.1);
   /* Opaque highlight for native <option> lists — the browser composites those
      against the OS panel, so a translucent token can't be used here. */
   --option-active-bg: #dbeafe;
-  --bg: #f8fafc;
+  --bg: #f3f6fb;
   --card: #ffffff;
   --surface: #ffffff;
-  --surface-elevated: #ffffff;
+  --surface-elevated: #f5f8fc;
   --text: #0f172a;
-  --muted: #64748b;
+  --muted: #5b6b82;
+  --faint: #8a99ae;
   --border: #e2e8f0;
   --success: #16a34a;
-  --success-soft: #dcfce7;
-  --warning: #f59e0b;
-  --warning-soft: #fef3c7;
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.12);
   --danger: #dc2626;
-  --danger-soft: #fee2e2;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --chart-out: #94a3b8;
   --primary-button-bg: #2563eb;
   --primary-button-hover: #1d4ed8;
   --primary-button-active: #1e40af;
@@ -361,25 +365,27 @@
 :root[data-theme="dark"] {
   --navy: #e5eefc;
   --navy-soft: #cbd5e1;
-  --blue: #60a5fa;
-  --blue-soft: rgba(96, 165, 250, 0.16);
+  --blue: #93c5fd;
+  --blue-soft: rgba(59, 130, 246, 0.14);
   --option-active-bg: #1d2d45;
   --bg: #07111f;
-  --card: #0f1b2d;
-  --surface: #111c2e;
-  --surface-elevated: #162238;
+  --card: #0d1829;
+  --surface: #0d1829;
+  --surface-elevated: #12203a;
   --text: #e5edf7;
-  --muted: #94a3b8;
-  --border: #27364d;
+  --muted: #8a9bb3;
+  --faint: #5f7190;
+  --border: #1f2d44;
   --success: #4ade80;
-  --success-soft: rgba(74, 222, 128, 0.16);
+  --success-soft: rgba(74, 222, 128, 0.14);
   --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.16);
+  --warning-soft: rgba(251, 191, 36, 0.14);
   --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.16);
-  --primary-button-bg: #2563eb;
-  --primary-button-hover: #1d4ed8;
-  --primary-button-active: #1e40af;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --chart-out: #64748b;
+  --primary-button-bg: #3b82f6;
+  --primary-button-hover: #2563eb;
+  --primary-button-active: #1d4ed8;
   --primary-button-disabled-bg: #162238;
   --primary-button-disabled-text: #94a3b8;
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
@@ -661,6 +667,79 @@ a {
 .badge--neutral {
   background: var(--surface-elevated);
   color: var(--muted);
+}
+
+/* Redesign status tones (docs/redesign §3.2): colour only where there is a
+   status to communicate. */
+.badge--ok {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.badge--warn {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.badge--bad {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge--muted {
+  background: var(--surface-elevated);
+  color: var(--muted);
+}
+
+/* Stock level: "8 de 30" + a 6px bar filled to min(100%, quantity/minimum).
+   Empty stock shows an empty bar with a faint red outline. */
+.stock-level {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.stock-level__text {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-level__text b {
+  color: var(--text);
+}
+
+.stock-level__bar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-elevated);
+}
+
+.stock-level__bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+}
+
+.stock-level__bar--ok i {
+  background: var(--success);
+}
+
+.stock-level__bar--warn i {
+  background: var(--warning);
+}
+
+.stock-level__bar--bad i {
+  background: var(--danger);
+}
+
+.stock-level__bar--empty {
+  box-shadow: inset 0 0 0 1px var(--danger-soft);
 }
 
 .badge--replenishment-open {
@@ -2303,7 +2382,7 @@ a {
   bottom: 7px;
   width: 10px;
   height: 10px;
-  background: var(--blue);
+  background: var(--primary-button-bg);
   box-shadow: -17px -12px 0 #ffffff;
   content: "";
 }
@@ -3837,7 +3916,7 @@ a {
 
 .segmented-control button.is-active {
   border-color: rgba(37, 99, 235, 0.22);
-  background: var(--blue);
+  background: var(--primary-button-bg);
   color: #ffffff;
 }
 
@@ -3988,7 +4067,7 @@ a {
   min-height: 36px;
   border: 1px solid var(--blue);
   border-radius: 8px;
-  background: var(--blue);
+  background: var(--primary-button-bg);
   color: #ffffff;
   font-weight: 800;
 }
@@ -4783,7 +4862,7 @@ a {
 }
 
 .replenishment-status-tabs button.is-active strong {
-  background: var(--blue);
+  background: var(--primary-button-bg);
   color: #ffffff;
 }
 
@@ -7177,6 +7256,14 @@ a {
    Produzzy" sections below. Always dark, whatever the app theme. Motion is
    driven by lib/useAuthLandingMotion.js.
    ========================================================================== */
+:root[data-theme="dark"] .auth-landing {
+  --danger-soft: rgba(248, 113, 113, 0.16);
+  --success-soft: rgba(74, 222, 128, 0.16);
+  --primary-button-bg: #2563eb;
+  --primary-button-hover: #1d4ed8;
+  --primary-button-active: #1e40af;
+}
+
 .auth-landing {
   --bg: #07111f;
   --card: #0f1b2d;
@@ -7193,6 +7280,10 @@ a {
   --auth-success: #4ade80;
   --auth-success-soft: rgba(74, 222, 128, 0.16);
   --auth-danger: #f87171;
+  /* Global tokens the login inherits, pinned to their pre-redesign values so
+     the (already redesigned) login screen is unaffected by the new palette. */
+  --danger-soft: #fee2e2;
+  --success-soft: #dcfce7;
   min-height: 100vh;
   min-height: 100svh;
   overflow-x: clip;

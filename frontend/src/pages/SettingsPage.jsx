@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import AvatarCropModal from '../components/settings/AvatarCropModal'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import PageHeader from '../components/ui/PageHeader'
 import ModalPortal from '../components/ui/ModalPortal'
 import SelectMenu from '../components/ui/SelectMenu'
 import UserAvatar from '../components/ui/UserAvatar'
@@ -1455,12 +1456,10 @@ function SettingsPage() {
 
   return (
     <div className="page-stack settings-page">
-      <div className="page-heading">
-        <div>
-          <h1>Configurações</h1>
-          <p>Gerencie seu workspace, sua conta e suas preferências.</p>
-        </div>
-      </div>
+      <PageHeader
+        subtitle="Gerencie seu workspace, sua conta e suas preferências."
+        title="Configurações"
+      />
 
       <div className="settings-page__grid">
         <ProfilePhotoSection

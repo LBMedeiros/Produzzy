@@ -11,6 +11,7 @@ import ActionMenu from '../components/ui/ActionMenu'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
+import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
 import SelectMenu from '../components/ui/SelectMenu'
 import { useWorkspace } from '../contexts/WorkspaceContext'
@@ -668,12 +669,10 @@ function LabelsPage({ onNavigate }) {
 
   return (
     <div className="page-stack">
-      <div className="page-heading">
-        <div>
-          <h1>Etiquetas e QR Codes</h1>
-          <p>Gere etiquetas e códigos para os produtos ativos do workspace</p>
-        </div>
-      </div>
+      <PageHeader
+        subtitle="Gere etiquetas e códigos para os produtos ativos do workspace"
+        title="Etiquetas e QR Codes"
+      />
 
       {error ? <p className="stock-feedback stock-feedback--error">{error}</p> : null}
       {successMessage ? (
