@@ -370,6 +370,21 @@ def set_recovery_email(
 
     return current_user, token
 
+def create_recovery_email_resend(current_user: models.User):
+    """New confirmation token for the pending recovery e-mail."""
+    if not current_user.recovery_email:
+        raise ValidationError("Nenhum e-mail de recuperação cadastrado.")
+
+    if current_user.recovery_email_verified:
+        raise ValidationError("Este e-mail de recuperação já está confirmado.")
+
+    token = create_recovery_email_verification_token(
+        current_user.email,
+        current_user.recovery_email,
+    )
+
+    return current_user.recovery_email, token
+
 def remove_recovery_email(current_user: models.User, db: Session):
     current_user.recovery_email = None
     current_user.recovery_email_verified = False

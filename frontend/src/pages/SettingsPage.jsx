@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AvatarCropModal from '../components/settings/AvatarCropModal'
@@ -12,8 +13,13 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { formatWorkspaceRole, getWorkspaceRoleValue } from '../lib/formatters'
 import { getPasswordError, PASSWORD_HINT } from '../lib/password'
-import { exportMyData } from '../services/authService'
-import { listWorkspaceMembers } from '../services/workspaceService'
+import ShareWorkspaceModal from '../components/layout/ShareWorkspaceModal'
+import Badge from '../components/ui/Badge'
+import {
+  exportMyData,
+  resendRecoveryEmailConfirmation,
+} from '../services/authService'
+import { getWorkspaceTeam, listWorkspaceMembers } from '../services/workspaceService'
 
 const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024
 const allowedAvatarTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -706,7 +712,7 @@ function RecoveryEmailModal({ currentRecoveryEmail, onClose, onSubmit }) {
     }
 
     if (!currentPassword) {
-      setError('Informe sua senha atual.')
+      setError('Informe sua senha do Produzzy.')
       return
     }
 
@@ -773,7 +779,7 @@ function RecoveryEmailModal({ currentRecoveryEmail, onClose, onSubmit }) {
             className="settings-password-label"
             htmlFor="settings-recovery-password"
           >
-            Senha atual
+            Senha do Produzzy
           </label>
           <span className="settings-password-field">
             <input
@@ -800,6 +806,7 @@ function RecoveryEmailModal({ currentRecoveryEmail, onClose, onSubmit }) {
               <PasswordVisibilityIcon isVisible={isPasswordVisible} />
             </button>
           </span>
+          <p className="settings-section__hint">Para confirmar que é você.</p>
 
           {error ? <p className="form-error">{error}</p> : null}
 
@@ -832,6 +839,9 @@ function ProfileSettingsSection({
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false)
   const [isRemovingRecovery, setIsRemovingRecovery] = useState(false)
+  const [isResendingRecovery, setIsResendingRecovery] = useState(false)
+  // Which card shows the feedback line: 'profile' (name/e-mail) or 'security'.
+  const [scope, setScope] = useState('profile')
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [profileFeedback, setProfileFeedback] = useState('')
@@ -848,6 +858,7 @@ function ProfileSettingsSection({
     }
 
     setIsSavingProfile(true)
+    setScope('profile')
     setProfileError('')
     setProfileFeedback('')
 
@@ -864,25 +875,66 @@ function ProfileSettingsSection({
 
   async function handleEmailChange(data) {
     await changeEmail(data)
+    setScope('profile')
     setProfileFeedback('Email atualizado com sucesso.')
     setProfileError('')
   }
 
   async function handlePasswordChange(data) {
     await changePassword(data)
-    setProfileFeedback('Senha alterada com sucesso.')
+    setScope('security')
+    setProfileFeedback('Senha alterada com sucesso. Os outros aparelhos foram desconectados.')
     setProfileError('')
   }
 
   async function handleRecoverySubmit(recoveryEmail, currentPassword) {
-    await setRecoveryEmail(recoveryEmail, currentPassword)
+    const updatedUser = await setRecoveryEmail(recoveryEmail, currentPassword)
+    setScope('security')
+
+    // The API says whether the confirmation e-mail actually left.
+    if (updatedUser?.verification_email_sent === false) {
+      setProfileFeedback('')
+      setProfileError(
+        'E-mail de recuperação salvo, mas não conseguimos enviar a confirmação agora. Use "Reenviar confirmação" daqui a pouco.',
+      )
+      return
+    }
+
     setProfileError('')
     setProfileFeedback(
       'E-mail de recuperação salvo. Confirme pelo link que enviamos a ele.',
     )
   }
 
+  async function handleRecoveryResend() {
+    setScope('security')
+    setProfileError('')
+    setProfileFeedback('')
+    setIsResendingRecovery(true)
+
+    try {
+      const result = await resendRecoveryEmailConfirmation()
+
+      if (result?.verification_email_sent) {
+        setProfileFeedback(result.message)
+      } else {
+        setProfileError(
+          result?.message ?? 'Não foi possível enviar o e-mail agora. Tente novamente em instantes.',
+        )
+      }
+    } catch (error) {
+      setProfileError(
+        error?.status === 429
+          ? 'Muitos reenvios seguidos. Aguarde alguns minutos e tente de novo.'
+          : (error?.message ?? 'Não foi possível reenviar a confirmação.'),
+      )
+    } finally {
+      setIsResendingRecovery(false)
+    }
+  }
+
   async function handleRecoveryRemove() {
+    setScope('security')
     setProfileError('')
     setProfileFeedback('')
     setIsRemovingRecovery(true)
@@ -899,144 +951,163 @@ function ProfileSettingsSection({
     }
   }
 
-  return (
-    <Card
-      className="settings-section settings-profile-section"
-      title="Perfil"
-      eyebrow="Minha conta"
-    >
-      <p className="settings-section__description">
-        Dados da sua conta conectada ao Produzzy nesta sessão.
-      </p>
-
-      <form className="settings-profile-form" onSubmit={handleProfileSubmit}>
-        <label>
-          Nome
-          <input
-            autoComplete="name"
-            disabled={isSavingProfile}
-            maxLength="100"
-            onChange={(event) => {
-              setProfileName(event.target.value)
-              setProfileError('')
-              setProfileFeedback('')
-            }}
-            required
-            value={profileName}
-          />
-        </label>
-        <Button
-          disabled={
-            !hasProfileNameChanged ||
-            !normalizedProfileName ||
-            isSavingProfile
-          }
-          type="submit"
-        >
-          {isSavingProfile ? 'Salvando...' : 'Salvar'}
-        </Button>
-      </form>
-
-      <div className="settings-profile-fields">
-        <div className="settings-profile-field">
-          <span>Email</span>
-          <strong>{user?.email ?? 'Não informado'}</strong>
-          <div className="settings-profile-actions">
-            <Button
-              onClick={() => {
-                setIsEmailModalOpen(true)
-                setProfileError('')
-                setProfileFeedback('')
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              Alterar email
-            </Button>
-            <Button
-              onClick={() => {
-                setIsPasswordModalOpen(true)
-                setProfileError('')
-                setProfileFeedback('')
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              Alterar senha
-            </Button>
-          </div>
-        </div>
-        <div className="settings-profile-field">
-          <span>E-mail de recuperação</span>
-          <strong>
-            {user?.recovery_email ? (
-              <>
-                {user.recovery_email}{' '}
-                <span
-                  className={`recovery-badge recovery-badge--${
-                    user.recovery_email_verified ? 'ok' : 'pending'
-                  }`}
-                >
-                  {user.recovery_email_verified ? 'Confirmado' : 'Pendente'}
-                </span>
-              </>
-            ) : (
-              'Não configurado'
-            )}
-          </strong>
-          <div className="settings-profile-actions">
-            <Button
-              onClick={() => {
-                setIsRecoveryModalOpen(true)
-                setProfileError('')
-                setProfileFeedback('')
-              }}
-              size="sm"
-              variant="secondary"
-            >
-              {user?.recovery_email ? 'Alterar' : 'Adicionar'}
-            </Button>
-            {user?.recovery_email ? (
-              <Button
-                disabled={isRemovingRecovery}
-                onClick={handleRecoveryRemove}
-                size="sm"
-                variant="secondary"
-              >
-                {isRemovingRecovery ? 'Removendo...' : 'Remover'}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-        <div className="settings-profile-field">
-          <span>Membro desde</span>
-          <strong>{formatDate(user?.created_at)}</strong>
-        </div>
-        <div className="settings-profile-field">
-          <span>Status da sessão</span>
-          <strong>
-            <span className="settings-session-status">
-              {isAuthenticated && user?.is_active !== false
-                ? 'Ativa'
-                : 'Indisponível'}
-            </span>
-          </strong>
-        </div>
-      </div>
-
+  const feedbackBlock = (
+    <>
       {profileError ? (
         <p className="settings-feedback settings-feedback--error" role="alert">
           {profileError}
         </p>
       ) : null}
       {profileFeedback ? (
-        <p
-          className="settings-feedback settings-feedback--success"
-          aria-live="polite"
-        >
+        <p className="settings-feedback settings-feedback--success" aria-live="polite">
           {profileFeedback}
         </p>
       ) : null}
+    </>
+  )
+  const isRecoveryPending = Boolean(user?.recovery_email && !user.recovery_email_verified)
+
+  function clearMessages() {
+    setProfileError('')
+    setProfileFeedback('')
+  }
+
+  return (
+    <>
+      <Card
+        className="settings-section settings-profile-section"
+        title="Perfil"
+        eyebrow="Minha conta"
+      >
+        <form className="settings-profile-form" onSubmit={handleProfileSubmit}>
+          <label>
+            Nome
+            <input
+              autoComplete="name"
+              disabled={isSavingProfile}
+              maxLength="100"
+              onChange={(event) => {
+                setProfileName(event.target.value)
+                clearMessages()
+              }}
+              required
+              value={profileName}
+            />
+          </label>
+          <Button
+            disabled={!hasProfileNameChanged || !normalizedProfileName || isSavingProfile}
+            type="submit"
+          >
+            {isSavingProfile ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </form>
+
+        <ul className="settings-rows">
+          <li>
+            <div>
+              <strong>E-mail</strong>
+              <span>{user?.email ?? 'Não informado'}</span>
+            </div>
+            <Button
+              onClick={() => {
+                setIsEmailModalOpen(true)
+                clearMessages()
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Alterar e-mail
+            </Button>
+          </li>
+          <li>
+            <div>
+              <strong>Membro desde</strong>
+              <span>{formatDate(user?.created_at)}</span>
+            </div>
+          </li>
+        </ul>
+
+        {scope === 'profile' ? feedbackBlock : null}
+      </Card>
+
+      <Card className="settings-section settings-security-section" title="Segurança" eyebrow="Acesso à conta">
+        <ul className="settings-rows">
+          <li>
+            <div>
+              <strong>Senha</strong>
+              <span>Use ao menos 8 caracteres, com um número e um caractere especial.</span>
+            </div>
+            <Button
+              onClick={() => {
+                setIsPasswordModalOpen(true)
+                clearMessages()
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Alterar senha
+            </Button>
+          </li>
+          <li>
+            <div>
+              <strong>E-mail de recuperação</strong>
+              {user?.recovery_email ? (
+                <span className="settings-rows__value">
+                  {user.recovery_email}
+                  <Badge tone={user.recovery_email_verified ? 'ok' : 'warn'}>
+                    {user.recovery_email_verified ? 'Confirmado' : 'Pendente'}
+                  </Badge>
+                </span>
+              ) : (
+                <span>Não configurado</span>
+              )}
+            </div>
+            <div className="settings-rows__actions">
+              {isRecoveryPending ? (
+                <Button
+                  disabled={isResendingRecovery}
+                  onClick={handleRecoveryResend}
+                  size="sm"
+                >
+                  {isResendingRecovery ? 'Reenviando...' : 'Reenviar confirmação'}
+                </Button>
+              ) : null}
+              <Button
+                onClick={() => {
+                  setIsRecoveryModalOpen(true)
+                  clearMessages()
+                }}
+                size="sm"
+                variant="secondary"
+              >
+                {user?.recovery_email ? 'Alterar' : 'Adicionar'}
+              </Button>
+              {user?.recovery_email ? (
+                <Button
+                  disabled={isRemovingRecovery}
+                  onClick={handleRecoveryRemove}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {isRemovingRecovery ? 'Removendo...' : 'Remover'}
+                </Button>
+              ) : null}
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Sessões</strong>
+              <span>
+                {isAuthenticated && user?.is_active !== false
+                  ? 'Sessão ativa neste aparelho. Trocar a senha encerra os outros aparelhos.'
+                  : 'Sessão indisponível.'}
+              </span>
+            </div>
+          </li>
+        </ul>
+
+        {scope === 'security' ? feedbackBlock : null}
+      </Card>
 
       {isEmailModalOpen ? (
         <EmailChangeModal
@@ -1058,6 +1129,93 @@ function ProfileSettingsSection({
           currentRecoveryEmail={user?.recovery_email}
           onClose={() => setIsRecoveryModalOpen(false)}
           onSubmit={handleRecoverySubmit}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function isLinkInvite(invite) {
+  return invite.email?.endsWith('@invite.produzzy.local')
+}
+
+// Members and pending invites, each on its own line (docs/redesign Fase 6).
+function WorkspaceTeamSection({ canInvite, currentMemberRole, workspaceId }) {
+  const [isShareOpen, setIsShareOpen] = useState(false)
+  const teamQuery = useQuery({
+    queryKey: ['workspace-team', workspaceId],
+    queryFn: () => getWorkspaceTeam(workspaceId),
+    enabled: Boolean(workspaceId),
+  })
+  const members = teamQuery.data?.members ?? []
+  const invites = (teamQuery.data?.pending_invites ?? []).filter(
+    (invite) => invite.status === 'pending',
+  )
+
+  return (
+    <Card
+      action={
+        canInvite ? (
+          <button className="dashboard-panel__link" onClick={() => setIsShareOpen(true)} type="button">
+            Convidar
+          </button>
+        ) : null
+      }
+      className="settings-section settings-team"
+      eyebrow="Workspace"
+      title="Equipe"
+    >
+      {teamQuery.isLoading ? (
+        <p className="settings-section__description">Carregando equipe...</p>
+      ) : teamQuery.error ? (
+        <p className="settings-section__description">
+          {teamQuery.error.status === 403
+            ? 'Você não tem permissão para ver a equipe deste workspace.'
+            : 'Não foi possível carregar a equipe.'}
+        </p>
+      ) : (
+        <>
+          <ul className="settings-team__list">
+            {members.map((member) => (
+              <li key={member.id ?? member.user_id}>
+                <UserAvatar name={member.user_name} src={member.user_avatar_url} />
+                <div>
+                  <strong>{member.user_name ?? member.user_email}</strong>
+                  <span>
+                    {formatWorkspaceRole(member.role)}
+                    {member.title ? ` · ${member.title}` : ''}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {invites.length ? (
+            <>
+              <p className="settings-team__sep">Convites pendentes</p>
+              <ul className="settings-team__list">
+                {invites.map((invite) => (
+                  <li key={invite.id}>
+                    <span className="avatar settings-team__invite-avatar">
+                      {isLinkInvite(invite) ? '🔗' : (invite.email?.[0] ?? '?').toUpperCase()}
+                    </span>
+                    <div>
+                      <strong>{isLinkInvite(invite) ? 'Link de convite' : invite.email}</strong>
+                      <span>{formatWorkspaceRole(invite.role)}</span>
+                    </div>
+                    <Badge tone="muted">Pendente</Badge>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </>
+      )}
+
+      {isShareOpen ? (
+        <ShareWorkspaceModal
+          currentMemberRole={currentMemberRole}
+          onClose={() => setIsShareOpen(false)}
+          onInviteCreated={() => teamQuery.refetch()}
         />
       ) : null}
     </Card>
@@ -1461,133 +1619,137 @@ function SettingsPage() {
         title="Configurações"
       />
 
-      <div className="settings-page__grid">
-        <ProfilePhotoSection
-          removeAvatar={removeAvatar}
-          uploadAvatar={uploadAvatar}
-          user={user}
-        />
-
-        <ProfileSettingsSection
-          changeEmail={changeEmail}
-          changePassword={changePassword}
-          isAuthenticated={isAuthenticated}
-          key={user?.id ?? 'no-user'}
-          removeRecoveryEmail={removeRecoveryEmail}
-          setRecoveryEmail={setRecoveryEmail}
-          updateProfile={updateProfile}
-          user={user}
-        />
-
-        <WorkspaceSettingsSection
-          activeWorkspace={activeWorkspace}
-          canEditWorkspace={canEditWorkspace}
-          isResolvingRole={isResolvingRole}
-          key={activeWorkspace?.id ?? 'no-workspace'}
-          roleLabel={roleLabel}
-          updateWorkspace={updateWorkspace}
-        />
-
-        <Card
-          className="settings-section settings-section--wide"
-          title="Permissões"
-          eyebrow="Acesso"
-        >
-          <div className="settings-permissions__header">
+      <div className="settings-columns">
+        <div className="settings-col">
+          <ProfilePhotoSection
+            removeAvatar={removeAvatar}
+            uploadAvatar={uploadAvatar}
+            user={user}
+          />
+          <ProfileSettingsSection
+            changeEmail={changeEmail}
+            changePassword={changePassword}
+            isAuthenticated={isAuthenticated}
+            key={user?.id ?? 'no-user'}
+            removeRecoveryEmail={removeRecoveryEmail}
+            setRecoveryEmail={setRecoveryEmail}
+            updateProfile={updateProfile}
+            user={user}
+          />
+          <Card
+            className="settings-section settings-section--wide"
+            title="Preferências"
+            eyebrow="Experiência"
+          >
             <p className="settings-section__description">
-              Resumo das ações disponíveis para seu cargo neste workspace.
+              Padrões atuais da interface. Novas opções serão liberadas com
+              confirmação antes de qualquer mudança no workspace.
             </p>
-            <span className="settings-role-badge">{roleLabel}</span>
-          </div>
-          <ul className="settings-permission-list">
-            {permissions.map((permission) => (
-              <li key={permission}>
-                <span aria-hidden="true">✓</span>
-                {permission}
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card
-          className="settings-section settings-section--wide"
-          title="Preferências"
-          eyebrow="Experiência"
-        >
-          <p className="settings-section__description">
-            Padrões atuais da interface. Novas opções serão liberadas com
-            confirmação antes de qualquer mudança no workspace.
-          </p>
-          <div className="settings-preferences">
-            <div className="settings-preference">
-              <div>
-                <strong>Tema da interface</strong>
-                <span>
-                  Preferência atual: {resolvedTheme === 'dark' ? 'Escuro' : 'Claro'}.
+            <div className="settings-preferences">
+              <div className="settings-preference">
+                <div>
+                  <strong>Tema da interface</strong>
+                  <span>
+                    Preferência atual: {resolvedTheme === 'dark' ? 'Escuro' : 'Claro'}.
+                  </span>
+                </div>
+                <SelectMenu
+                  ariaLabel="Tema da interface"
+                  className="settings-preference__select"
+                  onChange={setThemePreference}
+                  options={[
+                    { label: 'Sistema', value: 'system' },
+                    { label: 'Claro', value: 'light' },
+                    { label: 'Escuro', value: 'dark' },
+                  ]}
+                  value={themePreference}
+                />
+              </div>
+              <div className="settings-preference">
+                <div>
+                  <strong>Idioma</strong>
+                  <span>Idioma padrão da aplicação.</span>
+                </div>
+                <span className="settings-preference__value">
+                  Português do Brasil
                 </span>
               </div>
-              <SelectMenu
-                ariaLabel="Tema da interface"
-                className="settings-preference__select"
-                onChange={setThemePreference}
-                options={[
-                  { label: 'Sistema', value: 'system' },
-                  { label: 'Claro', value: 'light' },
-                  { label: 'Escuro', value: 'dark' },
-                ]}
-                value={themePreference}
-              />
-            </div>
-            <div className="settings-preference">
-              <div>
-                <strong>Idioma</strong>
-                <span>Idioma padrão da aplicação.</span>
+              <div className="settings-preference">
+                <div>
+                  <strong>Formato de impressão</strong>
+                  <span>Aplicado aos QR Codes e etiquetas gerados.</span>
+                </div>
+                <span className="settings-preference__value">
+                  Padrão para impressão
+                </span>
               </div>
-              <span className="settings-preference__value">
-                Português do Brasil
-              </span>
             </div>
-            <div className="settings-preference">
-              <div>
-                <strong>Formato de impressão</strong>
-                <span>Aplicado aos QR Codes e etiquetas gerados.</span>
-              </div>
-              <span className="settings-preference__value">
-                Padrão para impressão
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        <PrivacyDataSection deleteAccount={deleteAccount} user={user} />
-
-        <Card
-          className="settings-section settings-section--wide settings-danger"
-          title="Área de perigo"
-          eyebrow="Ações irreversíveis"
-        >
-          <div className="settings-danger__content">
-            <div>
-              <h3>Excluir workspace</h3>
-              <p>
-                Remove este workspace e seus dados vinculados. Esta ação exige
-                confirmação pelo nome e não pode ser desfeita.
+          </Card>
+        </div>
+        <div className="settings-col">
+          <WorkspaceSettingsSection
+            activeWorkspace={activeWorkspace}
+            canEditWorkspace={canEditWorkspace}
+            isResolvingRole={isResolvingRole}
+            key={activeWorkspace?.id ?? 'no-workspace'}
+            roleLabel={roleLabel}
+            updateWorkspace={updateWorkspace}
+          />
+          <WorkspaceTeamSection
+            canInvite={workspaceRole === 'owner' || workspaceRole === 'admin'}
+            currentMemberRole={workspaceRole}
+            key={`team-${activeWorkspace?.id ?? 'none'}`}
+            workspaceId={activeWorkspace?.id}
+          />
+          <Card
+            className="settings-section settings-section--wide"
+            title="Permissões"
+            eyebrow="Acesso"
+          >
+            <div className="settings-permissions__header">
+              <p className="settings-section__description">
+                Resumo das ações disponíveis para seu cargo neste workspace.
               </p>
+              <span className="settings-role-badge">{roleLabel}</span>
             </div>
-            <Button
-              disabled={!canEditWorkspace || isResolvingRole}
-              onClick={() => setIsDeleteModalOpen(true)}
-              variant="danger"
-            >
-              Excluir workspace
-            </Button>
-          </div>
-          {!canEditWorkspace && !isResolvingRole ? (
-            <p className="settings-section__hint">
-              Apenas o owner principal pode excluir este workspace.
-            </p>
-          ) : null}
-        </Card>
+            <ul className="settings-permission-list">
+              {permissions.map((permission) => (
+                <li key={permission}>
+                  <span aria-hidden="true">✓</span>
+                  {permission}
+                </li>
+              ))}
+            </ul>
+          </Card>
+          <PrivacyDataSection deleteAccount={deleteAccount} user={user} />
+          <Card
+            className="settings-section settings-section--wide settings-danger"
+            title="Área de perigo"
+            eyebrow="Ações irreversíveis"
+          >
+            <div className="settings-danger__content">
+              <div>
+                <h3>Excluir workspace</h3>
+                <p>
+                  Remove este workspace e seus dados vinculados. Esta ação exige
+                  confirmação pelo nome e não pode ser desfeita.
+                </p>
+              </div>
+              <Button
+                disabled={!canEditWorkspace || isResolvingRole}
+                onClick={() => setIsDeleteModalOpen(true)}
+                variant="danger"
+              >
+                Excluir workspace
+              </Button>
+            </div>
+            {!canEditWorkspace && !isResolvingRole ? (
+              <p className="settings-section__hint">
+                Apenas o owner principal pode excluir este workspace.
+              </p>
+            ) : null}
+          </Card>
+        </div>
       </div>
       {isDeleteModalOpen ? (
         <DeleteWorkspaceModal

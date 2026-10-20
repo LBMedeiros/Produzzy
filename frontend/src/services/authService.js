@@ -182,3 +182,9 @@ export function getToken() {
 export function logout() {
   clearStoredToken()
 }
+
+// Sends a new confirmation link to the pending recovery e-mail. The response
+// says whether the e-mail actually left (`verification_email_sent`).
+export function resendRecoveryEmailConfirmation() {
+  return request('/auth/me/recovery-email/resend', { method: 'POST' })
+}

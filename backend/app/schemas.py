@@ -271,6 +271,16 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class RecoveryEmailResponse(UserResponse):
+    # False when the confirmation e-mail could not be sent (SMTP off or a
+    # delivery failure), so the screen can say so instead of claiming success.
+    verification_email_sent: bool = False
+
+
+class RecoveryEmailResendResponse(MessageResponse):
+    verification_email_sent: bool = False
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str

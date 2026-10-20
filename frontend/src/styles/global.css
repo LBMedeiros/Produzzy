@@ -286,26 +286,6 @@
   font-weight: 600;
 }
 
-.recovery-badge {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  vertical-align: middle;
-}
-
-.recovery-badge--ok {
-  color: #166534;
-  background: rgba(22, 163, 74, 0.14);
-}
-
-.recovery-badge--pending {
-  color: #92400e;
-  background: rgba(245, 158, 11, 0.16);
-}
-
 .login-form input {
   border-color: #e2e8f0;
   background: #ffffff;
@@ -352,7 +332,6 @@
 :root[data-theme="dark"] .settings-feedback--success,
 :root[data-theme="dark"] .members-popover__feedback--success,
 :root[data-theme="dark"] .stock-feedback--success,
-:root[data-theme="dark"] .recovery-badge--ok,
 :root[data-theme="dark"] .table-action--restore {
   color: #86efac;
 }
@@ -1207,8 +1186,6 @@ a {
 }
 
 .search-field input,
-.settings-list input,
-.settings-list select,
 .login-form input,
 .workspace-form input,
 .workspace-form select {
@@ -2121,15 +2098,13 @@ a {
   color: var(--muted);
 }
 
-.feature-grid,
-.settings-grid {
+.feature-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 
 .feature-grid > *,
-.settings-grid > *,
 .content-grid > * {
   min-width: 0;
 }
@@ -2167,7 +2142,6 @@ a {
 }
 
 .audit-list,
-.settings-list,
 .security-note {
   display: grid;
   gap: 12px;
@@ -3388,18 +3362,8 @@ a {
   letter-spacing: 0;
 }
 
-.settings-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .settings-page {
   width: min(100%, 1240px);
-}
-
-.settings-page__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
 }
 
 .settings-section {
@@ -3524,54 +3488,6 @@ a {
   cursor: not-allowed;
 }
 
-.settings-profile-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.settings-profile-field {
-  display: grid;
-  min-width: 0;
-  align-content: start;
-  gap: 5px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 12px;
-}
-
-.settings-profile-field > span:first-child {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 750;
-}
-
-.settings-profile-field strong {
-  min-width: 0;
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 800;
-  overflow-wrap: anywhere;
-}
-
-.settings-profile-field .button {
-  justify-self: start;
-  margin-top: 5px;
-}
-
-.settings-profile-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 5px;
-}
-
-.settings-profile-actions .button {
-  margin-top: 0;
-}
-
 .settings-password-label {
   color: var(--text);
   font-size: 13px;
@@ -3680,11 +3596,6 @@ a {
   margin: 18px 0 0;
 }
 
-.settings-details--account {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 0;
-}
-
 .settings-details > div {
   min-width: 0;
   border: 1px solid var(--border);
@@ -3705,21 +3616,6 @@ a {
   font-size: 14px;
   font-weight: 800;
   overflow-wrap: anywhere;
-}
-
-.settings-session-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--success);
-}
-
-.settings-session-status::before {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-  content: "";
 }
 
 .settings-permissions__header {
@@ -3899,10 +3795,6 @@ a {
     width: 100%;
   }
 
-  .settings-profile-fields {
-    grid-template-columns: 1fr;
-  }
-
   .settings-danger__content {
     align-items: stretch;
     flex-direction: column;
@@ -3940,12 +3832,6 @@ a {
   font-weight: 800;
 }
 
-.settings-muted {
-  color: var(--muted);
-  margin-bottom: 12px;
-}
-
-.settings-list label,
 .login-form label {
   display: grid;
   gap: 8px;
@@ -3954,8 +3840,6 @@ a {
   font-weight: 800;
 }
 
-.settings-list input,
-.settings-list select,
 .login-form input,
 .workspace-form input,
 .workspace-form select {
@@ -5219,8 +5103,7 @@ a {
   .content-grid--label,
   .feature-grid,
   .feature-grid--three,
-  .feature-grid--four,
-  .settings-grid {
+  .feature-grid--four {
     grid-template-columns: 1fr;
   }
 
@@ -5228,14 +5111,6 @@ a {
     grid-template-areas:
       "generator"
       "products";
-  }
-
-  .settings-page__grid {
-    grid-template-columns: 1fr;
-    /* Single column: let each card size to its content instead of stretching
-       to the grid row height (which left the danger/privacy cards huge). */
-    align-items: start;
-    align-content: start;
   }
 
   .settings-section--wide {
@@ -5442,7 +5317,6 @@ a {
 
   .settings-workspace-form,
   .settings-details,
-  .settings-details--account,
   .settings-permission-list {
     grid-template-columns: 1fr;
   }
@@ -8105,4 +7979,168 @@ a {
   .scan-button:hover {
     transform: none;
   }
+}
+
+/* ===================================================================
+   Redesign · Fase 6 — Conta (docs/redesign/REDESIGN.md §5)
+   =================================================================== */
+
+.settings-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+}
+
+.settings-col {
+  display: grid;
+  min-width: 0;
+  gap: 20px;
+}
+
+.settings-col > * {
+  min-width: 0;
+}
+
+/* Label/value rows with the action on the right. */
+.settings-rows {
+  display: grid;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-rows li {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  border-top: 1px solid var(--border);
+  padding: 14px 0;
+}
+
+.settings-rows li:first-child {
+  border-top: 0;
+}
+
+.settings-rows li > div:first-child {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 220px;
+  gap: 2px;
+}
+
+.settings-rows strong {
+  font-size: 14px;
+}
+
+.settings-rows li > div:first-child > span {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.settings-rows__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-rows__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Team: members, then pending invites on their own lines. */
+.settings-team__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-team__list li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.settings-team__list li:first-child {
+  border-top: 0;
+}
+
+.settings-team__list li > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.settings-team__list strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-team__list li > div span {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.settings-team__sep {
+  border-top: 1px solid var(--border);
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-top: 6px;
+  padding-top: 12px;
+  text-transform: uppercase;
+}
+
+.settings-team__invite-avatar {
+  background: var(--surface-elevated);
+  color: var(--muted);
+}
+
+/* Destructive actions on the page are a discreet red outline; the final
+   confirmation inside the modal keeps the filled red button. */
+.settings-page .button--danger {
+  border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+  background: transparent;
+  box-shadow: none;
+  color: var(--danger);
+}
+
+.settings-page .button--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+@media (max-width: 1023px) {
+  .settings-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Half-width column: let the name wrap and the photo actions drop below. */
+.settings-col .settings-profile-photo__content {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.settings-col .settings-profile-photo__actions {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
+.settings-col .settings-profile-photo__identity strong {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
