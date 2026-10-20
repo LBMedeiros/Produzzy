@@ -11,8 +11,13 @@ import ActionMenu from '../components/ui/ActionMenu'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
+import Pagination from '../components/ui/Pagination'
 import SelectMenu from '../components/ui/SelectMenu'
 import { useWorkspace } from '../contexts/WorkspaceContext'
+import { usePagination } from '../lib/pagination'
+
+// The "Produtos ativos" catalog shows at most this many rows per page.
+const LABEL_PRODUCTS_PAGE_SIZE = 10
 
 // The scanner pulls in the ZXing decoder, so it loads only when first opened.
 const QrScannerModal = lazy(() => import('../components/labels/QrScannerModal'))
@@ -274,6 +279,13 @@ function LabelsPage({ onNavigate }) {
   const [successMessage, setSuccessMessage] = useState('')
   const qrPreviewUrlRef = useRef('')
   const labelPreviewUrlRef = useRef('')
+  const productListRef = useRef(null)
+  const productPagination = usePagination(
+    products,
+    LABEL_PRODUCTS_PAGE_SIZE,
+    workspaceId,
+    productListRef,
+  )
 
   const clearPreviews = useCallback(() => {
     if (qrPreviewUrlRef.current) {
@@ -853,9 +865,18 @@ function LabelsPage({ onNavigate }) {
         {isLoadingProducts ? (
           <div className="stock-loading">Carregando produtos...</div>
         ) : products.length ? (
-          <div className="labels-product-table">
-            <DataTable columns={columns} rows={products} />
-          </div>
+          <>
+            <div className="labels-product-table" ref={productListRef}>
+              <DataTable columns={columns} rows={productPagination.pageItems} />
+            </div>
+            <Pagination
+              itemLabel="produtos"
+              onPageChange={productPagination.setPage}
+              page={productPagination.page}
+              pageSize={productPagination.pageSize}
+              totalItems={productPagination.totalItems}
+            />
+          </>
         ) : (
           <div className="stock-empty">
             <h2>Nenhum produto ativo</h2>
