@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional
 
@@ -611,6 +611,11 @@ class DashboardSummary(BaseModel):
     out_of_stock_products: int = 0
     total_stock_quantity: int
     total_stock_movements: int
+    # Context for the summary tiles (docs/redesign Fase 2).
+    low_stock_in_replenishment: int = 0
+    out_of_stock_without_replenishment: int = 0
+    movements_today: int = 0
+    movements_yesterday: int = 0
 
 
 class WorkspaceSearchProductResult(BaseModel):
@@ -658,7 +663,36 @@ class AuditLogResponse(BaseModel):
     )
 
 
+class DashboardAttentionProduct(ProductResponse):
+    # Active (open / in progress / ready) replenishment for the product, so the
+    # dashboard can offer "Repor" or point to the request already open.
+    active_replenishment_id: Optional[int] = None
+    active_replenishment_status: Optional[str] = None
+
+
+class DashboardActivityResponse(AuditLogResponse):
+    # Resolved names for a readable sentence ("Ana deu entrada de +20 em X").
+    user_name: Optional[str] = None
+    user_avatar_url: Optional[str] = None
+    product_name: Optional[str] = None
+
+
+class DashboardMovementDay(BaseModel):
+    # Movements per local day: entries raised stock, exits lowered it.
+    date: date
+    entries: int = 0
+    exits: int = 0
+    total: int = 0
+
+
 class DashboardResponse(BaseModel):
     summary: DashboardSummary
-    attention_products: list[ProductResponse] = Field(default_factory=list)
-    recent_activity: list[AuditLogResponse] = Field(default_factory=list)
+    attention_products: list[DashboardAttentionProduct] = Field(default_factory=list)
+    recent_activity: list[DashboardActivityResponse] = Field(default_factory=list)
+    movements_by_day: list[DashboardMovementDay] = Field(default_factory=list)
+    stalled_replenishments: list[ReplenishmentRequestResponse] = Field(
+        default_factory=list
+    )
+    ready_replenishments: list[ReplenishmentRequestResponse] = Field(
+        default_factory=list
+    )

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -30,6 +30,11 @@ def get_dashboard_summary(
 @router.get("", response_model=schemas.DashboardResponse)
 def get_dashboard(
     workspace_id: int,
+    tz: str | None = Query(
+        None,
+        max_length=64,
+        description="IANA timezone for the per-day chart (e.g. America/Sao_Paulo).",
+    ),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -44,4 +49,5 @@ def get_dashboard(
         db=db,
         workspace_id=workspace_id,
         include_recent_activity=member.role in crud.AUDIT_LOG_READ_ROLES,
+        tz_name=tz,
     )
