@@ -8,10 +8,12 @@ import PageHeader from '../components/ui/PageHeader'
 import ModalPortal from '../components/ui/ModalPortal'
 import Pagination from '../components/ui/Pagination'
 import SelectMenu from '../components/ui/SelectMenu'
+import StockLevel from '../components/ui/StockLevel'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { getWorkspaceRoleValue } from '../lib/formatters'
+import { formatRelativeTime } from '../lib/activity'
+import { getFirstName, getWorkspaceRoleValue } from '../lib/formatters'
 import { usePagination } from '../lib/pagination'
 import {
   createCategory,
@@ -25,7 +27,6 @@ import {
   createStockMovement,
   deleteProduct,
   getProduct,
-  listAllLowStockProducts,
   listAllProducts,
   listProductStockMovements,
   restoreProduct,
@@ -37,13 +38,19 @@ import {
   listAllReplenishments,
 } from '../services/replenishmentService'
 
+// Chips with counts (docs/redesign Fase 3). "Abaixo do mínimo" excludes
+// zeroed products, which have their own chip.
 const STOCK_FILTERS = [
-  { id: 'active', label: 'Ativos' },
-  { id: 'low-stock', label: 'Baixo estoque' },
-  { id: 'empty', label: 'Sem estoque' },
+  { id: 'active', label: 'Todos', countKey: 'active' },
+  { id: 'low-stock', label: 'Abaixo do mínimo', countKey: 'low' },
+  { id: 'empty', label: 'Zerados', countKey: 'empty' },
   { id: 'history', label: 'Histórico' },
   { id: 'deleted', label: 'Lixeira' },
 ]
+
+function isLowStock(product) {
+  return product.quantity > 0 && product.quantity < product.minimum_quantity
+}
 
 const emptyProductForm = {
   category: '',
@@ -95,18 +102,18 @@ function getFriendlyError(error) {
 
 function getProductStatus(product) {
   if (!product.is_active) {
-    return { label: 'Na lixeira', tone: 'neutral' }
+    return { label: 'Na lixeira', tone: 'muted' }
   }
 
   if (product.quantity === 0) {
-    return { label: 'Sem estoque', tone: 'danger' }
+    return { label: 'Zerado', tone: 'bad' }
   }
 
   if (product.quantity < product.minimum_quantity) {
-    return { label: 'Baixo estoque', tone: 'warning' }
+    return { label: 'Abaixo do mínimo', tone: 'warn' }
   }
 
-  return { label: 'Em estoque', tone: 'success' }
+  return { label: 'Em estoque', tone: 'ok' }
 }
 
 function formatDate(value) {
@@ -177,13 +184,16 @@ function formatMovementQuantity(movement) {
   return String(difference)
 }
 
+// "saída de 6 · há 1 h" (the actor is rendered before it).
 function formatMovementSummary(movement) {
-  const movementLabel =
-    MOVEMENT_LABELS[movement.movement_type] ?? movement.movement_type
+  const action =
+    movement.movement_type === 'entrada'
+      ? `entrada de ${movement.quantity}`
+      : movement.movement_type === 'saida'
+        ? `saída de ${movement.quantity}`
+        : `ajuste para ${movement.quantity_after ?? movement.quantity}`
 
-  return `${movementLabel} de ${movement.quantity} · ${formatCompactDateTime(
-    movement.created_at,
-  )}`
+  return `${action} · ${formatRelativeTime(movement.created_at)}`
 }
 
 function formatLinkedProducts(count) {
@@ -254,6 +264,8 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   const canMoveStock = STOCK_WRITE_ROLES.has(currentRole)
 
   const [products, setProducts] = useState([])
+  // Every active product, kept for the chip counts whatever the filter.
+  const [activeProducts, setActiveProducts] = useState([])
   const [categories, setCategories] = useState([])
   const [deletedCategories, setDeletedCategories] = useState([])
   const [activeFilter, setActiveFilter] = useState('active')
@@ -377,23 +389,20 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     try {
       // Fetched in parallel. Each product already carries its latest movement
       // (`last_movement`), so no separate movements request is needed.
-      const productRequest =
-        activeFilter === 'history'
-          ? Promise.resolve([])
-          : activeFilter === 'low-stock'
-            ? listAllLowStockProducts(workspaceId)
-            : listAllProducts(workspaceId, {
-                status: activeFilter === 'deleted' ? 'deleted' : 'active',
-              })
-      const [categoryItems, readyItems, productItems] = await Promise.all([
-        listCategories(workspaceId),
-        listAllReplenishments(workspaceId, {
-          status: 'completed',
-        }),
-        productRequest,
-      ])
+      const [categoryItems, readyItems, activeItems, deletedItems] =
+        await Promise.all([
+          listCategories(workspaceId),
+          listAllReplenishments(workspaceId, {
+            status: 'completed',
+          }),
+          listAllProducts(workspaceId, { status: 'active' }),
+          activeFilter === 'deleted'
+            ? listAllProducts(workspaceId, { status: 'deleted' })
+            : Promise.resolve([]),
+        ])
       setCategories(categoryItems)
       setReadyReplenishments(uniqueReplenishmentsByProduct(readyItems))
+      setActiveProducts(activeItems)
 
       if (activeFilter === 'history') {
         setProducts([])
@@ -402,11 +411,13 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       }
 
       const nextProducts =
-        activeFilter === 'low-stock'
-          ? productItems.filter((product) => product.quantity > 0)
-          : activeFilter === 'empty'
-            ? productItems.filter((product) => product.quantity === 0)
-            : productItems
+        activeFilter === 'deleted'
+          ? deletedItems
+          : activeFilter === 'low-stock'
+            ? activeItems.filter(isLowStock)
+            : activeFilter === 'empty'
+              ? activeItems.filter((product) => product.quantity === 0)
+              : activeItems
 
       setProducts(nextProducts)
     } catch (loadError) {
@@ -722,6 +733,15 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       return matchesSearch && matchesCategory
     })
   }, [categoryFilter, products, searchTerm])
+
+  const filterCounts = useMemo(
+    () => ({
+      active: activeProducts.length,
+      empty: activeProducts.filter((product) => product.quantity === 0).length,
+      low: activeProducts.filter(isLowStock).length,
+    }),
+    [activeProducts],
+  )
 
   const productListRef = useRef(null)
   const productPagination = usePagination(
@@ -1247,6 +1267,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       return
     }
 
+    if (!categoryForm.name.trim()) {
+      setCategoryError('Informe o nome da categoria.')
+      return
+    }
+
     setIsSavingCategory(true)
     setCategoryError('')
     setSuccessMessage('')
@@ -1276,6 +1301,12 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     event.preventDefault()
 
     if (!workspaceId || !movementProduct) {
+      return
+    }
+
+    const movementQuantity = Number(movementForm.quantity)
+    if (!Number.isInteger(movementQuantity) || movementQuantity < 1) {
+      setMovementError('Informe uma quantidade inteira maior que zero.')
       return
     }
 
@@ -1408,19 +1439,6 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     }
   }
 
-  function renderProductName(product, options = {}) {
-    return (
-      <button
-        className="product-cell product-cell--button"
-        type="button"
-        onClick={() => loadProductDetail(product, options)}
-      >
-        <strong>{product.name}</strong>
-        <span>ID {product.id}</span>
-      </button>
-    )
-  }
-
   function renderCompactProductName(product, options = {}) {
     return (
       <button
@@ -1442,16 +1460,16 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     }
 
     return (
-      <div className="last-movement-cell">
-        <strong>{getMovementActorName(movement)}</strong>
-        <span>{formatMovementSummary(movement)}</span>
-      </div>
+      <p className="last-movement-cell">
+        <b>{getFirstName(getMovementActorName(movement))}</b> ·{' '}
+        {formatMovementSummary(movement)}
+      </p>
     )
   }
 
-  function getActiveProductActionItems(product) {
+  function getActiveProductActionItems(product, options = {}) {
     return [
-      canMoveStock
+      canMoveStock && options.includeMovement
         ? {
             id: 'movement',
             label: 'Movimentar estoque',
@@ -1490,11 +1508,24 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     ]
   }
 
-  function renderActiveProductActions(product) {
+  function renderActiveProductActions(product, options = {}) {
+    const showMoveButton = canMoveStock && !options.compact
+
     return (
       <div className="stock-product-actions">
+        {showMoveButton ? (
+          <Button
+            onClick={() => handleSecondaryProductAction(product, 'movement')}
+            size="sm"
+            variant="secondary"
+          >
+            Movimentar
+          </Button>
+        ) : null}
         <ActionMenu
-          items={getActiveProductActionItems(product)}
+          items={getActiveProductActionItems(product, {
+            includeMovement: !showMoveButton,
+          })}
           label={`Ações de ${product.name}`}
         />
       </div>
@@ -1526,43 +1557,26 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     )
   }
 
-  function renderProductCard(product) {
+  // Phone list (< 640px): name, status pill and level with "repor N".
+  function renderProductRow(product) {
     const status = getProductStatus(product)
+    const isDeleted = activeFilter === 'deleted'
 
     return (
-      <article className="stock-product-card" key={product.id}>
-        <div className="stock-product-card__header">
-          <div>
-            {renderProductName(product, {
-              includeDeleted: activeFilter === 'deleted',
-            })}
-            <span>{product.category}</span>
-          </div>
+      <li className="stock-row" key={product.id}>
+        <div className="stock-row__top">
+          {renderCompactProductName(product, { includeDeleted: isDeleted })}
           <Badge tone={status.tone}>{status.label}</Badge>
-        </div>
-
-        <div className="stock-product-card__metrics">
-          <div>
-            <span>Quantidade atual</span>
-            <strong>{product.quantity}</strong>
-          </div>
-          <div>
-            <span>Mínimo</span>
-            <strong>{product.minimum_quantity}</strong>
-          </div>
-        </div>
-
-        <div className="stock-product-card__movement">
-          <span>Último movimento</span>
-          {renderLatestMovement(product)}
-        </div>
-
-        <div className="stock-product-card__actions">
-          {activeFilter === 'deleted'
+          {isDeleted
             ? renderDeletedProductActions(product)
-            : renderActiveProductActions(product)}
+            : renderActiveProductActions(product, { compact: true })}
         </div>
-      </article>
+        <StockLevel
+          minimum={product.minimum_quantity}
+          quantity={product.quantity}
+          showReplenish={!isDeleted}
+        />
+      </li>
     )
   }
 
@@ -1611,7 +1625,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     },
   ]
 
-  const compactColumns = [
+  const columns = [
     {
       key: 'name',
       label: 'Produto',
@@ -1621,15 +1635,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
         }),
     },
     {
-      key: 'stock',
-      label: 'Estoque',
+      className: 'cell-level',
+      key: 'level',
+      label: 'Nível',
       render: (product) => (
-        <div className="stock-compact-quantity">
-          <strong>
-            {product.quantity} / {product.minimum_quantity}
-          </strong>
-          <span>Atual / mínimo</span>
-        </div>
+        <StockLevel minimum={product.minimum_quantity} quantity={product.quantity} />
       ),
     },
     {
@@ -1642,53 +1652,13 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       },
     },
     {
+      className: 'cell-last',
       key: 'updated_at',
       label: 'Último movimento',
       render: renderLatestMovement,
     },
     {
-      key: 'actions',
-      label: 'Ações',
-      render: (product) =>
-        activeFilter === 'deleted' ? (
-          renderDeletedProductActions(product)
-        ) : (
-          renderActiveProductActions(product)
-        ),
-    },
-  ]
-
-  const columns = [
-    {
-      key: 'name',
-      label: 'Produto',
-      render: (product) =>
-        renderProductName(product, {
-          includeDeleted: activeFilter === 'deleted',
-        }),
-    },
-    { key: 'category', label: 'Categoria' },
-    { key: 'quantity', label: 'Quantidade' },
-    {
-      key: 'minimum_quantity',
-      label: 'Mínimo',
-      render: (product) => product.minimum_quantity,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (product) => {
-        const status = getProductStatus(product)
-
-        return <Badge tone={status.tone}>{status.label}</Badge>
-      },
-    },
-    {
-      key: 'updated_at',
-      label: 'Último movimento',
-      render: renderLatestMovement,
-    },
-    {
+      className: 'cell-actions',
       key: 'actions',
       label: 'Ações',
       render: (product) =>
@@ -1725,23 +1695,17 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
         title="Estoque"
       />
 
-      <Card
-        action={
-          readyReplenishments.length ? (
-            <Badge tone="neutral">{readyReplenishments.length} prontas</Badge>
-          ) : null
-        }
-        className="stock-ready-replenishments"
-        title="Reposições prontas para estocar"
-        eyebrow="Entrada pendente"
-      >
-        {readyReplenishments.length ? (
-          <div className="stock-ready-replenishments__list">
+      {readyReplenishments.length ? (
+        <section aria-labelledby="ready-title" className="stock-ready">
+          <p className="stock-ready__title" id="ready-title">
+            <i aria-hidden="true" className="status-dot status-dot--ok" />
+            {readyReplenishments.length === 1
+              ? '1 reposição pronta para estocar'
+              : `${readyReplenishments.length} reposições prontas para estocar`}
+          </p>
+          <ul className="stock-ready__list">
             {readyReplenishments.map((replenishment) => (
-              <div
-                className="stock-ready-replenishment"
-                key={replenishment.id}
-              >
+              <li className="stock-ready__item" key={replenishment.id}>
                 <div>
                   <strong>{replenishment.product_name}</strong>
                   <span>
@@ -1749,22 +1713,19 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                     {replenishment.quantity_needed} un. previstas
                   </span>
                 </div>
-                <Button
-                  className="stock-ready-replenishment__action"
-                  onClick={() => openReplenishmentEntry(replenishment)}
-                  size="sm"
-                >
-                  Registrar entrada
-                </Button>
-              </div>
+                {canMoveStock ? (
+                  <Button
+                    onClick={() => openReplenishmentEntry(replenishment)}
+                    size="sm"
+                  >
+                    Estocar
+                  </Button>
+                ) : null}
+              </li>
             ))}
-          </div>
-        ) : (
-          <p className="stock-ready-replenishments__empty">
-            Nenhuma reposição aguardando entrada em estoque.
-          </p>
-        )}
-      </Card>
+          </ul>
+        </section>
+      ) : null}
 
       <Card className="stock-panel">
         <div className="stock-toolbar">
@@ -1803,9 +1764,15 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               }`}
               key={filter.id}
               type="button"
+              aria-pressed={activeFilter === filter.id}
               onClick={() => setActiveFilter(filter.id)}
             >
               {filter.label}
+              {filter.countKey ? (
+                <span className="filter-pill__count">
+                  {filterCounts[filter.countKey]}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -1856,15 +1823,12 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           </>
         ) : filteredProducts.length ? (
           <div className="stock-product-list" ref={productListRef}>
-            <div className="stock-product-table stock-product-table--full">
+            <div className="stock-product-table">
               <DataTable columns={columns} rows={pageProducts} />
             </div>
-            <div className="stock-product-table stock-product-table--compact">
-              <DataTable columns={compactColumns} rows={pageProducts} />
-            </div>
-            <div className="stock-product-cards">
-              {pageProducts.map((product) => renderProductCard(product))}
-            </div>
+            <ul className="stock-rows">
+              {pageProducts.map((product) => renderProductRow(product))}
+            </ul>
             <Pagination
               itemLabel="produtos"
               onPageChange={productPagination.setPage}
@@ -2255,7 +2219,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               </button>
             </div>
 
-            <form className="stock-form" onSubmit={handleMoveStock}>
+            <form noValidate className="stock-form" onSubmit={handleMoveStock}>
               {movementProduct.replenishmentRequestId ? (
                 <p className="stock-form__hint">
                   A quantidade veio como previsão da reposição. Confirme os dados
@@ -2342,7 +2306,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               </button>
             </div>
 
-            <form className="stock-form" onSubmit={handleCreateCategory}>
+            <form noValidate className="stock-form" onSubmit={handleCreateCategory}>
               <label>
                 Nome
                 <input
@@ -2541,7 +2505,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                         </div>
                       </>
                     ) : editingCategoryId === category.id ? (
-                      <form
+                      <form noValidate
                         className="stock-form category-editor-form"
                         onSubmit={handleSaveCategoryEdit}
                       >

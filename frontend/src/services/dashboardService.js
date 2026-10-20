@@ -18,8 +18,11 @@ export function getDashboardSummary(workspaceId) {
   return request(`/workspaces/${workspaceId}/dashboard/summary`)
 }
 
-export function getDashboard(workspaceId) {
-  return request(`/workspaces/${workspaceId}/dashboard`)
+// `tz` makes the per-day chart follow the user's calendar days.
+export function getDashboard(workspaceId, options = {}) {
+  const tz = options.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+
+  return request(withQuery(`/workspaces/${workspaceId}/dashboard`, { tz }))
 }
 
 export function listRecentActivity(workspaceId, options = {}) {

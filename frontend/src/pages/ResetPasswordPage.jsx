@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import AuthHero from '../components/auth/AuthHero'
 import PasswordField from '../components/auth/PasswordField'
 import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
@@ -65,73 +64,73 @@ function ResetPasswordPage() {
   }
 
   return (
-    <main className="login-page">
-      <section className="login-panel">
-        <div className="login-panel__brand">
-          <BrandIcon />
-          <strong>Produzzy</strong>
-        </div>
-        <div className="login-panel__copy">
-          <h1>Criar nova senha</h1>
-          <p>Escolha uma nova senha para voltar a acessar sua conta.</p>
-        </div>
-
-        {isDone ? (
-          <div className="auth-feedback" role="status">
-            <h2>Senha redefinida!</h2>
-            <p>Sua senha foi atualizada. Agora é só entrar com a nova senha.</p>
-            <Button
-              className="login-form__submit"
-              onClick={() => navigate('/login')}
-            >
-              Ir para o login
-            </Button>
+    <main className="auth-landing auth-page">
+      <section className="auth-hero">
+        <div className="auth-card">
+          <div className="auth-card__brand">
+            <BrandIcon />
+            <strong>Produzzy</strong>
           </div>
-        ) : (
-          <form className="login-form" onSubmit={handleSubmit}>
-            <PasswordField
-              autoComplete="new-password"
-              id="reset-password"
-              isVisible={visiblePasswords.password}
-              label="Nova senha"
-              minLength={8}
-              placeholder="Digite a nova senha"
-              value={form.password}
-              onChange={(event) => updateField('password', event.target.value)}
-              onToggle={() => togglePasswordVisibility('password')}
-            />
-            <PasswordField
-              autoComplete="new-password"
-              id="reset-confirm-password"
-              isVisible={visiblePasswords.confirmPassword}
-              label="Confirmar nova senha"
-              minLength={8}
-              placeholder="Repita a nova senha"
-              value={form.confirmPassword}
-              onChange={(event) =>
-                updateField('confirmPassword', event.target.value)
-              }
-              onToggle={() => togglePasswordVisibility('confirmPassword')}
-            />
+          <div className="auth-card__copy">
+            <h1>Criar nova senha</h1>
+            <p>Escolha uma nova senha para voltar a acessar sua conta.</p>
+          </div>
 
-            {error ? <p className="form-error">{error}</p> : null}
+          {isDone ? (
+            <div className="auth-feedback" role="status">
+              <h2>Senha redefinida!</h2>
+              <p>Sua senha foi atualizada. Agora é só entrar com a nova senha.</p>
+              <Button
+                className="auth-form__submit"
+                onClick={() => navigate('/login')}
+              >
+                Ir para o login
+              </Button>
+            </div>
+          ) : (
+            <form className="login-form auth-form" onSubmit={handleSubmit}>
+              <PasswordField
+                autoComplete="new-password"
+                id="reset-password"
+                isVisible={visiblePasswords.password}
+                label="Nova senha"
+                minLength={8}
+                placeholder="Digite a nova senha"
+                value={form.password}
+                onChange={(event) => updateField('password', event.target.value)}
+                onToggle={() => togglePasswordVisibility('password')}
+              />
+              <PasswordField
+                autoComplete="new-password"
+                id="reset-confirm-password"
+                isVisible={visiblePasswords.confirmPassword}
+                label="Confirmar nova senha"
+                minLength={8}
+                placeholder="Repita a nova senha"
+                value={form.confirmPassword}
+                onChange={(event) =>
+                  updateField('confirmPassword', event.target.value)
+                }
+                onToggle={() => togglePasswordVisibility('confirmPassword')}
+              />
 
-            <Button
-              className="login-form__submit"
-              disabled={isSubmitting}
-              type="submit"
-            >
-              {isSubmitting ? 'Salvando...' : 'Redefinir senha'}
-            </Button>
-          </form>
-        )}
+              {error ? <p className="form-error">{error}</p> : null}
 
-        <p className="login-panel__footer">
-          <Link to="/login">Voltar para o login</Link>
-        </p>
+              <Button
+                className="auth-form__submit"
+                disabled={isSubmitting}
+                type="submit"
+              >
+                {isSubmitting ? 'Salvando...' : 'Redefinir senha'}
+              </Button>
+            </form>
+          )}
+
+          <p className="auth-card__switch">
+            <Link to="/login">Voltar para o login</Link>
+          </p>
+        </div>
       </section>
-
-      <AuthHero />
     </main>
   )
 }

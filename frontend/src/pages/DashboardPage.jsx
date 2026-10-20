@@ -1,14 +1,21 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import MovementsChart from '../components/dashboard/MovementsChart'
+import { useQuickActions } from '../components/layout/QuickActions'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
-import DataTable from '../components/ui/DataTable'
-import StatCard from '../components/ui/StatCard'
+import StockLevel from '../components/ui/StockLevel'
+import SummaryTile from '../components/ui/SummaryTile'
+import UserAvatar from '../components/ui/UserAvatar'
+import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { auditEntityLabels, humanizeAuditAction } from '../lib/formatters'
-import { getReplenishmentStatus } from '../lib/replenishment'
+import { daysSince, describeActivity, formatRelativeTime } from '../lib/activity'
+import { getFirstName } from '../lib/formatters'
 import { getDashboard } from '../services/dashboardService'
+
+const numberFormatter = new Intl.NumberFormat('pt-BR')
+const RECENT_ACTIVITY_LIMIT = 5
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -19,246 +26,410 @@ function getFriendlyError(error) {
     return 'Não foi possível conectar ao servidor.'
   }
 
-  return error?.message ?? 'Não foi possível carregar o dashboard.'
+  return error?.message ?? 'Não foi possível carregar o início.'
 }
 
-function formatNumber(value) {
-  return new Intl.NumberFormat('pt-BR').format(value ?? 0)
-}
+function getGreeting(now) {
+  const hour = now.getHours()
 
-function formatDate(value) {
-  if (!value) {
-    return 'Sem data'
+  if (hour < 12) {
+    return 'Bom dia'
   }
 
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    month: '2-digit',
-  }).format(new Date(value))
+  return hour < 18 ? 'Boa tarde' : 'Boa noite'
 }
 
-function formatAuditLog(log) {
-  const metadata = log.metadata ?? {}
-  const detail =
-    metadata.name ??
-    metadata.product_name ??
-    metadata.product_id ??
-    metadata.category_id ??
-    metadata.movement_type ??
-    auditEntityLabels[log.entity_type] ??
-    log.entity_type
+// "Segunda, 20 de outubro"
+function formatToday(now) {
+  const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
+    .format(now)
+    .replace('-feira', '')
+  const day = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' }).format(
+    now,
+  )
 
-  return {
-    detail: `Item relacionado: ${detail}`,
-    id: log.id,
-    time: formatDate(log.created_at),
-    title: humanizeAuditAction(log.action),
-  }
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${day}`
 }
 
-const RECENT_ACTIVITY_LIMIT = 3
+function pluralize(count, singular, plural) {
+  return `${numberFormatter.format(count)} ${count === 1 ? singular : plural}`
+}
+
+function getTypeLabel(type) {
+  return type === 'production' ? 'produção' : 'compra'
+}
+
+function getAssigneeName(request) {
+  return request.assignees?.[0]?.name ?? request.assigned_to_name ?? null
+}
+
+function ActivitySentence({ actor, parts }) {
+  return (
+    <>
+      <b>{actor}</b>
+      {parts.map((part, index) => {
+        const key = `${part.kind}-${index}`
+
+        if (part.kind === 'strong') {
+          return (
+            <span key={key}>
+              {' '}
+              <b>{part.value}</b>
+            </span>
+          )
+        }
+
+        if (part.kind === 'in' || part.kind === 'out') {
+          return (
+            <span key={key}>
+              {' '}
+              <span className={part.kind === 'in' ? 'activity-in' : 'activity-out'}>
+                {part.value}
+              </span>
+            </span>
+          )
+        }
+
+        return <span key={key}> {part.value}</span>
+      })}
+    </>
+  )
+}
 
 function DashboardPage({ onNavigate }) {
+  const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
+  const quickActions = useQuickActions()
   const workspaceId = activeWorkspace?.id
+  const canAct = Boolean(quickActions?.canAct)
+  const now = useMemo(() => new Date(), [])
 
-  const {
-    data,
-    error,
-    isLoading,
-    refetch,
-  } = useQuery({
+  const { data, error, isLoading } = useQuery({
     queryKey: ['dashboard', workspaceId],
     queryFn: () => getDashboard(workspaceId),
     enabled: Boolean(workspaceId),
   })
 
-  const summary = data?.summary ?? null
-  const attentionProducts = data?.attention_products ?? []
-  const recentActivity = useMemo(
-    () => (data?.recent_activity ?? []).map(formatAuditLog),
-    [data],
-  )
-  const errorMessage = error ? getFriendlyError(error) : ''
+  const summary = data?.summary ?? {}
+  const attentionProducts = useMemo(() => data?.attention_products ?? [], [data])
+  const zeroProducts = attentionProducts.filter((product) => product.quantity === 0)
+  const lowProducts = attentionProducts.filter((product) => product.quantity > 0)
+  const stalledRequests = data?.stalled_replenishments ?? []
+  const readyRequests = data?.ready_replenishments ?? []
+  const movementsByDay = data?.movements_by_day ?? []
+  const activity = (data?.recent_activity ?? []).slice(0, RECENT_ACTIVITY_LIMIT)
+  const canSeeActivity = Boolean(data?.recent_activity?.length)
 
-  const stats = useMemo(
-    () => [
-      {
-        label: 'Total de produtos',
-        tone: 'blue',
-        trend: `${formatNumber(summary?.total_categories)} categorias cadastradas`,
-        value: formatNumber(summary?.total_products),
-      },
-      {
-        label: 'Estoque baixo',
-        tone: 'yellow',
-        trend: 'Abaixo do mínimo cadastrado',
-        value: formatNumber(summary?.low_stock_products),
-      },
-      {
-        label: 'Sem estoque',
-        tone: 'red',
-        trend: 'Produtos com quantidade zerada',
-        value: formatNumber(summary?.out_of_stock_products),
-      },
-      {
-        label: 'Movimentações',
-        tone: 'slate',
-        trend: 'Total registrado no workspace',
-        value: formatNumber(summary?.total_stock_movements),
-      },
-    ],
-    [summary],
-  )
+  const attentionCount =
+    (summary.out_of_stock_products ?? 0) +
+    (summary.low_stock_products ?? 0) +
+    stalledRequests.length +
+    readyRequests.length
+  const shownAttentionCount =
+    attentionProducts.length + stalledRequests.length + readyRequests.length
+  const attentionText = attentionCount
+    ? `${pluralize(attentionCount, 'item precisa', 'itens precisam')} de atenção hoje`
+    : 'Nada precisa da sua atenção hoje'
 
-  const attentionColumns = [
-    { key: 'name', label: 'Produto', mobilePrimary: true },
-    { key: 'category', label: 'Categoria' },
-    { key: 'quantity', label: 'Quantidade' },
-    {
-      key: 'minimum_quantity',
-      label: 'Mínimo',
-      render: (product) => product.minimum_quantity,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (product) => {
-        const status = getReplenishmentStatus(product)
+  const movementsDelta = (summary.movements_today ?? 0) - (summary.movements_yesterday ?? 0)
+  const lowCount = summary.low_stock_products ?? 0
+  const zeroCount = summary.out_of_stock_products ?? 0
+  const zeroWithout = summary.out_of_stock_without_replenishment ?? 0
 
-        return <Badge tone={status.tone}>{status.label}</Badge>
-      },
-    },
-    {
-      key: 'action',
-      label: 'Ação',
-      render: () => (
-        <Button onClick={() => onNavigate('stock')} size="sm" variant="secondary">
-          Abrir estoque
-        </Button>
-      ),
-    },
-  ]
+  function openProductReplenishment(product) {
+    if (product.active_replenishment_id) {
+      onNavigate('production', {
+        requestId: product.active_replenishment_id,
+        status: product.active_replenishment_status,
+        type: 'replenishment-focus',
+        workspaceId,
+      })
+      return
+    }
 
-  const activityColumns = [
-    { key: 'title', label: 'Atividade', mobilePrimary: true },
-    { key: 'detail', label: 'Detalhe' },
-    { key: 'time', label: 'Quando' },
-  ]
-  return (
-    <div className="page-stack">
-      <div className="page-heading">
-        <div>
-          <h1>Dashboard</h1>
-          <p>Acompanhe estoque, movimentações e necessidades de reposição.</p>
+    onNavigate('production', {
+      productId: product.id,
+      type: 'replenishment-create',
+      workspaceId,
+    })
+  }
+
+  function renderProductRow(product) {
+    const hasRequest = Boolean(product.active_replenishment_id)
+
+    return (
+      <div className="attention-row" key={product.id}>
+        <div className="attention-row__name">
+          <strong>{product.name}</strong>
+          <span>{product.category}</span>
         </div>
-        <Button onClick={() => refetch()} variant="secondary">
-          Atualizar dados
-        </Button>
+        <StockLevel
+          minimum={product.minimum_quantity}
+          quantity={product.quantity}
+          showReplenish
+        />
+        {hasRequest ? (
+          <Button onClick={() => openProductReplenishment(product)} size="sm" variant="secondary">
+            Ver reposição
+          </Button>
+        ) : canAct ? (
+          <Button onClick={() => openProductReplenishment(product)} size="sm">
+            Repor
+          </Button>
+        ) : (
+          <span />
+        )}
       </div>
+    )
+  }
 
-      {errorMessage ? (
-        <p className="stock-feedback stock-feedback--error">{errorMessage}</p>
+  function renderRequestRow(request, kind) {
+    const assignee = getAssigneeName(request)
+    const days = daysSince(request.updated_at, now)
+    const note =
+      kind === 'stalled'
+        ? `${assignee ? `Com ${getFirstName(assignee)}` : 'Sem responsável'} há ${pluralize(days, 'dia', 'dias')}, sem atualização`
+        : `${numberFormatter.format(request.quantity_needed)} un. previstas · pronta para estocar`
+
+    return (
+      <div className="attention-row" key={`${kind}-${request.id}`}>
+        <div className="attention-row__name">
+          <strong>{request.product_name}</strong>
+          <span>
+            {request.product_category ? `${request.product_category} · ` : ''}
+            {getTypeLabel(request.type)}
+          </span>
+        </div>
+        <div className="attention-row__note">
+          {assignee ? <UserAvatar className="avatar--xs" name={assignee} /> : null}
+          <span>{note}</span>
+        </div>
+        {kind === 'stalled' ? (
+          <button
+            className="attention-row__pill-button"
+            onClick={() =>
+              onNavigate('production', {
+                requestId: request.id,
+                status: request.status,
+                type: 'replenishment-focus',
+                workspaceId,
+              })
+            }
+            type="button"
+          >
+            <Badge tone="warn">Parada</Badge>
+          </button>
+        ) : canAct ? (
+          <Button
+            onClick={() =>
+              onNavigate('stock', { request, type: 'replenishment-entry', workspaceId })
+            }
+            size="sm"
+            variant="secondary"
+          >
+            Estocar
+          </Button>
+        ) : (
+          <Badge tone="ok">Pronta</Badge>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="page-stack dashboard">
+      <section className="dashboard-hello">
+        <div>
+          <h1>
+            {getGreeting(now)}, {getFirstName(user?.name)}
+          </h1>
+          <p>
+            {formatToday(now)}
+            {data ? ` · ${attentionText}` : ''}
+          </p>
+        </div>
+        {canAct ? (
+          <Button
+            className="dashboard-hello__action"
+            icon="+"
+            onClick={() => quickActions.openQuickAction('movement')}
+          >
+            Movimentar estoque
+          </Button>
+        ) : null}
+      </section>
+
+      {error ? (
+        <p className="stock-feedback stock-feedback--error">{getFriendlyError(error)}</p>
       ) : null}
 
       {isLoading ? (
-        <div className="stock-loading">Carregando dashboard...</div>
-      ) : (
+        <div className="stock-loading">Carregando início...</div>
+      ) : data ? (
         <>
-          <section className="stats-grid">
-            {stats.map((stat) => (
-              <StatCard key={stat.label} {...stat} />
-            ))}
+          <section aria-label="Resumo" className="summary-tiles">
+            <SummaryTile
+              hint={`em ${pluralize(summary.total_categories ?? 0, 'categoria', 'categorias')}`}
+              label="Produtos ativos"
+              value={numberFormatter.format(summary.total_products ?? 0)}
+            />
+            <SummaryTile
+              highlight={lowCount > 0}
+              hint={
+                lowCount
+                  ? `${numberFormatter.format(summary.low_stock_in_replenishment ?? 0)} já em reposição`
+                  : 'tudo acima do mínimo'
+              }
+              label="Abaixo do mínimo"
+              tone="warn"
+              value={numberFormatter.format(lowCount)}
+            />
+            <SummaryTile
+              highlight={zeroCount > 0}
+              hint={
+                !zeroCount
+                  ? 'nenhum produto zerado'
+                  : zeroWithout
+                    ? `${numberFormatter.format(zeroWithout)} sem reposição aberta`
+                    : 'todos com reposição aberta'
+              }
+              label="Zerados"
+              tone="bad"
+              value={numberFormatter.format(zeroCount)}
+            />
+            <SummaryTile
+              hint={
+                movementsDelta === 0 ? (
+                  'igual a ontem'
+                ) : (
+                  <>
+                    <b className={movementsDelta > 0 ? 'is-up' : 'is-down'}>
+                      {movementsDelta > 0 ? '+' : '−'}
+                      {numberFormatter.format(Math.abs(movementsDelta))}
+                    </b>{' '}
+                    em relação a ontem
+                  </>
+                )
+              }
+              label="Movimentações hoje"
+              tone="ok"
+              value={numberFormatter.format(summary.movements_today ?? 0)}
+            />
           </section>
 
-          <section className="content-grid content-grid--two">
-            <Card title="Atenção do estoque" eyebrow="Inventory attention">
-              {attentionProducts.length ? (
-                <DataTable columns={attentionColumns} rows={attentionProducts} />
-              ) : (
-                <div className="stock-empty">
-                  <h2>Estoque vazio</h2>
-                  <p>Nenhum produto ativo está zerado ou abaixo do mínimo cadastrado.</p>
-                </div>
-              )}
-            </Card>
-            <Card title="Atividades recentes" eyebrow="Recent activity">
-              {recentActivity.length ? (
-                <div className="dashboard-activity">
-                  <DataTable
-                    columns={activityColumns}
-                    rows={recentActivity.slice(0, RECENT_ACTIVITY_LIMIT)}
-                  />
-                  <div className="dashboard-activity__footer">
-                    <Button
-                      onClick={() =>
-                        onNavigate('stock', {
-                          type: 'stock-history',
-                          workspaceId,
-                        })
-                      }
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Ver histórico de estoque
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="stock-empty">
-                  <h2>Nenhuma atividade recente</h2>
-                  <p>As ações do workspace aparecerão aqui conforme forem registradas.</p>
-                </div>
-              )}
-            </Card>
-          </section>
-
-          <section className="feature-grid feature-grid--single">
-            <Card
-              className="feature-card"
-              title="Atalho para etiquetas/QR Code"
-              eyebrow="Identificação"
-            >
-              <div className="label-shortcut">
-                <div className="label-shortcut__content">
-                  <p>
-                    Gere QR Codes, códigos de barras e etiquetas prontas para
-                    impressão e identificação dos produtos.
-                  </p>
-                  <Button
-                    className="label-shortcut__button"
-                    onClick={() => onNavigate('labels')}
-                  >
-                    Gerar etiquetas
-                  </Button>
-                </div>
-
-                <div
-                  className="label-shortcut__preview"
-                  role="img"
-                  aria-label="Exemplo decorativo de etiqueta Produzzy"
-                >
-                  <div className="label-shortcut__brand">
-                    <img
-                      aria-hidden="true"
-                      alt=""
-                      src="/brand/produzzy-icon.png"
-                    />
-                    <strong>Produzzy</strong>
-                  </div>
-                  <span className="label-shortcut__product">Produto</span>
-                  <div className="label-shortcut__codes">
-                    <div className="label-shortcut__qr" aria-hidden="true"></div>
-                    <div className="label-shortcut__barcode" aria-hidden="true"></div>
-                  </div>
-                </div>
+          <div className="dashboard-grid">
+            <section aria-labelledby="attention-title" className="dashboard-panel">
+              <div className="dashboard-panel__head">
+                <h2 id="attention-title">
+                  Precisa da sua atenção
+                  {shownAttentionCount ? (
+                    <span className="dashboard-panel__count">{attentionCount}</span>
+                  ) : null}
+                </h2>
+                <Link to="/stock">Ver estoque</Link>
               </div>
-            </Card>
-          </section>
+
+              {shownAttentionCount ? (
+                <>
+                  {zeroProducts.length ? (
+                    <div className="attention-group">
+                      <p className="attention-group__label">
+                        <i aria-hidden="true" className="status-dot status-dot--bad" />
+                        Zerados
+                      </p>
+                      {zeroProducts.map(renderProductRow)}
+                    </div>
+                  ) : null}
+                  {lowProducts.length ? (
+                    <div className="attention-group">
+                      <p className="attention-group__label">
+                        <i aria-hidden="true" className="status-dot status-dot--warn" />
+                        Abaixo do mínimo
+                      </p>
+                      {lowProducts.map(renderProductRow)}
+                    </div>
+                  ) : null}
+                  {stalledRequests.length || readyRequests.length ? (
+                    <div className="attention-group">
+                      <p className="attention-group__label">
+                        <i aria-hidden="true" className="status-dot" />
+                        Reposições
+                      </p>
+                      {stalledRequests.map((request) => renderRequestRow(request, 'stalled'))}
+                      {readyRequests.map((request) => renderRequestRow(request, 'ready'))}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="dashboard-panel__empty">
+                  <strong>Tudo em dia</strong>
+                  <p>Nenhum produto zerado ou abaixo do mínimo, e nenhuma reposição parada.</p>
+                </div>
+              )}
+            </section>
+
+            <div className="dashboard-col">
+              <section aria-labelledby="movements-title" className="dashboard-panel">
+                <div className="dashboard-panel__head">
+                  <h2 id="movements-title">Movimentações · 7 dias</h2>
+                </div>
+                <div className="movements-legend">
+                  <span>
+                    <i aria-hidden="true" className="movements-legend__in" />
+                    Entradas
+                  </span>
+                  <span>
+                    <i aria-hidden="true" className="movements-legend__out" />
+                    Saídas
+                  </span>
+                </div>
+                <div className="movements-chart-wrap">
+                  <MovementsChart days={movementsByDay} />
+                  {movementsByDay.every((day) => day.total === 0) ? (
+                    <p className="movements-chart__empty">
+                      Nenhuma movimentação nos últimos 7 dias.
+                    </p>
+                  ) : null}
+                </div>
+              </section>
+
+              {canSeeActivity ? (
+                <section aria-labelledby="activity-title" className="dashboard-panel">
+                  <div className="dashboard-panel__head">
+                    <h2 id="activity-title">Atividade recente</h2>
+                    <button
+                      className="dashboard-panel__link"
+                      onClick={() =>
+                        onNavigate('stock', { type: 'stock-history', workspaceId })
+                      }
+                      type="button"
+                    >
+                      Ver histórico
+                    </button>
+                  </div>
+                  <ul className="activity-feed">
+                    {activity.map((log) => (
+                      <li key={log.id}>
+                        <UserAvatar
+                          className="avatar--sm"
+                          name={log.user_name}
+                          src={log.user_avatar_url}
+                        />
+                        <p>
+                          <ActivitySentence {...describeActivity(log, user?.id)} />
+                          <time dateTime={log.created_at}>
+                            {formatRelativeTime(log.created_at, now)}
+                          </time>
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </div>
+          </div>
         </>
-      )}
+      ) : null}
     </div>
   )
 }

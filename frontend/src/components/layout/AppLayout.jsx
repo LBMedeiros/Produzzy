@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
+import BottomTabBar from './BottomTabBar'
 import Header from './Header'
+import { QuickActionButton, QuickActionsProvider } from './QuickActions'
 import Sidebar from './Sidebar'
 
 function AppLayout() {
@@ -35,29 +37,36 @@ function AppLayout() {
     .join(' ')
 
   return (
-    <div className={shellClasses}>
-      <Sidebar
-        isCollapsed={isSidebarCollapsed}
-        onNavigate={() => setIsSidebarDrawerOpen(false)}
-        onToggleCollapsed={() => setIsSidebarDrawerOpen((value) => !value)}
-      />
-      <button
-        aria-hidden={!isSidebarDrawerOpen}
-        aria-label="Fechar menu lateral"
-        className="sidebar-backdrop"
-        tabIndex={isSidebarDrawerOpen ? 0 : -1}
-        type="button"
-        onClick={() => setIsSidebarDrawerOpen(false)}
-      />
-      <div className="app-shell__main">
-        <Header onNavigated={() => setIsSidebarDrawerOpen(false)} />
-        <main className="page-content">
-          <div className="page-transition" key={location.pathname}>
-            <Outlet />
-          </div>
-        </main>
+    <QuickActionsProvider>
+      <div className={shellClasses}>
+        <Sidebar
+          isCollapsed={isSidebarCollapsed}
+          onNavigate={() => setIsSidebarDrawerOpen(false)}
+          onToggleCollapsed={() => setIsSidebarDrawerOpen((value) => !value)}
+        />
+        <button
+          aria-hidden={!isSidebarDrawerOpen}
+          aria-label="Fechar menu lateral"
+          className="sidebar-backdrop"
+          tabIndex={isSidebarDrawerOpen ? 0 : -1}
+          type="button"
+          onClick={() => setIsSidebarDrawerOpen(false)}
+        />
+        <div className="app-shell__main">
+          <Header onNavigated={() => setIsSidebarDrawerOpen(false)} />
+          <main className="page-content">
+            <div className="page-transition" key={location.pathname}>
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+      {/* Phone-only (< 640px): fixed bottom menu and the "+" quick action.
+          Outside .app-shell so its entry animation can't become their
+          containing block. */}
+      <QuickActionButton />
+      <BottomTabBar />
+    </QuickActionsProvider>
   )
 }
 

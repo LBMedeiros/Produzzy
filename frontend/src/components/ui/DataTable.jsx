@@ -1,3 +1,5 @@
+// `column.className` is applied to both the header and the cells, so a
+// column can be restyled or hidden at some widths from CSS.
 function DataTable({ columns, rows, emptyMessage = 'Nenhum registro encontrado.' }) {
   if (!rows.length) {
     return <p className="table-empty">{emptyMessage}</p>
@@ -9,7 +11,9 @@ function DataTable({ columns, rows, emptyMessage = 'Nenhum registro encontrado.'
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key}>{column.label}</th>
+              <th className={column.className} key={column.key}>
+                {column.label}
+              </th>
             ))}
           </tr>
         </thead>
@@ -20,7 +24,11 @@ function DataTable({ columns, rows, emptyMessage = 'Nenhum registro encontrado.'
                 <td
                   key={column.key}
                   data-label={column.label}
-                  className={column.mobilePrimary ? 'data-cell--primary' : undefined}
+                  className={
+                    [column.mobilePrimary ? 'data-cell--primary' : '', column.className]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
                 >
                   {column.render ? column.render(row) : row[column.key]}
                 </td>

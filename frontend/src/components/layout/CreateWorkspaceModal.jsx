@@ -12,6 +12,11 @@ function CreateWorkspaceModal({ onClose }) {
     event.preventDefault()
     setError('')
 
+    if (!name.trim()) {
+      setError('Informe o nome do workspace.')
+      return
+    }
+
     try {
       await createWorkspace(name)
       onClose()
@@ -40,7 +45,7 @@ function CreateWorkspaceModal({ onClose }) {
           </button>
         </div>
 
-        <form className="workspace-form" onSubmit={handleSubmit}>
+        <form noValidate className="workspace-form" onSubmit={handleSubmit}>
           <label>
             Nome do workspace
             <input

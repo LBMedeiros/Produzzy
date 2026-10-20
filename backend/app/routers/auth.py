@@ -152,8 +152,9 @@ def send_account_verification_email(user: models.User, token: str):
         auth_logger.exception("auth.verify_email failed to send e-mail")
 
 
-def send_recovery_verification_email(recovery_email: str, token: str):
-    """Best-effort: never fails the request that triggered it."""
+def send_recovery_verification_email(recovery_email: str, token: str) -> bool:
+    """Best-effort: never fails the request that triggered it. Returns whether
+    the e-mail actually left, so the caller can tell the user."""
     verify_link = (
         f"{PRODUZZY_APP_BASE_URL.rstrip('/')}/verify-recovery-email/{token}"
     )
@@ -163,6 +164,7 @@ def send_recovery_verification_email(recovery_email: str, token: str):
             recovery_email,
             verify_link,
         )
+        return True
     except email_service.EmailNotConfiguredError:
         if PRODUZZY_ENV in {"production", "prod"}:
             auth_logger.warning(
@@ -175,6 +177,8 @@ def send_recovery_verification_email(recovery_email: str, token: str):
             )
     except email_service.EmailSendError:
         auth_logger.exception("auth.recovery_email failed to send e-mail")
+
+    return False
 
 
 @router.post(
@@ -479,16 +483,54 @@ def change_current_user_password(
     )
 
 
-@router.post("/me/recovery-email", response_model=schemas.UserResponse)
+@router.post("/me/recovery-email", response_model=schemas.RecoveryEmailResponse)
 def set_current_user_recovery_email(
     data: schemas.RecoveryEmailUpdate,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     user, token = crud.set_recovery_email(current_user, data, db)
-    send_recovery_verification_email(user.recovery_email, token)
+    sent = send_recovery_verification_email(user.recovery_email, token)
+    response = schemas.RecoveryEmailResponse.model_validate(user)
+    response.verification_email_sent = sent
 
-    return user
+    return response
+
+
+@router.post(
+    "/me/recovery-email/resend",
+    response_model=schemas.RecoveryEmailResendResponse,
+)
+def resend_current_user_recovery_email(
+    request: Request,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Same limits as /resend-verification; every request counts, per user.
+    key = build_rate_limit_key(request, f"user-{current_user.id}")
+    ensure_rate_limit_allowed(
+        "auth.resend_recovery_email",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    record_rate_limit_failure(
+        "auth.resend_recovery_email",
+        key,
+        PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+    recovery_email, token = crud.create_recovery_email_resend(current_user)
+    sent = send_recovery_verification_email(recovery_email, token)
+
+    return schemas.RecoveryEmailResendResponse(
+        message=(
+            "Enviamos um novo link de confirmação."
+            if sent
+            else "Não foi possível enviar o e-mail agora. Tente novamente em instantes."
+        ),
+        verification_email_sent=sent,
+    )
 
 
 @router.delete("/me/recovery-email", response_model=schemas.UserResponse)

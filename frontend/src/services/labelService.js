@@ -68,3 +68,20 @@ export function getQrCodesSheet(workspaceId) {
     `/workspaces/${validWorkspaceId}/products/qrcodes-sheet`,
   )
 }
+
+// A4 sheet (3 columns) for the selected products: `code` is 'qr' (QR Codes
+// with the Produzzy logo) or 'barcode', `copies` per product, and `format`
+// 'png' (preview) or 'pdf' (download). Max 120 labels per request.
+export function getPrintSheet(workspaceId, options = {}) {
+  const validWorkspaceId = parseId(workspaceId, 'Workspace')
+  const { code = 'qr', copies = 1, format = 'png', productIds = [] } = options
+  const query = new URLSearchParams({ code, copies: String(copies), format })
+
+  productIds.forEach((productId) => {
+    query.append('product_ids', String(parseId(productId, 'Produto')))
+  })
+
+  return requestBlob(
+    `/workspaces/${validWorkspaceId}/products/print-sheet?${query.toString()}`,
+  )
+}
