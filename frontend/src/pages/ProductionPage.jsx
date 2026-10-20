@@ -8,6 +8,7 @@ import ReplenishmentChatModal from '../components/replenishment/ReplenishmentCha
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
+import { normalizeSearchText } from '../lib/formatters'
 import { needsReplenishment } from '../lib/replenishment'
 import { usePagination } from '../lib/pagination'
 import { listAllProducts } from '../services/productService'
@@ -34,6 +35,23 @@ const HISTORY_FILTERS = [
   { label: 'Estocadas', value: 'stocked' },
   { label: 'Canceladas', value: 'canceled' },
 ]
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  )
+}
+
+function matchesSearch(term, name, category) {
+  return (
+    !term ||
+    normalizeSearchText(name).includes(term) ||
+    normalizeSearchText(category).includes(term)
+  )
+}
 
 const activeRequestStatuses = new Set(['open', 'in_progress', 'completed'])
 const HISTORY_PAGE_SIZE = 12
@@ -76,6 +94,7 @@ function ProductionPage({
   // 'history' shows stocked/canceled requests.
   const [stage, setStage] = useState('open')
   const [historyFilter, setHistoryFilter] = useState('stocked')
+  const [search, setSearch] = useState('')
   const now = useMemo(() => new Date(), [])
   const [focusRequestId, setFocusRequestId] = useState(null)
 
@@ -210,38 +229,59 @@ function ProductionPage({
     return products.filter((product) => !activeProductIds.has(product.id))
   }, [displayRequests, products])
 
+  // Board search: by product name or category, across every column and the
+  // history.
+  const searchTerm = normalizeSearchText(search.trim())
+
   const columns = useMemo(() => {
     const byStatus = { completed: [], in_progress: [], open: [] }
+    const matches = (name, category) => matchesSearch(searchTerm, name, category)
 
     displayRequests.forEach((requestItem) => {
-      byStatus[requestItem.status]?.push({ requestItem })
+      if (matches(requestItem.product_name, requestItem.product_category)) {
+        byStatus[requestItem.status]?.push({ requestItem })
+      }
     })
 
     // Low-stock products with no request yet lead the "Necessário repor" column.
     byStatus.open = [
-      ...lowStockProductsWithoutActiveRequest.map((product) => ({ product })),
+      ...lowStockProductsWithoutActiveRequest
+        .filter((product) => matches(product.name, product.category))
+        .map((product) => ({ product })),
       ...byStatus.open,
     ]
 
     return byStatus
-  }, [displayRequests, lowStockProductsWithoutActiveRequest])
+  }, [displayRequests, lowStockProductsWithoutActiveRequest, searchTerm])
 
-  const historyCounts = useMemo(
-    () => ({
-      canceled: displayRequests.filter((item) => item.status === 'canceled').length,
-      stocked: displayRequests.filter((item) => item.status === 'stocked').length,
-    }),
-    [displayRequests],
-  )
+  const historyCounts = useMemo(() => {
+    const counts = { canceled: 0, stocked: 0 }
+
+    displayRequests.forEach((item) => {
+      if (
+        item.status in counts &&
+        matchesSearch(searchTerm, item.product_name, item.product_category)
+      ) {
+        counts[item.status] += 1
+      }
+    })
+
+    return counts
+  }, [displayRequests, searchTerm])
   const historyItems = useMemo(
-    () => displayRequests.filter((item) => item.status === historyFilter),
-    [displayRequests, historyFilter],
+    () =>
+      displayRequests.filter(
+        (item) =>
+          item.status === historyFilter &&
+          matchesSearch(searchTerm, item.product_name, item.product_category),
+      ),
+    [displayRequests, historyFilter, searchTerm],
   )
   const historyListRef = useRef(null)
   const historyPagination = usePagination(
     historyItems,
     HISTORY_PAGE_SIZE,
-    `${workspaceId}-${historyFilter}`,
+    `${workspaceId}-${historyFilter}-${searchTerm}`,
     historyListRef,
   )
   const { goToItem: goToHistoryItem } = historyPagination
@@ -475,49 +515,62 @@ function ProductionPage({
       ) : null}
 
       {/* Computer: Quadro | Histórico. Phone: one chip per stage + Histórico. */}
-      <div aria-label="Visualização" className="board-views board-views--desktop" role="tablist">
-        <button
-          aria-selected={!isHistory}
-          className={`filter-pill${!isHistory ? ' is-active' : ''}`}
-          onClick={() => setStage('open')}
-          role="tab"
-          type="button"
-        >
-          Quadro
-        </button>
-        <button
-          aria-selected={isHistory}
-          className={`filter-pill${isHistory ? ' is-active' : ''}`}
-          onClick={() => setStage('history')}
-          role="tab"
-          type="button"
-        >
-          Histórico
-        </button>
-      </div>
-      <div aria-label="Etapas da reposição" className="board-views board-views--phone" role="tablist">
-        {BOARD_COLUMNS.map((column) => (
+      <div className="board-toolbar">
+        <div aria-label="Visualização" className="board-views board-views--desktop" role="tablist">
           <button
-            aria-selected={stage === column.value}
-            className={`filter-pill${stage === column.value ? ' is-active' : ''}`}
-            key={column.value}
-            onClick={() => setStage(column.value)}
+            aria-selected={!isHistory}
+            className={`filter-pill${!isHistory ? ' is-active' : ''}`}
+            onClick={() => setStage('open')}
             role="tab"
             type="button"
           >
-            {column.label}
-            <span className="filter-pill__count">{columns[column.value].length}</span>
+            Quadro
           </button>
-        ))}
-        <button
-          aria-selected={isHistory}
-          className={`filter-pill${isHistory ? ' is-active' : ''}`}
-          onClick={() => setStage('history')}
-          role="tab"
-          type="button"
-        >
-          Histórico
-        </button>
+          <button
+            aria-selected={isHistory}
+            className={`filter-pill${isHistory ? ' is-active' : ''}`}
+            onClick={() => setStage('history')}
+            role="tab"
+            type="button"
+          >
+            Histórico
+          </button>
+        </div>
+        <div aria-label="Etapas da reposição" className="board-views board-views--phone" role="tablist">
+          {BOARD_COLUMNS.map((column) => (
+            <button
+              aria-selected={stage === column.value}
+              className={`filter-pill${stage === column.value ? ' is-active' : ''}`}
+              key={column.value}
+              onClick={() => setStage(column.value)}
+              role="tab"
+              type="button"
+            >
+              {column.label}
+              <span className="filter-pill__count">{columns[column.value].length}</span>
+            </button>
+          ))}
+          <button
+            aria-selected={isHistory}
+            className={`filter-pill${isHistory ? ' is-active' : ''}`}
+            onClick={() => setStage('history')}
+            role="tab"
+            type="button"
+          >
+            Histórico
+          </button>
+        </div>
+
+        <label className="labels-search board-search">
+          <SearchIcon />
+          <input
+            aria-label="Buscar produto na reposição"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar produto"
+            type="search"
+            value={search}
+          />
+        </label>
       </div>
 
       {isLoading ? (
@@ -556,11 +609,17 @@ function ProductionPage({
           ) : (
             <div className="stock-empty">
               <h2>
-                {historyFilter === 'stocked'
-                  ? 'Nenhuma reposição estocada ainda.'
-                  : 'Nenhuma reposição cancelada.'}
+                {searchTerm
+                  ? 'Nenhum produto encontrado.'
+                  : historyFilter === 'stocked'
+                    ? 'Nenhuma reposição estocada ainda.'
+                    : 'Nenhuma reposição cancelada.'}
               </h2>
-              <p>As reposições concluídas aparecem aqui.</p>
+              <p>
+                {searchTerm
+                  ? 'Tente outro nome ou categoria.'
+                  : 'As reposições concluídas aparecem aqui.'}
+              </p>
             </div>
           )}
         </section>
@@ -583,11 +642,13 @@ function ProductionPage({
                   <div className="board__list">{items.map(renderBoardItem)}</div>
                 ) : (
                   <p className="board__empty">
-                    {column.value === 'open'
-                      ? 'Nada abaixo do mínimo sem reposição.'
-                      : column.value === 'in_progress'
-                        ? 'Nenhuma reposição em andamento.'
-                        : 'Nada aguardando entrada no estoque.'}
+                    {searchTerm
+                      ? 'Nenhum produto encontrado.'
+                      : column.value === 'open'
+                        ? 'Nada abaixo do mínimo sem reposição.'
+                        : column.value === 'in_progress'
+                          ? 'Nenhuma reposição em andamento.'
+                          : 'Nada aguardando entrada no estoque.'}
                   </p>
                 )}
               </section>

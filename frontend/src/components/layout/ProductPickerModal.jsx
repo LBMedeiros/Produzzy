@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { normalizeSearchText } from '../../lib/formatters'
 import { needsReplenishment } from '../../lib/replenishment'
 import { listAllProducts } from '../../services/productService'
 import ModalPortal from '../ui/ModalPortal'
@@ -15,14 +16,6 @@ const MODES = {
     eyebrow: 'Nova reposição',
     title: 'Qual produto repor?',
   },
-}
-
-function normalize(value) {
-  return (value ?? '')
-    .toString()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
 }
 
 // First step of the "+" quick actions: pick an active product, then the page
@@ -57,12 +50,12 @@ function ProductPickerModal({ mode, onClose, onPick }) {
   }, [onClose])
 
   const visibleProducts = useMemo(() => {
-    const term = normalize(search.trim())
+    const term = normalizeSearchText(search.trim())
     const products = (productsQuery.data ?? []).filter(
       (product) =>
         !term ||
-        normalize(product.name).includes(term) ||
-        normalize(product.category).includes(term) ||
+        normalizeSearchText(product.name).includes(term) ||
+        normalizeSearchText(product.category).includes(term) ||
         String(product.id) === term,
     )
 

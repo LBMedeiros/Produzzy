@@ -7044,6 +7044,33 @@ a {
   padding: 10px 4px;
 }
 
+/* Views on the left, search on the right (one row on a computer). */
+.board-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Board search: same field as Etiquetas, outside a panel. */
+.labels-search.board-search {
+  flex: 0 1 360px;
+  margin: 0;
+  background: var(--card);
+}
+
+@media (max-width: 639px) {
+  .board-toolbar {
+    display: grid;
+    gap: 10px;
+  }
+
+  .labels-search.board-search {
+    flex: none;
+  }
+}
+
 /* Each column scrolls on its own, so the board fits the screen instead of
    growing into one long page. */
 .board__list {

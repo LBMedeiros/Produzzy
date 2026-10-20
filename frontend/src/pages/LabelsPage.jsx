@@ -3,6 +3,7 @@ import Button from '../components/ui/Button'
 import PageHeader from '../components/ui/PageHeader'
 import Pagination from '../components/ui/Pagination'
 import { useWorkspace } from '../contexts/WorkspaceContext'
+import { normalizeSearchText } from '../lib/formatters'
 import { usePagination } from '../lib/pagination'
 import { getPrintSheet } from '../services/labelService'
 import { listAllProducts } from '../services/productService'
@@ -15,14 +16,6 @@ const LABEL_PRODUCTS_PAGE_SIZE = 10
 const MAX_LABELS = 120
 const MAX_COPIES = 20
 const PREVIEW_DEBOUNCE_MS = 350
-
-function normalize(value) {
-  return (value ?? '')
-    .toString()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-}
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -183,13 +176,13 @@ function LabelsPage({ onNavigate }) {
   }, [loadProducts])
 
   const visibleProducts = useMemo(() => {
-    const term = normalize(search.trim())
+    const term = normalizeSearchText(search.trim())
 
     return term
       ? products.filter(
           (product) =>
-            normalize(product.name).includes(term) ||
-            normalize(product.category).includes(term) ||
+            normalizeSearchText(product.name).includes(term) ||
+            normalizeSearchText(product.category).includes(term) ||
             String(product.id) === term,
         )
       : products
@@ -471,7 +464,7 @@ function LabelsPage({ onNavigate }) {
         <section aria-labelledby="labels-preview-title" className="dashboard-panel">
           <div className="dashboard-panel__head">
             <h2 id="labels-preview-title">Prévia da folha</h2>
-            <span className="dashboard-panel__count">A4 · 21 por folha</span>
+            <span className="dashboard-panel__count">A4 · 24 por folha</span>
           </div>
           <div aria-label="Opções da etiqueta" className="label-options">
             <span className="label-options__hint">QR Code e código de barras na mesma etiqueta</span>

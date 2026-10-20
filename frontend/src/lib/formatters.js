@@ -124,3 +124,12 @@ export function humanizeAuditAction(action) {
     ? readable.charAt(0).toUpperCase() + readable.slice(1)
     : 'Atividade'
 }
+
+// Case- and accent-insensitive text for local searches ("Capitão" ~ "capitao").
+export function normalizeSearchText(value) {
+  return (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
