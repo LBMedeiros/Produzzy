@@ -1324,7 +1324,7 @@ function PrivacyDataSection({ deleteAccount, user }) {
         <Link to="/privacidade">Política de Privacidade</Link>.
       </p>
 
-      <div className="settings-danger__content">
+      <div className="settings-danger__content settings-danger__content--safe">
         <div>
           <h3>Baixar meus dados</h3>
           <p>

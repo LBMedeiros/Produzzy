@@ -4506,6 +4506,13 @@ a {
   font-size: 16px;
 }
 
+/* Benign/informative action inside the "Privacidade e dados" card (e.g.
+   "Baixar meus dados"): neutral heading colour. `--danger` stays reserved for
+   the genuinely destructive action (account deletion). */
+.settings-danger__content--safe h3 {
+  color: var(--text);
+}
+
 .settings-danger__content p {
   margin-top: 5px;
   color: var(--muted);
@@ -6418,8 +6425,7 @@ a {
     padding: 16px;
   }
 
-  .sidebar.is-collapsed .brand__text,
-  .sidebar.is-collapsed .sidebar__item strong {
+  .sidebar.is-collapsed .brand__text {
     display: block;
   }
 
@@ -6431,34 +6437,35 @@ a {
     margin-bottom: 10px;
   }
 
-  /* Horizontal, scrollable row: flex items keep their natural width so they
-     never overlap (a shrinking grid track did), and the row scrolls when the
-     labels don't all fit. */
+  /* Icon-only 5-column grid across the whole top-bar range (≤860px): every
+     item gets an equal track, so the row can never overflow or clip the last
+     item (e.g. "Configurações"). Labels stay hidden — the icons keep their
+     aria-label/title — mirroring the small-screen navigation. */
   .sidebar__nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     max-width: 100%;
     min-width: 0;
-    gap: 8px;
-    overflow-x: auto;
+    gap: 6px;
   }
 
   .sidebar__item {
-    flex: 0 0 auto;
-    width: auto;
     min-width: 0;
+    min-height: 44px;
     justify-content: center;
     gap: 8px;
-    padding: 0 12px;
+    padding-inline: 0;
   }
 
   .sidebar__item span {
-    width: 32px;
-    height: 32px;
-    flex-basis: 32px;
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
   }
 
-  .sidebar__item strong {
-    white-space: nowrap;
+  .sidebar .sidebar__item strong,
+  .sidebar.is-collapsed .sidebar__item strong {
+    display: none;
   }
 
   .sidebar.is-collapsed .sidebar__item {
@@ -6695,33 +6702,6 @@ a {
   .category-editor-item .category-editor-item__delete,
   .category-editor-item .category-editor-item__restore {
     width: 100%;
-  }
-
-  .sidebar__nav {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
-    overflow: visible;
-    padding-bottom: 0;
-  }
-
-  .sidebar__item {
-    min-width: 0;
-    min-height: 44px;
-    justify-content: center;
-    gap: 8px;
-    padding-inline: 0;
-  }
-
-  .sidebar .sidebar__item strong,
-  .sidebar.is-collapsed .sidebar__item strong {
-    display: none;
-  }
-
-  .sidebar__item span {
-    width: 34px;
-    height: 34px;
-    flex-basis: 34px;
   }
 
   .modal-backdrop {
@@ -7212,6 +7192,7 @@ a {
   --auth-warning-soft: rgba(251, 191, 36, 0.16);
   --auth-success: #4ade80;
   --auth-success-soft: rgba(74, 222, 128, 0.16);
+  --auth-danger: #f87171;
   min-height: 100vh;
   min-height: 100svh;
   overflow-x: clip;
@@ -7418,6 +7399,82 @@ a {
 
 .auth-landing .login-hint {
   color: var(--muted);
+}
+
+/* Sign-up password checklist: each rule turns red -> green while typing. */
+.password-requirements {
+  display: grid;
+  gap: 4px;
+  margin: -6px 0 0;
+  padding: 0;
+  list-style: none;
+  animation: auth-reveal 0.35s ease both;
+}
+
+.password-requirements__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--auth-danger);
+  font-size: 13px;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.password-requirements__item.is-met {
+  color: var(--auth-success);
+}
+
+.password-requirements__icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.16);
+  transition: background-color 0.2s ease;
+}
+
+.password-requirements__item.is-met .password-requirements__icon {
+  background: var(--auth-success-soft);
+}
+
+.password-requirements__icon svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+/* Status for screen readers only ("atendido"/"pendente"). */
+.password-requirements__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Sign-up-only fields fade in while the card grows. */
+.auth-form__reveal {
+  animation: auth-reveal 0.35s ease both;
+}
+
+@keyframes auth-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .auth-form__submit {
@@ -7918,7 +7975,9 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-more span {
+  .auth-more span,
+  .auth-form__reveal,
+  .password-requirements {
     animation: none;
   }
 }

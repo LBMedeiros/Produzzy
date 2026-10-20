@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import LoginShowcase from '../components/auth/LoginShowcase'
 import PasswordField from '../components/auth/PasswordField'
+import PasswordRequirements from '../components/auth/PasswordRequirements'
 import BrandIcon from '../components/ui/BrandIcon'
 import Button from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
-import { getPasswordError, PASSWORD_HINT } from '../lib/password'
+import { getPasswordError } from '../lib/password'
 import { useAuthLandingMotion } from '../lib/useAuthLandingMotion'
 import { resendVerification } from '../services/authService'
 
@@ -149,7 +150,56 @@ function LoginPage() {
   const isRegisterMode = mode === 'register'
   const landingRef = useRef(null)
   const showcaseRef = useRef(null)
+  const cardRef = useRef(null)
+  // Card height right before switching login <-> sign-up, so the switch can
+  // animate from it to the new height instead of jumping.
+  const cardHeightBeforeSwitch = useRef(null)
   const scrollToSection = useAuthLandingMotion(landingRef)
+
+  useLayoutEffect(() => {
+    const card = cardRef.current
+    const fromHeight = cardHeightBeforeSwitch.current
+    cardHeightBeforeSwitch.current = null
+
+    if (
+      !card ||
+      fromHeight === null ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return undefined
+    }
+
+    const toHeight = card.offsetHeight
+    if (fromHeight === toHeight) {
+      return undefined
+    }
+
+    function finish() {
+      card.style.height = ''
+      card.style.overflow = ''
+      card.style.transition = ''
+    }
+
+    function handleTransitionEnd(event) {
+      if (event.target === card && event.propertyName === 'height') {
+        finish()
+      }
+    }
+
+    card.style.height = `${fromHeight}px`
+    card.style.overflow = 'hidden'
+    card.getBoundingClientRect() // commit the start height before animating
+    card.style.transition = 'height 0.35s cubic-bezier(0.22, 1, 0.36, 1)'
+    card.style.height = `${toHeight}px`
+    card.addEventListener('transitionend', handleTransitionEnd)
+    const fallback = window.setTimeout(finish, 500)
+
+    return () => {
+      card.removeEventListener('transitionend', handleTransitionEnd)
+      window.clearTimeout(fallback)
+      finish()
+    }
+  }, [mode])
 
   function updateField(field, value) {
     setForm((currentForm) => ({
@@ -309,6 +359,7 @@ function LoginPage() {
   }
 
   function toggleMode() {
+    cardHeightBeforeSwitch.current = cardRef.current?.offsetHeight ?? null
     setMode((currentMode) => (currentMode === 'login' ? 'register' : 'login'))
     setVisiblePasswords({
       confirmPassword: false,
@@ -323,7 +374,7 @@ function LoginPage() {
     ? 'Confirme seu e-mail'
     : isRegisterMode
       ? 'Crie sua conta'
-      : 'Bem-vindo de volta'
+      : 'Bem-vindo de volta!'
   const subtitle = verificationNotice
     ? 'Falta um passo: confirme seu e-mail para acessar sua conta.'
     : isRegisterMode
@@ -333,7 +384,7 @@ function LoginPage() {
   return (
     <main className="auth-landing" ref={landingRef}>
       <section className="auth-hero" data-hero>
-        <div className="auth-card" data-hero-card>
+        <div className="auth-card" data-hero-card ref={cardRef}>
           <div className="auth-card__brand">
             <BrandIcon />
             <strong>Produzzy</strong>
@@ -406,7 +457,7 @@ function LoginPage() {
 
               <form className="login-form auth-form" onSubmit={handleSubmit}>
                 {isRegisterMode ? (
-                  <label>
+                  <label className="auth-form__reveal">
                     Nome
                     <input
                       autoComplete="name"
@@ -424,7 +475,7 @@ function LoginPage() {
                   <input
                     autoComplete="email"
                     onChange={(event) => updateField('email', event.target.value)}
-                    placeholder="voce@empresa.com"
+                    placeholder="Email"
                     required
                     type="email"
                     value={form.email}
@@ -443,28 +494,30 @@ function LoginPage() {
                   isVisible={visiblePasswords.password}
                   label="Senha"
                   minLength={isRegisterMode ? 8 : 1}
-                  placeholder={isRegisterMode ? 'Crie uma senha' : 'Sua senha'}
+                  placeholder="Senha"
                   value={form.password}
                   onChange={(event) => updateField('password', event.target.value)}
                   onToggle={() => togglePasswordVisibility('password')}
                 />
 
-                {isRegisterMode ? <p className="login-hint">{PASSWORD_HINT}</p> : null}
+                {isRegisterMode ? <PasswordRequirements password={form.password} /> : null}
 
                 {isRegisterMode ? (
-                  <PasswordField
-                    autoComplete="new-password"
-                    id="login-confirm-password"
-                    isVisible={visiblePasswords.confirmPassword}
-                    label="Confirmar senha"
-                    minLength="8"
-                    placeholder="Repita a senha"
-                    value={form.confirmPassword}
-                    onChange={(event) =>
-                      updateField('confirmPassword', event.target.value)
-                    }
-                    onToggle={() => togglePasswordVisibility('confirmPassword')}
-                  />
+                  <div className="auth-form__reveal">
+                    <PasswordField
+                      autoComplete="new-password"
+                      id="login-confirm-password"
+                      isVisible={visiblePasswords.confirmPassword}
+                      label="Confirmar senha"
+                      minLength="8"
+                      placeholder="Repita a senha"
+                      value={form.confirmPassword}
+                      onChange={(event) =>
+                        updateField('confirmPassword', event.target.value)
+                      }
+                      onToggle={() => togglePasswordVisibility('confirmPassword')}
+                    />
+                  </div>
                 ) : null}
 
                 {!isRegisterMode ? (

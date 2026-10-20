@@ -1164,8 +1164,35 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       return
     }
 
+    if (!productForm.name.trim()) {
+      setProductFormError('Informe o nome do produto.')
+      return
+    }
+
     if (!productForm.category) {
       setProductFormError('Crie ou selecione uma categoria antes de salvar.')
+      return
+    }
+
+    if (productModal.mode === 'create') {
+      const initialQuantity = Number(productForm.quantity)
+      if (
+        productForm.quantity === '' ||
+        Number.isNaN(initialQuantity) ||
+        initialQuantity < 0
+      ) {
+        setProductFormError('Informe uma quantidade inicial válida (0 ou mais).')
+        return
+      }
+    }
+
+    const minimumQuantity = Number(productForm.minimumQuantity)
+    if (
+      productForm.minimumQuantity === '' ||
+      Number.isNaN(minimumQuantity) ||
+      minimumQuantity < 0
+    ) {
+      setProductFormError('Informe uma quantidade mínima válida (0 ou mais).')
       return
     }
 
@@ -2108,7 +2135,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               </button>
             </div>
 
-            <form className="stock-form" onSubmit={handleSaveProduct}>
+            <form className="stock-form" noValidate onSubmit={handleSaveProduct}>
               <label>
                 Nome
                 <input
