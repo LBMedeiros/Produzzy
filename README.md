@@ -25,7 +25,8 @@ With Produzzy, teams can:
 - collaborate through shared workspaces with custom member titles;
 - hand off replenishment work through a per-request chat;
 - generate QR Codes, barcodes, and printable product labels;
-- scan a product's QR Code or barcode with the camera to jump straight to its stock movement.
+- scan a product's QR Code or barcode with the camera to jump straight to its stock movement;
+- see what needs attention at a glance on a dashboard with a 7-day movement chart.
 
 ---
 
@@ -34,14 +35,16 @@ With Produzzy, teams can:
 ### Authentication & Account
 
 - User registration and login with email and password (accounts are active right after sign-up, with automatic login)
-- Password policy enforced on both backend and frontend: 8+ characters with at least one number and one special character
-- JWT-based authentication with protected routes and session handling ("remember me")
+- Password policy enforced on both backend and frontend: 8+ characters with at least one number and one special character, with a live checklist while typing
+- JWT-based authentication with protected routes and session handling
+- "Remember me" keeps the session for 30 days (configurable); otherwise the session ends with the browser
+- Changing the password signs out every other session (tokens carry a password fingerprint)
 - Google OAuth (Sign in with Google)
 - Change email and change password from the account settings
 - Password recovery ("forgot password") via a single-use e-mail reset link
-- Optional backup recovery e-mail (confirmed by link) that also receives the reset link
+- Optional backup recovery e-mail (confirmed by link) that also receives the reset link, with a Pending/Confirmed status and a "resend confirmation" action
 - Profile photo upload with an in-app crop/framing editor (stored on Cloudinary)
-- Login, registration, forgot-password and invite-acceptance rate limiting
+- Login, registration, forgot-password and invite-acceptance rate limiting, keyed on the real client IP behind the Render proxy
 - Input validation
 
 > Google authentication requires OAuth credentials, and password recovery requires SMTP e-mail settings, both configured through environment variables. See [`DEPLOY.md`](./DEPLOY.md) for the full setup.
@@ -61,11 +64,21 @@ With Produzzy, teams can:
 - Custom member titles (e.g. "Sócio", "Gerente") — cosmetic labels the owner assigns, independent from access roles
 - Workspace deletion with confirmation
 
+### Dashboard
+
+- Greeting with summary tiles (active products, below minimum, out of stock, movements today)
+- "Needs attention" list of low and out-of-stock products, linked to their replenishment
+- Stalled replenishments (no update for 3+ days) and replenishments ready to stock
+- 7-day chart of stock entries and exits (in the user's time zone)
+- Readable recent-activity feed with the member's photo and name
+
 ### Product Management
 
 - Create and edit products
 - Organize products by category (with a trash/restore workflow for categories)
-- Search and filter inventory
+- Search and filter inventory, with filter chips and counts (All, Below minimum, Out of stock, History, Trash)
+- Paginated product lists, with no cap on how many products a workspace can have
+- Stock level bar per product and its last movement ("Lucas · exit of 6 · 1 h ago")
 - Soft delete products with a trash and restore workflow
 - Product and category names are unique per workspace, case-insensitively (e.g. "Café" and "café" are the same name)
 - Product status derived from inventory levels
@@ -106,6 +119,10 @@ Current workflow stages include:
 
 The system calculates replenishment needs based on the product's current and minimum quantities.
 
+- Three-column board (Replenishment needed, In progress, Ready to stock), each column scrolling on its own, with stocked and cancelled requests in a paginated history
+- Product search that filters every column and the history (accent and case insensitive)
+- Each card shows the stock level, the assignee and how long the request has been open or stalled, plus a single next action
+- On phones, one stage at a time through chips
 - Confirming a new replenishment assigns its creator and starts it directly as *In progress*
 - Additional assignees can be attached to a replenishment
 - **Handoff chat**: each request has its own message thread, so assignees can leave notes on where they stopped; everyone with board access can read it
@@ -113,20 +130,22 @@ The system calculates replenishment needs based on the product's current and min
 
 ### QR Codes, Barcodes & Labels
 
-- Individual QR Code and Code 128 barcode generation
-- Individual product labels and identification codes
-- Batch QR Code and label export (paginated, print-ready sheets)
-- Printable previews
+- One label per product with both a QR Code (Produzzy logo in the center) and a Code 128 barcode
+- Product picker with search, select all and pagination, plus a copies counter
+- Live preview of the real A4 sheet generated by the API
+- Download as PDF or print directly (up to 120 labels per request)
 - **Camera scanner**: read a product's QR Code or barcode with the device camera to open its stock-movement flow directly
 
 ### Interface & UX
 
-- Responsive web interface, tuned for mobile (phone-friendly cards and layouts)
+- Redesigned interface (spec in [`docs/redesign/`](./docs/redesign/)): one visual system for colors, status badges and stock levels
+- Desktop: compact icon sidebar; phones: one-line header, bottom tab bar and a "+" quick-action button
+- Login landing page with the sign-in card centered and a product showcase revealed as you scroll
 - Light and dark modes with a persistent theme preference and an in-menu toggle
-- Responsive sidebar and workspace navigation
-- Accessible dropdowns and menus
+- Team popover with member photos and pending invites listed separately
+- Accessibility: AA text contrast in both themes, visible keyboard focus, and form validation messages in Portuguese
 - Loading, empty, error, and confirmation states
-- Subtle interface transitions and motion
+- Subtle interface transitions and motion (respects "reduce motion")
 
 ---
 
@@ -170,6 +189,7 @@ The system calculates replenishment needs based on the product's current and min
 - Swagger / OpenAPI
 - Pytest
 - ESLint
+- GitHub Actions (CI)
 
 ---
 
@@ -231,18 +251,21 @@ Produzzy/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── components/          # ui, layout, replenishment, settings, labels,
-│   │   │                        #   auth, legal
+│   │   ├── components/          # ui, layout, dashboard, replenishment, settings,
+│   │   │                        #   labels, auth, legal
 │   │   ├── contexts/            # Auth, Workspace, Theme
 │   │   ├── pages/               # dashboard, stock, production, labels, settings,
 │   │   │                        #   auth flows, terms/privacy, invite acceptance
 │   │   ├── services/            # API layer per domain
-│   │   ├── lib/                 # api client, formatters, replenishment helpers,
-│   │   │                        #   password policy, PDF data export
+│   │   ├── lib/                 # api client, formatters, pagination, activity,
+│   │   │                        #   replenishment helpers, password policy,
+│   │   │                        #   PDF data export, login motion
 │   │   └── styles/
 │   ├── .env.example
 │   └── package.json
 │
+├── docs/redesign/               # interface redesign spec and prototype
+├── .github/workflows/ci.yml     # CI: lint, build and backend tests
 ├── render.yaml                  # Render Blueprint
 ├── DEPLOY.md                    # deployment checklist
 ├── .gitignore
@@ -386,6 +409,8 @@ PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173
 PRODUZZY_SECRET_KEY=replace-with-a-long-random-secret-key
 PRODUZZY_JWT_ALGORITHM=HS256
 PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES=60
+# Session length when "remember me" is checked
+PRODUZZY_REMEMBER_ME_EXPIRE_DAYS=30
 
 PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS=5
 PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS=300
@@ -491,6 +516,10 @@ Compile the backend modules:
 python -m compileall app alembic tests
 ```
 
+### Continuous Integration
+
+Every pull request runs [GitHub Actions](./.github/workflows/ci.yml): the frontend lint and build, and the backend test suite against a PostgreSQL 16 service.
+
 ---
 
 ## Deployment
@@ -526,7 +555,7 @@ Suggested showcase:
 
 **Produzzy is under active development and deployed to production.**
 
-The core SaaS architecture and inventory workflow are implemented, and the app is live on Render. Current work focuses on:
+The core SaaS architecture and inventory workflow are implemented, the full interface redesign has shipped, and the app is live on Render. Current work focuses on:
 
 - end-to-end quality assurance;
 - permission and workspace isolation testing;
@@ -562,6 +591,10 @@ The core SaaS architecture and inventory workflow are implemented, and the app i
 - [x] Password strength policy
 - [x] Terms of Use, Privacy Policy, and LGPD data rights (PDF export, account deletion)
 - [x] Production deployment (Render + Neon)
+- [x] Continuous integration (GitHub Actions)
+- [x] Dashboard with 7-day movement chart
+- [x] Full interface redesign (desktop and mobile)
+- [x] A4 label sheets with PDF download
 - [ ] Complete end-to-end QA
 - [ ] Expanded automated test coverage
 - [ ] Production monitoring and backups
