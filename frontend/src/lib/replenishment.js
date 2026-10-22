@@ -18,14 +18,3 @@ export function getReplenishmentStatus(product) {
   return { label: 'Em estoque', tone: 'success' }
 }
 
-export function getReplenishmentPriority(product) {
-  if (product.quantity === 0) {
-    return { label: 'Prioridade alta', tone: 'danger' }
-  }
-
-  if (product.quantity < product.minimum_quantity) {
-    return { label: 'Prioridade média', tone: 'warning' }
-  }
-
-  return { label: 'Sem prioridade', tone: 'neutral' }
-}

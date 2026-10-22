@@ -6,9 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `AGENTS.md` at the repo root contains the authoritative, detailed domain rules (permission matrix, stock invariants, replenishment state machine, soft-delete semantics, audit-log constraints, change/validation policy). Follow it. This file covers the parts not in `AGENTS.md`: commands and cross-file architecture.
 
-**UI redesign in progress:** `docs/redesign/REDESIGN.md` is the spec for the new look of the authenticated app (phased plan, tokens, components, responsive rules) and `docs/redesign/prototipo.html` is the visual reference (open it in a browser). Follow them for any UI work, one phase per PR.
-
-`.atlas/` holds product/roadmap notes (`PRODUCT.md`, `ROADMAP.md`, `STATE.md`) and logs written by a separate automation tool — read for product context, don't treat as code.
+**Visual system:** the redesign is complete. `docs/redesign/REDESIGN.md` (tokens, shared components, responsive rules) and `docs/redesign/prototipo.html` (visual reference) remain the reference for any new UI, so new screens match the rest of the app.
 
 ## Layout
 

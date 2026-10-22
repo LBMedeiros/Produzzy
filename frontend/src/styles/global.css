@@ -3739,14 +3739,6 @@ a {
 /* Read-only informational values (Idioma, Formato de impressão). Styled as
    plain text — not a pill/button — so they don't look clickable like the
    Tema control above them. */
-.settings-preference__value {
-  flex: 0 0 auto;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: right;
-}
-
 .settings-danger {
   border-color: rgba(220, 38, 38, 0.28);
   background: linear-gradient(135deg, var(--surface) 0%, var(--danger-soft) 100%);
@@ -5043,8 +5035,7 @@ a {
     flex-direction: column;
   }
 
-  .settings-role-badge,
-  .settings-preference__value {
+  .settings-role-badge {
     align-self: flex-start;
   }
 

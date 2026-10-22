@@ -48,10 +48,6 @@ export function updateReplenishment(workspaceId, requestId, data) {
   })
 }
 
-export function getReplenishment(workspaceId, requestId) {
-  return request(`/workspaces/${workspaceId}/replenishments/${requestId}`)
-}
-
 export function assignReplenishmentToMe(workspaceId, requestId) {
   return request(
     `/workspaces/${workspaceId}/replenishments/${requestId}/assignees/me`,

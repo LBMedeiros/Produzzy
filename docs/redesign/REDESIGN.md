@@ -1,5 +1,8 @@
 # Redesign do Produzzy — guia de implementação
 
+> **Status: concluído** (fases 0 a 7, PRs #8 e #9, outubro de 2026). Este guia fica como
+> referência do sistema visual para telas novas.
+
 Este documento é a especificação do novo visual do app (todas as telas autenticadas).
 A referência visual é o protótipo **`docs/redesign/prototipo.html`**: abra no navegador e use os
 botões **Computador / Celular** e **Escuro / Claro** no topo. O protótipo é estático (dados de
