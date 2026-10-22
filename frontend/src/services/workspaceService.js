@@ -32,10 +32,6 @@ export function listWorkspaceMembers(workspaceId) {
   return request(`/workspaces/${workspaceId}/members?limit=100`)
 }
 
-export function listWorkspaceInvites(workspaceId) {
-  return request(`/workspaces/${workspaceId}/invites?limit=100`)
-}
-
 export function getWorkspaceTeam(workspaceId) {
   return request(`/workspaces/${workspaceId}/team`)
 }

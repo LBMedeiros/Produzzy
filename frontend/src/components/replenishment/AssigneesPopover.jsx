@@ -1,7 +1,8 @@
 import Badge from '../ui/Badge'
 import { formatWorkspaceRole, getInitials } from '../../lib/formatters'
 
-function AssigneesPopover({ assignees }) {
+// `onRemove` is passed only to owners/admins, who manage assignees.
+function AssigneesPopover({ assignees, isUpdating = false, onRemove }) {
   return (
     <div
       aria-label="Responsáveis pela necessidade"
@@ -25,6 +26,17 @@ function AssigneesPopover({ assignees }) {
             <Badge tone="neutral">
               {formatWorkspaceRole(assignee.role)}
             </Badge>
+            {onRemove ? (
+              <button
+                aria-label={`Remover ${assignee.name} dos responsáveis`}
+                className="replenishment-assignee-row__remove"
+                disabled={isUpdating}
+                onClick={() => onRemove(assignee.id)}
+                type="button"
+              >
+                Remover
+              </button>
+            ) : null}
           </div>
         ))}
       </div>

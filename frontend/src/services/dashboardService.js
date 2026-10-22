@@ -14,10 +14,6 @@ function withQuery(path, params = {}) {
   return queryString ? `${path}?${queryString}` : path
 }
 
-export function getDashboardSummary(workspaceId) {
-  return request(`/workspaces/${workspaceId}/dashboard/summary`)
-}
-
 // `tz` makes the per-day chart follow the user's calendar days.
 export function getDashboard(workspaceId, options = {}) {
   const tz = options.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -25,13 +21,3 @@ export function getDashboard(workspaceId, options = {}) {
   return request(withQuery(`/workspaces/${workspaceId}/dashboard`, { tz }))
 }
 
-export function listRecentActivity(workspaceId, options = {}) {
-  const { limit = 6, page = 1 } = options
-
-  return request(
-    withQuery(`/workspaces/${workspaceId}/audit-logs`, {
-      limit,
-      page,
-    }),
-  )
-}

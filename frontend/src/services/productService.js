@@ -36,23 +36,6 @@ export function listAllProducts(workspaceId, options = {}) {
   )
 }
 
-export function listLowStockProducts(workspaceId, options = {}) {
-  const { limit = 100, page = 1 } = options
-
-  return request(
-    withQuery(`/workspaces/${workspaceId}/products/low-stock`, {
-      limit,
-      page,
-    }),
-  )
-}
-
-export function listAllLowStockProducts(workspaceId) {
-  return fetchAllPages((pageOptions) =>
-    listLowStockProducts(workspaceId, pageOptions),
-  )
-}
-
 export function getProduct(workspaceId, productId, options = {}) {
   const { includeDeleted = false } = options
 

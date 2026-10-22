@@ -1697,8 +1697,7 @@ function SettingsPage() {
             eyebrow="Experiência"
           >
             <p className="settings-section__description">
-              Padrões atuais da interface. Novas opções serão liberadas com
-              confirmação antes de qualquer mudança no workspace.
+              Como o Produzzy aparece para você neste aparelho.
             </p>
             <div className="settings-preferences">
               <div className="settings-preference">
@@ -1719,24 +1718,6 @@ function SettingsPage() {
                   ]}
                   value={themePreference}
                 />
-              </div>
-              <div className="settings-preference">
-                <div>
-                  <strong>Idioma</strong>
-                  <span>Idioma padrão da aplicação.</span>
-                </div>
-                <span className="settings-preference__value">
-                  Português do Brasil
-                </span>
-              </div>
-              <div className="settings-preference">
-                <div>
-                  <strong>Formato de impressão</strong>
-                  <span>Aplicado aos QR Codes e etiquetas gerados.</span>
-                </div>
-                <span className="settings-preference__value">
-                  Padrão para impressão
-                </span>
               </div>
             </div>
           </Card>

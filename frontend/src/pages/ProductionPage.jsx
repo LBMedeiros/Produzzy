@@ -8,14 +8,17 @@ import ReplenishmentChatModal from '../components/replenishment/ReplenishmentCha
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { normalizeSearchText } from '../lib/formatters'
+import { getWorkspaceRoleValue, normalizeSearchText } from '../lib/formatters'
 import { needsReplenishment } from '../lib/replenishment'
 import { usePagination } from '../lib/pagination'
 import { listAllProducts } from '../services/productService'
+import { getWorkspaceTeam } from '../services/workspaceService'
 import {
+  assignReplenishmentMember,
   assignReplenishmentToMe,
   createReplenishment,
   listAllReplenishments,
+  removeReplenishmentMember,
   unassignReplenishmentFromMe,
   updateReplenishment,
 } from '../services/replenishmentService'
@@ -96,6 +99,19 @@ function ProductionPage({
   const [historyFilter, setHistoryFilter] = useState('stocked')
   const [search, setSearch] = useState('')
   const now = useMemo(() => new Date(), [])
+  // Owners/admins can put anyone on a replenishment; the team list is only
+  // fetched for them (the endpoint is restricted to the same roles).
+  const workspaceRole = getWorkspaceRoleValue(user, activeWorkspace)
+  const canManageAssignees = workspaceRole === 'owner' || workspaceRole === 'admin'
+  const teamQuery = useQuery({
+    enabled: Boolean(workspaceId) && canManageAssignees,
+    queryFn: () => getWorkspaceTeam(workspaceId),
+    queryKey: ['workspace-team', workspaceId],
+  })
+  // Visualizadores only read, so they aren't offered as responsáveis.
+  const assignableMembers = canManageAssignees
+    ? (teamQuery.data?.members ?? []).filter((member) => member.role !== 'viewer')
+    : null
   const [focusRequestId, setFocusRequestId] = useState(null)
 
   // No timed polling: the board refreshes when the user comes back to the
@@ -456,6 +472,36 @@ function ProductionPage({
     }
   }
 
+  async function handleAssigneeChange(requestItem, userId, shouldAdd) {
+    setUpdatingRequestId(requestItem.id)
+    setError('')
+    setSuccessMessage('')
+
+    try {
+      const updatedRequest = shouldAdd
+        ? await assignReplenishmentMember(workspaceId, requestItem.id, userId)
+        : await removeReplenishmentMember(workspaceId, requestItem.id, userId)
+
+      queryClient.setQueryData(
+        REPLENISHMENTS_QUERY_KEY(workspaceId),
+        (current) =>
+          (current ?? []).map((currentRequest) =>
+            currentRequest.id === requestItem.id
+              ? updatedRequest
+              : currentRequest,
+          ),
+      )
+      await invalidateReplenishment()
+      setSuccessMessage(
+        shouldAdd ? 'Responsável adicionado.' : 'Responsável removido.',
+      )
+    } catch (updateError) {
+      setError(getFriendlyError(updateError))
+    } finally {
+      setUpdatingRequestId(null)
+    }
+  }
+
   function handleRegisterEntry(requestItem) {
     onNavigate('stock', {
       request: requestItem,
@@ -465,9 +511,14 @@ function ProductionPage({
   }
 
   const cardHandlers = {
+    assignableMembers,
     currentUserId: user?.id,
     now,
+    onAddAssignee: (requestItem, userId) =>
+      handleAssigneeChange(requestItem, userId, true),
     onAssign: handleAssigneeUpdate,
+    onRemoveAssignee: (requestItem, userId) =>
+      handleAssigneeChange(requestItem, userId, false),
     onChat: setChatRequest,
     onCreate: openCreationModal,
     onEntry: handleRegisterEntry,

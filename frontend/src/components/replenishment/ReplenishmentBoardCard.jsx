@@ -2,6 +2,7 @@ import { daysSince } from '../../lib/activity'
 import { getFirstName } from '../../lib/formatters'
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
+import SelectMenu from '../ui/SelectMenu'
 import StockLevel from '../ui/StockLevel'
 import AssigneeAvatars from './AssigneeAvatars'
 
@@ -59,13 +60,16 @@ function ChatIcon() {
 // categoria · tipo, StockLevel with "repor N", who is on it, how long it has
 // been there, and the next action. No badge repeating the column name.
 function ReplenishmentBoardCard({
+  assignableMembers,
   currentUserId,
   isUpdating = false,
   now,
+  onAddAssignee,
   onAssign,
   onChat,
   onCreate,
   onEntry,
+  onRemoveAssignee,
   onStatusChange,
   product,
   request,
@@ -97,6 +101,13 @@ function ReplenishmentBoardCard({
   const isFinished = request.status === 'stocked' || request.status === 'canceled'
   const timeNote = getTimeNote(request, now)
   const lead = assignees[0]?.name ?? request.assigned_to_name
+  // Owners/admins get `assignableMembers` and can add anyone not yet on it.
+  const canManageAssignees = Boolean(assignableMembers) && canAssign
+  const addOptions = canManageAssignees
+    ? assignableMembers
+        .filter((member) => !assignees.some((assignee) => assignee.id === member.user_id))
+        .map((member) => ({ label: member.user_name, value: member.user_id }))
+    : []
 
   return (
     <article
@@ -126,7 +137,15 @@ function ReplenishmentBoardCard({
       ) : null}
 
       <div className="board-card__meta">
-        <AssigneeAvatars assignees={assignees} />
+        <AssigneeAvatars
+          assignees={assignees}
+          isUpdating={isUpdating}
+          onRemove={
+            canManageAssignees
+              ? (userId) => onRemoveAssignee(request, userId)
+              : undefined
+          }
+        />
         <span className="board-card__who">
           {lead ? getFirstName(lead) : null}
           {lead && assignees.length > 1 ? ` +${assignees.length - 1}` : null}
@@ -171,6 +190,19 @@ function ReplenishmentBoardCard({
           >
             Assumir
           </Button>
+        ) : null}
+        {addOptions.length ? (
+          <SelectMenu
+            ariaLabel={`Adicionar responsável à reposição de ${request.product_name}`}
+            className="board-card__assign"
+            disabled={isUpdating}
+            menuClassName="board-card__assign-menu"
+            onChange={(userId) => onAddAssignee(request, Number(userId))}
+            options={addOptions}
+            placeholder="+ Responsável"
+            portal
+            value=""
+          />
         ) : null}
         {canAssign ? (
           <button

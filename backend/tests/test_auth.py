@@ -775,7 +775,11 @@ def test_google_login_links_authoritative_existing_password_user(
     monkeypatch,
     user_factory,
 ):
+    # The pre-existing password may belong to whoever squatted the address,
+    # so linking Google drops it and ends the sessions issued with it.
     account = user_factory(email=f"linked-{uuid4().hex}@gmail.com")
+    old_session = client.get("/auth/me", headers=account["headers"])
+    assert old_session.status_code == 200, old_session.text
     monkeypatch.setattr(
         auth_router.google_auth_service,
         "verify_google_auth_code",
@@ -800,6 +804,8 @@ def test_google_login_links_authoritative_existing_password_user(
     )
 
     assert response.status_code == 200, response.text
+    google_headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+    assert client.get("/auth/me", headers=google_headers).status_code == 200
 
     password_response = client.post(
         "/auth/login",
@@ -809,7 +815,8 @@ def test_google_login_links_authoritative_existing_password_user(
         },
     )
 
-    assert password_response.status_code == 200, password_response.text
+    assert password_response.status_code == 401, password_response.text
+    assert client.get("/auth/me", headers=account["headers"]).status_code == 401
 
 
 def test_google_login_rejects_non_authoritative_existing_email(
