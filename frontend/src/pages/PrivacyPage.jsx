@@ -45,7 +45,7 @@ function PrivacyPage() {
           convidar alguém para um workspace, guardamos o e-mail dessa pessoa para
           enviar e identificar o convite, mesmo que ela ainda não tenha conta.
           Convites pendentes podem ser cancelados pelo dono ou administrador do
-          workspace.
+          workspace, e todo convite é apagado 30 dias depois de vencer.
         </li>
         <li>
           <strong>Dados de uso:</strong> registros técnicos como data/hora de
@@ -128,10 +128,13 @@ function PrivacyPage() {
         Mantemos seus dados enquanto sua conta estiver ativa. Algumas
         informações são apagadas automaticamente antes disso: reposições
         canceladas são removidas após <strong>7 dias</strong>, e as mensagens do
-        chat de reposições finalizadas, após <strong>30 dias</strong>.
+        chat de reposições finalizadas, após <strong>30 dias</strong>. Convites
+        para o workspace, com o e-mail da pessoa convidada, são apagados{' '}
+        <strong>30 dias</strong> depois de vencerem.
       </p>
       <p>
-        Ao excluir a conta, seus dados pessoais são anonimizados ou removidos; alguns registros podem
+        Ao excluir a conta, seus dados pessoais são anonimizados ou removidos,
+        incluindo os convites enviados para o seu e-mail; alguns registros podem
         ser mantidos de forma anonimizada quando necessário para integridade,
         segurança ou cumprimento de obrigações legais.
       </p>
@@ -142,7 +145,8 @@ function PrivacyPage() {
         <li><strong>Acessar</strong> e <strong>corrigir</strong> seus dados em Configurações;</li>
         <li>
           <strong>Exportar</strong> seus dados (portabilidade) em{' '}
-          <strong>Configurações → Privacidade e dados → Baixar meus dados</strong>;
+          <strong>Configurações → Privacidade e dados</strong>, em PDF para
+          leitura ou em JSON para levar a outro sistema;
         </li>
         <li>
           <strong>Excluir</strong> sua conta em{' '}

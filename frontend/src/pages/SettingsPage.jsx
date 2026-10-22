@@ -1449,6 +1449,7 @@ function DeleteAccountModal({ hasPassword, onClose, onConfirm }) {
 
 function PrivacyDataSection({ deleteAccount, user }) {
   const [isExporting, setIsExporting] = useState(false)
+  const [isExportingJson, setIsExportingJson] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
@@ -1468,6 +1469,34 @@ function PrivacyDataSection({ deleteAccount, user }) {
       setError(exportError?.message ?? 'Não foi possível baixar seus dados.')
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  // Portability copy (LGPD art. 19, §3º): the same data as the PDF, as JSON
+  // that another system can read.
+  async function handleExportJson() {
+    setIsExportingJson(true)
+    setError('')
+    setFeedback('')
+
+    try {
+      const data = await exportMyData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `produzzy-meus-dados-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setFeedback('Seus dados foram baixados.')
+    } catch (exportError) {
+      setError(exportError?.message ?? 'Não foi possível baixar seus dados.')
+    } finally {
+      setIsExportingJson(false)
     }
   }
 
@@ -1493,6 +1522,23 @@ function PrivacyDataSection({ deleteAccount, user }) {
         </div>
         <Button disabled={isExporting} onClick={handleExport} variant="secondary">
           {isExporting ? 'Gerando...' : 'Baixar meus dados'}
+        </Button>
+      </div>
+
+      <div className="settings-danger__content settings-danger__content--safe">
+        <div>
+          <h3>Levar meus dados para outro sistema</h3>
+          <p>
+            Os mesmos dados em um arquivo JSON, formato que outros sistemas
+            conseguem ler e importar.
+          </p>
+        </div>
+        <Button
+          disabled={isExportingJson}
+          onClick={handleExportJson}
+          variant="secondary"
+        >
+          {isExportingJson ? 'Gerando...' : 'Baixar em JSON'}
         </Button>
       </div>
 

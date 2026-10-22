@@ -595,6 +595,12 @@ def delete_account(
         models.WorkspaceMember.user_id == current_user.id
     ).delete(synchronize_session=False)
 
+    # Invites addressed to this person still carry the original e-mail; drop
+    # them so the address doesn't outlive the account (LGPD art. 18, VI).
+    db.query(models.WorkspaceInvite).filter(
+        func.lower(models.WorkspaceInvite.email) == current_user.email.lower()
+    ).delete(synchronize_session=False)
+
     # Anonymize + deactivate. The e-mail becomes a unique tombstone so the
     # original address is freed and the unique constraint stays satisfied.
     current_user.name = "Conta removida"
