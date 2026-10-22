@@ -4178,6 +4178,17 @@ a {
   padding: 12px;
 }
 
+/* Fixed wrapper the popover is portal'd into; the popover fills it. */
+.replenishment-assignees-portal {
+  position: fixed;
+  z-index: 100;
+}
+
+.replenishment-assignees-portal .replenishment-assignees-popover {
+  position: static;
+  width: 100%;
+}
+
 .replenishment-assignees-popover__header {
   display: flex;
   align-items: center;
@@ -4204,7 +4215,7 @@ a {
 
 .replenishment-assignee-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 9px;
   border-radius: 8px;
@@ -7254,6 +7265,41 @@ a {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+/* "+ Responsável" (owners/admins): a compact menu sized like the sm buttons. */
+.board-card__assign {
+  width: auto;
+}
+
+.board-card__assign .select-menu__button {
+  min-height: 32px;
+  border-style: dashed;
+  padding-inline: 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+/* Portal'd to <body>, so it's targeted by its own class. */
+.board-card__assign-menu.select-menu__menu {
+  min-width: 200px;
+  max-width: min(280px, calc(100vw - 32px));
+}
+
+.replenishment-assignee-row__remove {
+  border: 0;
+  background: none;
+  color: var(--danger-text, var(--danger));
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+  padding: 4px;
+}
+
+.replenishment-assignee-row__remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .board-card__cancel {

@@ -5,6 +5,7 @@ function SelectMenu({
   ariaLabel,
   className = '',
   disabled = false,
+  menuClassName = '',
   onChange,
   options,
   placeholder,
@@ -133,7 +134,7 @@ function SelectMenu({
 
   const menu = isOpen ? (
     <div
-      className={`select-menu__menu ${portal ? 'select-menu__menu--portal' : ''}`}
+      className={`select-menu__menu ${portal ? 'select-menu__menu--portal' : ''} ${menuClassName}`.trim()}
       id={menuId}
       ref={menuRef}
       role="listbox"
