@@ -3,6 +3,7 @@ import Button from '../ui/Button'
 import ModalPortal from '../ui/ModalPortal'
 import SelectMenu from '../ui/SelectMenu'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { memberTitleOptions } from '../../lib/formatters'
 import {
   createWorkspaceInvite,
   createWorkspaceInviteLink,
@@ -29,6 +30,19 @@ function buildSharedInviteLink(inviteLink) {
     inviteLink.token,
   )}`
 }
+
+// What each permission allows (mirrors the role matrix in AGENTS.md).
+const ROLE_DESCRIPTIONS = {
+  admin:
+    'Cadastra produtos e categorias, movimenta o estoque, cuida das reposições e da equipe.',
+  employee: 'Movimenta o estoque e trabalha nas reposições.',
+  viewer: 'Só consulta: vê o estoque e as reposições, sem alterar nada.',
+}
+
+const TITLE_OPTIONS = [
+  { label: 'Sem cargo', value: '' },
+  ...memberTitleOptions.map((title) => ({ label: title, value: title })),
+]
 
 const LINK_STATUS_LABELS = {
   active: 'Ativo',
@@ -101,6 +115,7 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
   const [createdIndividualInvite, setCreatedIndividualInvite] = useState(null)
   const [individualEmail, setIndividualEmail] = useState('')
   const [individualRole, setIndividualRole] = useState('viewer')
+  const [individualTitle, setIndividualTitle] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingLinks, setIsLoadingLinks] = useState(false)
   const [isRevoking, setIsRevoking] = useState(false)
@@ -214,6 +229,7 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
       const invite = await createWorkspaceInvite(workspaceId, {
         email: email || null,
         role: selectedIndividualRole,
+        title: individualTitle || null,
       })
 
       setCreatedIndividualInvite(invite)
@@ -393,9 +409,9 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
           ) : (
             <form noValidate className="workspace-form" onSubmit={handleCreateIndividualInvite}>
               <p className="workspace-modal__text">
-                Gera um link para uma pessoa entrar com a permissão escolhida.
-                Com e-mail, só essa pessoa consegue usar o link. Sem e-mail, o
-                link vale para quem entrar primeiro.
+                Gera um link para uma pessoa entrar com a permissão e o cargo
+                escolhidos. Com e-mail, só essa pessoa consegue usar o link. Sem
+                e-mail, o link vale para quem entrar primeiro.
               </p>
 
               <label>
@@ -422,6 +438,28 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
                   portal
                   value={selectedIndividualRole}
                 />
+                {ROLE_DESCRIPTIONS[selectedIndividualRole] ? (
+                  <small className="workspace-form__hint">
+                    {ROLE_DESCRIPTIONS[selectedIndividualRole]}
+                  </small>
+                ) : null}
+              </div>
+
+              <div className="workspace-form__field">
+                <span>
+                  Cargo <span className="field-optional">(opcional)</span>
+                </span>
+                <SelectMenu
+                  ariaLabel="Cargo do convidado"
+                  disabled={isSubmitting}
+                  onChange={setIndividualTitle}
+                  options={TITLE_OPTIONS}
+                  portal
+                  value={individualTitle}
+                />
+                <small className="workspace-form__hint">
+                  Só o nome que a equipe vê, como Estoquista. Não muda o acesso.
+                </small>
               </div>
 
               {individualInviteLink ? (

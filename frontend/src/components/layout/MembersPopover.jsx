@@ -1,9 +1,15 @@
 import Badge from '../ui/Badge'
 import Button from '../ui/Button'
 import SelectMenu from '../ui/SelectMenu'
-import { memberTitleOptions } from '../../lib/formatters'
+import { formatWorkspaceRole, memberTitleOptions } from '../../lib/formatters'
 
 const ADMIN_MANAGED_ROLES = new Set(['employee', 'viewer'])
+
+// "Permissão" = what the person can do; "Cargo" = a display title only.
+function getAssignableRoles(currentMemberRole) {
+  const roles = currentMemberRole === 'admin' ? ['employee', 'viewer'] : ['admin', 'employee', 'viewer']
+  return roles.map((role) => ({ label: formatWorkspaceRole(role), value: role }))
+}
 
 function formatMembersCount(count) {
   return `${count} ${count === 1 ? 'membro' : 'membros'}`
@@ -29,6 +35,7 @@ function MembersPopover({
   onInvite,
   onInviteRevoke,
   onMemberRemove,
+  onRoleChange,
   onTitleChange,
   ownerUserId,
   removingMemberId,
@@ -55,6 +62,15 @@ function MembersPopover({
       member.user_id !== ownerUserId &&
       member.user_id !== currentUserId &&
       adminCanManageRole
+    const canChangeRole =
+      canManageRoles &&
+      Boolean(onRoleChange) &&
+      !member.isInvite &&
+      member.role !== 'owner' &&
+      member.user_id !== ownerUserId &&
+      member.user_id !== currentUserId &&
+      adminCanManageRole
+    const canChangeTitle = canManageTitles && !member.isInvite && adminCanManageRole
 
     return (
       <div className="member-row" key={member.id}>
@@ -62,25 +78,40 @@ function MembersPopover({
         <div className="member-row__identity">
           <strong>{member.name}</strong>
           <small>{member.email}</small>
-          {!member.isInvite && canManageTitles ? (
-            <SelectMenu
-              ariaLabel={`Cargo de ${member.name}`}
-              className="member-row__title-select"
-              disabled={savingTitleMemberId !== null}
-              onChange={(value) => onTitleChange(member.id, value)}
-              options={[
-                { label: 'Sem cargo', value: '' },
-                ...memberTitleOptions.map((title) => ({
-                  label: title,
-                  value: title,
-                })),
-              ]}
-              portal
-              value={member.title || ''}
-            />
-          ) : !member.isInvite && member.title ? (
-            <span className="member-row__title">{member.title}</span>
-          ) : null}
+          <div className="member-row__controls">
+            {canChangeRole ? (
+              <SelectMenu
+                ariaLabel={`Permissão de ${member.name}`}
+                className="member-row__title-select"
+                disabled={isBusy}
+                onChange={(value) => onRoleChange(member.id, value)}
+                options={getAssignableRoles(currentMemberRole)}
+                portal
+                value={member.role}
+              />
+            ) : (
+              <span className="member-row__role">{formatWorkspaceRole(member.role)}</span>
+            )}
+            {canChangeTitle ? (
+              <SelectMenu
+                ariaLabel={`Cargo de ${member.name}`}
+                className="member-row__title-select"
+                disabled={savingTitleMemberId !== null}
+                onChange={(value) => onTitleChange(member.id, value)}
+                options={[
+                  { label: 'Sem cargo', value: '' },
+                  ...memberTitleOptions.map((title) => ({
+                    label: title,
+                    value: title,
+                  })),
+                ]}
+                portal
+                value={member.title || ''}
+              />
+            ) : member.title ? (
+              <span className="member-row__title">{member.title}</span>
+            ) : null}
+          </div>
         </div>
         <div className="member-row__meta">
           <Badge tone={member.status === 'Ativo' ? 'success' : 'warning'}>

@@ -164,7 +164,9 @@ function SelectMenu({
             if (!option.disabled) setActiveIndex(index)
           }}
         >
-          <span>{option.label}</span>
+          <span title={typeof option.label === 'string' ? option.label : undefined}>
+            {option.label}
+          </span>
         </button>
       ))}
     </div>

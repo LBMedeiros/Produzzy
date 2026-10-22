@@ -98,6 +98,7 @@ function normalizeInvite(invite) {
     isInvite: true,
     name: isLinkInvite ? 'Link de convite' : 'Convite pendente',
     role: invite.role,
+    title: invite.title ?? null,
     status: 'Pendente',
   }
 }
@@ -116,10 +117,10 @@ function getMembersError(error) {
 
 function getRoleUpdateError(error) {
   if (error?.status === 403) {
-    return 'Apenas Dono ou Admin podem alterar cargos de outros membros.'
+    return 'Apenas o dono ou um administrador pode alterar permissões.'
   }
 
-  return error?.message ?? 'Não foi possível atualizar o cargo.'
+  return error?.message ?? 'Não foi possível atualizar a permissão.'
 }
 
 function getInviteRevokeError(error) {
@@ -201,9 +202,6 @@ function Header({ onNavigated }) {
     activeWorkspace?.owner_id === user?.id ||
     currentMemberRole === 'owner' ||
     currentMemberRole === 'admin'
-  // Only the owner assigns display titles ("dono define de todos").
-  const isWorkspaceOwner =
-    activeWorkspace?.owner_id === user?.id || currentMemberRole === 'owner'
 
   const openWorkspaceMenu = useCallback(() => {
     const activeWorkspaceIndex = workspaces.findIndex(
@@ -569,8 +567,8 @@ function Header({ onNavigated }) {
   ])
 
   async function handleMemberTitleChange(memberId, title) {
-    if (!isWorkspaceOwner) {
-      setMembersError('Apenas o dono pode definir cargos.')
+    if (!canManageRoles) {
+      setMembersError('Apenas o dono ou um administrador pode definir cargos.')
       return
     }
 
@@ -620,21 +618,19 @@ function Header({ onNavigated }) {
 
   async function handleMemberRoleChange(memberId, role) {
     if (!canManageRoles) {
-      setMembersError(
-        'Apenas Dono ou Admin podem alterar cargos de outros membros.',
-      )
+      setMembersError('Apenas o dono ou um administrador pode alterar permissões.')
       return
     }
 
     const member = workspaceMembers.find((item) => item.id === memberId)
 
     if (!member || member.isInvite) {
-      setMembersError('Não foi possível atualizar o cargo.')
+      setMembersError('Não foi possível atualizar a permissão.')
       return
     }
 
     if (member.role === 'owner' || member.user_id === activeWorkspace.owner_id) {
-      setMembersError('Não é possível alterar o cargo do dono do workspace.')
+      setMembersError('Não é possível alterar a permissão do dono do workspace.')
       return
     }
 
@@ -658,7 +654,7 @@ function Header({ onNavigated }) {
           currentMember.id === memberId ? normalizedMember : currentMember,
         ),
       )
-      setMembersFeedback('Cargo atualizado com sucesso.')
+      setMembersFeedback('Permissão atualizada.')
     } catch (error) {
       if (activeWorkspaceIdRef.current === workspaceId) {
         setMembersError(getRoleUpdateError(error))
@@ -1086,7 +1082,7 @@ function Header({ onNavigated }) {
             {isMembersOpen ? (
               <MembersPopover
                 canManageRoles={canManageRoles}
-                canManageTitles={isWorkspaceOwner}
+                canManageTitles={canManageRoles}
                 currentMemberRole={currentMemberRole}
                 error={membersError}
                 feedback={membersFeedback}

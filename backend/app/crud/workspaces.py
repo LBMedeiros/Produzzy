@@ -248,13 +248,13 @@ def ensure_admin_can_manage_member_role(
         return
 
     if current_member.id == target_member.id:
-        raise PermissionDenied("Admin não pode alterar o próprio cargo.")
+        raise PermissionDenied("Admin não pode alterar a própria permissão.")
 
     if target_member.role not in ADMIN_MEMBER_TARGET_ROLES:
-        raise PermissionDenied("Admin só pode alterar membros employee ou viewer.")
+        raise PermissionDenied("Admin só pode alterar Funcionários e Visualizadores.")
 
     if new_role not in ADMIN_MEMBER_TARGET_ROLES:
-        raise PermissionDenied("Admin só pode alternar cargos entre employee e viewer.")
+        raise PermissionDenied("Admin só pode dar a permissão de Funcionário ou Visualizador.")
 
 def update_workspace_member(
     workspace_id: int,
@@ -274,10 +274,10 @@ def update_workspace_member(
     new_role = normalize_role(member_data.role)
 
     if is_workspace_owner_member(member, workspace):
-        raise ValidationError("Não é possível alterar o cargo de um owner.")
+        raise ValidationError("Não é possível alterar a permissão do dono.")
 
     if new_role == schemas.WorkspaceRole.owner.value:
-        raise ValidationError("Não é permitido atribuir o cargo owner por este endpoint.")
+        raise ValidationError("Não é possível tornar alguém dono por aqui.")
 
     ensure_admin_can_manage_member_role(current_member, member, new_role)
 
@@ -302,20 +302,6 @@ def update_workspace_member(
 
     return member
 
-def normalize_member_title(title):
-    if title is None:
-        return None
-
-    normalized = str(title).strip()
-
-    if not normalized:
-        return None
-
-    if normalized not in WORKSPACE_MEMBER_TITLES:
-        raise ValidationError("Cargo inválido.")
-
-    return normalized
-
 def update_workspace_member_title(
     workspace_id: int,
     member_id: int,
@@ -323,13 +309,23 @@ def update_workspace_member_title(
     current_user: models.User,
     db: Session,
 ):
-    require_workspace_role(
+    current_member = require_workspace_role(
         workspace_id,
         current_user,
         db,
         MEMBER_TITLE_MANAGE_ROLES,
     )
     member = get_member_by_id(workspace_id, member_id, db)
+
+    # Admins set titles only for the people whose permission they manage.
+    if (
+        current_member.role == schemas.WorkspaceRole.admin.value
+        and member.role not in ADMIN_MEMBER_TARGET_ROLES
+    ):
+        raise PermissionDenied(
+            "Admin só pode definir o cargo de Funcionários e Visualizadores."
+        )
+
     normalized_title = normalize_member_title(title)
 
     old_title = member.title
@@ -378,7 +374,7 @@ def delete_workspace_member(
         current_member.role == schemas.WorkspaceRole.admin.value
         and member.role not in ADMIN_MEMBER_TARGET_ROLES
     ):
-        raise PermissionDenied("Admin só pode remover membros employee ou viewer.")
+        raise PermissionDenied("Admin só pode remover Funcionários e Visualizadores.")
 
     create_audit_log(
         db=db,

@@ -360,6 +360,7 @@ class WorkspaceInviteCreate(BaseModel):
         pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
     )
     role: WorkspaceRole
+    title: Optional[str] = Field(default=None, max_length=50)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -378,6 +379,7 @@ class WorkspaceInviteResponse(BaseModel):
     email: str
     is_open_invite: bool = False
     role: str
+    title: Optional[str] = None
     token: str
     status: str
     invite_url: str
