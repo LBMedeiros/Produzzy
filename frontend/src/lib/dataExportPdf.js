@@ -2,22 +2,27 @@ import { jsPDF } from 'jspdf'
 
 import { humanizeAuditAction } from './formatters'
 
-// Builds the "Baixar meus dados" (LGPD) document as a clean, formal PDF.
-// Everything here is plain layout math (A4, millimetres) so the file reads well
-// for a non-technical user and prints nicely.
+// Builds the "Baixar meus dados" (LGPD) document: a readable report in the
+// app's visual language (light surfaces, blue accent, cards, tables). Plain
+// layout math on A4 in millimetres, so it reads well on screen and in print.
 
 const PAGE = { height: 297, width: 210 }
-const MARGIN = { bottom: 20, left: 18, right: 18, top: 18 }
+const MARGIN = { bottom: 22, left: 16, right: 16, top: 18 }
 const CONTENT_WIDTH = PAGE.width - MARGIN.left - MARGIN.right
 const CONTENT_RIGHT = PAGE.width - MARGIN.right
-const HEADER_HEIGHT = 30
-const LOGO_SIZE = 14 // mm (the brand icon is square)
+const LINE = 4.6 // mm per line of 9.5pt text
+
+const CONTACT_NAME = 'Lucas Medeiros'
+const CONTACT_EMAIL = 'lucasmedbasil@gmail.com'
 
 const COLOR = {
   blue: [37, 99, 235],
-  line: [226, 232, 240],
-  muted: [100, 116, 139],
+  blueSoft: [234, 241, 254],
+  border: [226, 232, 240],
+  faint: [138, 153, 174],
+  muted: [91, 107, 130],
   navy: [15, 23, 42],
+  surface: [245, 248, 252],
   white: [255, 255, 255],
 }
 
@@ -61,7 +66,26 @@ function formatDateTime(value) {
   }
 }
 
-function setColor(doc, [r, g, b]) {
+function formatNumber(value) {
+  return new Intl.NumberFormat('pt-BR').format(Number(value) || 0)
+}
+
+function initials(name) {
+  const parts = String(name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (!parts.length) {
+    return '?'
+  }
+
+  const first = parts[0][0]
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : ''
+  return `${first}${last}`.toUpperCase()
+}
+
+function setText(doc, [r, g, b]) {
   doc.setTextColor(r, g, b)
 }
 
@@ -73,54 +97,388 @@ function setFill(doc, [r, g, b]) {
   doc.setFillColor(r, g, b)
 }
 
+function font(doc, style, size, color) {
+  doc.setFont('helvetica', style)
+  doc.setFontSize(size)
+  setText(doc, color)
+}
+
+// Pages after the first get a slim running header so loose sheets stay
+// identifiable once printed.
+function addPage(ctx) {
+  const { doc } = ctx
+  doc.addPage()
+
+  setFill(doc, COLOR.blue)
+  doc.rect(0, 0, PAGE.width, 2, 'F')
+  font(doc, 'bold', 8.5, COLOR.navy)
+  doc.text('Seus dados no Produzzy', MARGIN.left, 10)
+  font(doc, 'normal', 8.5, COLOR.muted)
+  doc.text(ctx.ownerName, CONTENT_RIGHT, 10, { align: 'right' })
+  setDraw(doc, COLOR.border)
+  doc.setLineWidth(0.2)
+  doc.line(MARGIN.left, 13, CONTENT_RIGHT, 13)
+
+  ctx.y = MARGIN.top + 2
+}
+
 // Reserve vertical space; start a new page when the current one is full.
 function ensureSpace(ctx, needed) {
   if (ctx.y + needed > PAGE.height - MARGIN.bottom) {
-    ctx.doc.addPage()
-    ctx.y = MARGIN.top
+    addPage(ctx)
+    return true
   }
+
+  return false
 }
 
-function drawHeader(doc, generatedAt, logo) {
-  setFill(doc, COLOR.navy)
-  doc.rect(0, 0, PAGE.width, HEADER_HEIGHT, 'F')
+function drawCover(ctx, data, logo) {
+  const { doc } = ctx
 
-  let textX = MARGIN.left
+  setFill(doc, COLOR.blue)
+  doc.rect(0, 0, PAGE.width, 3, 'F')
 
+  let brandX = MARGIN.left
   if (logo) {
-    const logoY = (HEADER_HEIGHT - LOGO_SIZE) / 2
     try {
-      doc.addImage(
-        logo,
-        'PNG',
-        MARGIN.left,
-        logoY,
-        LOGO_SIZE,
-        LOGO_SIZE,
-        undefined,
-        'FAST',
-      )
-      textX = MARGIN.left + LOGO_SIZE + 5
+      doc.addImage(logo, 'PNG', MARGIN.left, 11, 9, 9, undefined, 'FAST')
+      brandX = MARGIN.left + 12
     } catch {
-      // If the logo can't be drawn, fall back to the text-only header.
-      textX = MARGIN.left
+      // Without the logo the wordmark alone still identifies the document.
     }
   }
 
-  setColor(doc, COLOR.white)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(20)
-  doc.text('Produzzy', textX, 15)
+  font(doc, 'bold', 13, COLOR.navy)
+  doc.text('Produzzy', brandX, 17.3)
 
-  setColor(doc, COLOR.line)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text('Relatório de dados pessoais', textX, 22)
-
-  doc.setFontSize(9)
-  doc.text(`Gerado em ${formatDate(generatedAt)}`, CONTENT_RIGHT, 22, {
+  font(doc, 'normal', 8.5, COLOR.muted)
+  doc.text('Relatório de dados pessoais', CONTENT_RIGHT, 14.2, { align: 'right' })
+  doc.text(`Gerado em ${formatDateTime(data?.exported_at)}`, CONTENT_RIGHT, 18.6, {
     align: 'right',
   })
+
+  font(doc, 'bold', 24, COLOR.navy)
+  doc.text('Seus dados no Produzzy', MARGIN.left, 40)
+
+  font(doc, 'normal', 10.5, COLOR.muted)
+  const intro = doc.splitTextToSize(
+    'Esta é uma cópia das informações pessoais que o Produzzy guarda sobre ' +
+      'você, gerada a seu pedido conforme a Lei Geral de Proteção de Dados ' +
+      '(Lei nº 13.709/2018).',
+    CONTENT_WIDTH,
+  )
+  doc.text(intro, MARGIN.left, 48)
+
+  ctx.y = 48 + intro.length * 5 + 6
+}
+
+function drawProfileCard(ctx, account) {
+  const { doc } = ctx
+  const top = ctx.y
+  const height = 24
+
+  setFill(doc, COLOR.surface)
+  setDraw(doc, COLOR.border)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(MARGIN.left, top, CONTENT_WIDTH, height, 3, 3, 'FD')
+
+  const avatarX = MARGIN.left + 13
+  const avatarY = top + height / 2
+  setFill(doc, COLOR.blue)
+  doc.circle(avatarX, avatarY, 7, 'F')
+  font(doc, 'bold', 11, COLOR.white)
+  doc.text(initials(account.name), avatarX, avatarY + 1.4, { align: 'center' })
+
+  const textX = MARGIN.left + 25
+  font(doc, 'bold', 13, COLOR.navy)
+  doc.text(String(account.name ?? '—'), textX, top + 10.5)
+  font(doc, 'normal', 9.5, COLOR.muted)
+  doc.text(String(account.email ?? '—'), textX, top + 16.5)
+
+  const pill =
+    account.auth_provider === 'google' ? 'Login com Google' : 'Login com e-mail e senha'
+  font(doc, 'bold', 8, COLOR.blue)
+  const pillWidth = doc.getTextWidth(pill) + 8
+  const pillX = CONTENT_RIGHT - 6 - pillWidth
+  setFill(doc, COLOR.blueSoft)
+  doc.roundedRect(pillX, avatarY - 3.6, pillWidth, 7.2, 3.6, 3.6, 'F')
+  doc.text(pill, pillX + pillWidth / 2, avatarY + 1, { align: 'center' })
+
+  ctx.y = top + height + 6
+}
+
+function drawStatTiles(ctx, tiles) {
+  const { doc } = ctx
+  const gap = 4
+  const width = (CONTENT_WIDTH - gap * (tiles.length - 1)) / tiles.length
+  const height = 20
+  const top = ctx.y
+
+  tiles.forEach((tile, index) => {
+    const x = MARGIN.left + index * (width + gap)
+
+    setFill(doc, COLOR.white)
+    setDraw(doc, COLOR.border)
+    doc.setLineWidth(0.25)
+    doc.roundedRect(x, top, width, height, 2.5, 2.5, 'FD')
+
+    font(doc, 'bold', 16, COLOR.blue)
+    doc.text(formatNumber(tile.value), x + 5, top + 10)
+    font(doc, 'normal', 8.5, COLOR.muted)
+    doc.text(tile.label, x + 5, top + 15.5)
+  })
+
+  ctx.y = top + height + 4
+}
+
+function sectionTitle(ctx, title, subtitle) {
+  const { doc } = ctx
+  ensureSpace(ctx, subtitle ? 26 : 20)
+  ctx.y += 6
+
+  setFill(doc, COLOR.blue)
+  doc.roundedRect(MARGIN.left, ctx.y - 4.2, 1.4, 5.4, 0.7, 0.7, 'F')
+  font(doc, 'bold', 12.5, COLOR.navy)
+  doc.text(title, MARGIN.left + 4, ctx.y)
+  ctx.y += 5
+
+  if (subtitle) {
+    font(doc, 'normal', 9, COLOR.muted)
+    const lines = doc.splitTextToSize(subtitle, CONTENT_WIDTH - 4)
+    doc.text(lines, MARGIN.left + 4, ctx.y)
+    ctx.y += lines.length * 4.2
+  }
+
+  ctx.y += 2.5
+}
+
+// Label/value pairs laid out two per row inside a card.
+function drawFieldGrid(ctx, fields) {
+  const { doc } = ctx
+  const padding = 6
+  const columnGap = 8
+  const columnWidth = (CONTENT_WIDTH - padding * 2 - columnGap) / 2
+
+  font(doc, 'normal', 9.5, COLOR.navy)
+  const rows = []
+  for (let index = 0; index < fields.length; index += 2) {
+    const pair = fields.slice(index, index + 2).map((item) => ({
+      ...item,
+      lines: doc.splitTextToSize(String(item.value ?? '—'), columnWidth),
+    }))
+    const lineCount = Math.max(...pair.map((item) => item.lines.length))
+    rows.push({ height: 5 + lineCount * LINE + 3, pair })
+  }
+
+  const height = rows.reduce((sum, row) => sum + row.height, 0) + padding
+  ensureSpace(ctx, height)
+  const top = ctx.y
+
+  setFill(doc, COLOR.white)
+  setDraw(doc, COLOR.border)
+  doc.setLineWidth(0.25)
+  doc.roundedRect(MARGIN.left, top, CONTENT_WIDTH, height, 3, 3, 'FD')
+
+  let y = top + padding + 1
+  rows.forEach((row) => {
+    row.pair.forEach((item, column) => {
+      const x = MARGIN.left + padding + column * (columnWidth + columnGap)
+      font(doc, 'normal', 8, COLOR.faint)
+      doc.text(item.label.toUpperCase(), x, y)
+      font(doc, 'normal', 9.5, COLOR.navy)
+      doc.text(item.lines, x, y + 5)
+    })
+    y += row.height
+  })
+
+  ctx.y = top + height + 2
+}
+
+// A table with a tinted header row that repeats on every new page, zebra
+// rows and wrapping cells. `columns` widths are fractions of the content width.
+function drawTable(ctx, columns, rows) {
+  const { doc } = ctx
+  const cellPadding = 3
+  const widths = columns.map((column) => column.width * CONTENT_WIDTH)
+
+  function drawHead() {
+    const height = 8
+    setFill(doc, COLOR.surface)
+    doc.roundedRect(MARGIN.left, ctx.y, CONTENT_WIDTH, height, 2, 2, 'F')
+    font(doc, 'bold', 8, COLOR.muted)
+
+    let x = MARGIN.left
+    columns.forEach((column, index) => {
+      const textX =
+        column.align === 'right' ? x + widths[index] - cellPadding : x + cellPadding
+      doc.text(column.title.toUpperCase(), textX, ctx.y + 5.3, {
+        align: column.align === 'right' ? 'right' : 'left',
+      })
+      x += widths[index]
+    })
+
+    ctx.y += height + 1
+  }
+
+  ensureSpace(ctx, 18)
+  drawHead()
+
+  rows.forEach((row, rowIndex) => {
+    font(doc, 'normal', 9.5, COLOR.navy)
+    const cells = columns.map((column, index) => {
+      // A cell is plain text or { text, sub } for a muted second line.
+      const raw = row[column.key]
+      const value = raw !== null && typeof raw === 'object' ? raw : { text: raw }
+      const main = doc.splitTextToSize(
+        String(value.text ?? '—'),
+        widths[index] - cellPadding * 2,
+      )
+      const sub = value.sub
+        ? doc.splitTextToSize(String(value.sub), widths[index] - cellPadding * 2)
+        : []
+      return { main, sub }
+    })
+    const lineCount = Math.max(
+      ...cells.map((cell) => cell.main.length + cell.sub.length),
+    )
+    const height = lineCount * LINE + 3.4
+
+    if (ensureSpace(ctx, height)) {
+      drawHead()
+    }
+
+    if (rowIndex % 2 === 1) {
+      setFill(doc, COLOR.surface)
+      doc.rect(MARGIN.left, ctx.y, CONTENT_WIDTH, height, 'F')
+    }
+
+    let x = MARGIN.left
+    cells.forEach((cell, index) => {
+      const column = columns[index]
+      const align = column.align === 'right' ? 'right' : 'left'
+      const textX = align === 'right' ? x + widths[index] - cellPadding : x + cellPadding
+      const baseline = ctx.y + 4.6
+
+      font(doc, column.bold ? 'bold' : 'normal', 9.5, COLOR.navy)
+      doc.text(cell.main, textX, baseline, { align })
+
+      if (cell.sub.length) {
+        font(doc, 'normal', 8.5, COLOR.muted)
+        doc.text(cell.sub, textX, baseline + cell.main.length * LINE, { align })
+      }
+
+      x += widths[index]
+    })
+
+    ctx.y += height
+    setDraw(doc, COLOR.border)
+    doc.setLineWidth(0.15)
+    doc.line(MARGIN.left, ctx.y, CONTENT_RIGHT, ctx.y)
+  })
+
+  ctx.y += 2
+}
+
+function emptyState(ctx, text) {
+  const { doc } = ctx
+  ensureSpace(ctx, 14)
+  setDraw(doc, COLOR.border)
+  doc.setLineWidth(0.25)
+  doc.setLineDashPattern([1.2, 1.2], 0)
+  doc.roundedRect(MARGIN.left, ctx.y, CONTENT_WIDTH, 11, 2.5, 2.5, 'S')
+  doc.setLineDashPattern([], 0)
+  font(doc, 'normal', 9.5, COLOR.muted)
+  doc.text(text, PAGE.width / 2, ctx.y + 6.8, { align: 'center' })
+  ctx.y += 13
+}
+
+function note(ctx, text) {
+  const { doc } = ctx
+  font(doc, 'normal', 8.5, COLOR.faint)
+  const lines = doc.splitTextToSize(text, CONTENT_WIDTH)
+  ensureSpace(ctx, lines.length * 4 + 2)
+  doc.text(lines, MARGIN.left, ctx.y + 3)
+  ctx.y += lines.length * 4 + 2
+}
+
+function drawRightsBox(ctx) {
+  const { doc } = ctx
+  const padding = 6
+  const textWidth = CONTENT_WIDTH - padding * 2 - 3
+  const rights = [
+    'Corrigir seus dados a qualquer momento em Configurações.',
+    'Baixar uma nova cópia destes dados em Configurações > Privacidade e dados.',
+    'Excluir sua conta: seus dados pessoais são removidos ou anonimizados.',
+    'Saber com quem seus dados são compartilhados, revogar consentimentos e ' +
+      'reclamar à ANPD (Autoridade Nacional de Proteção de Dados).',
+  ]
+  const contact =
+    `Controlador e encarregado: ${CONTACT_NAME} · ${CONTACT_EMAIL}. ` +
+    'Pedidos são respondidos em até 15 dias.'
+
+  font(doc, 'normal', 9.5, COLOR.navy)
+  const rightLines = rights.map((item) => doc.splitTextToSize(item, textWidth - 4))
+  font(doc, 'normal', 8.5, COLOR.muted)
+  const contactLines = doc.splitTextToSize(contact, textWidth)
+  const height =
+    padding +
+    6 +
+    rightLines.reduce((sum, lines) => sum + lines.length * LINE + 1, 0) +
+    3 +
+    contactLines.length * 4.2 +
+    padding
+
+  ensureSpace(ctx, height + 4)
+  ctx.y += 4
+  const top = ctx.y
+
+  setFill(doc, COLOR.blueSoft)
+  doc.roundedRect(MARGIN.left, top, CONTENT_WIDTH, height, 3, 3, 'F')
+  setFill(doc, COLOR.blue)
+  doc.rect(MARGIN.left, top + 3, 1.4, height - 6, 'F')
+
+  const x = MARGIN.left + padding + 3
+  let y = top + padding + 3
+  font(doc, 'bold', 11, COLOR.navy)
+  doc.text('Seus direitos sobre estes dados', x, y)
+  y += 6
+
+  rightLines.forEach((lines) => {
+    setFill(doc, COLOR.blue)
+    doc.circle(x + 1, y - 1.3, 0.75, 'F')
+    font(doc, 'normal', 9.5, COLOR.navy)
+    doc.text(lines, x + 4, y)
+    y += lines.length * LINE + 1
+  })
+
+  y += 2
+  font(doc, 'normal', 8.5, COLOR.muted)
+  doc.text(contactLines, x, y)
+
+  ctx.y = top + height + 2
+}
+
+function drawFooters(doc) {
+  const total = doc.getNumberOfPages()
+
+  for (let page = 1; page <= total; page += 1) {
+    doc.setPage(page)
+    const footerY = PAGE.height - 13
+
+    setDraw(doc, COLOR.border)
+    doc.setLineWidth(0.2)
+    doc.line(MARGIN.left, footerY, CONTENT_RIGHT, footerY)
+
+    font(doc, 'normal', 7.5, COLOR.faint)
+    doc.text(
+      'Documento gerado a pedido do titular, conforme a LGPD. Contém dados pessoais: guarde com cuidado.',
+      MARGIN.left,
+      footerY + 5,
+    )
+    doc.text(`Página ${page} de ${total}`, CONTENT_RIGHT, footerY + 5, {
+      align: 'right',
+    })
+  }
 }
 
 /** Loads the brand icon from /public as a PNG data URL for jsPDF. Resolves to
@@ -132,8 +490,7 @@ function loadLogoDataUrl() {
 
       img.onload = () => {
         try {
-          // The logo only prints at 14mm, so 128px is plenty — downscaling
-          // keeps the embedded image (and the PDF) small.
+          // The logo prints at 9mm, so 128px is plenty and keeps the PDF small.
           const size = 128
           const canvas = document.createElement('canvas')
           canvas.width = size
@@ -153,125 +510,6 @@ function loadLogoDataUrl() {
   })
 }
 
-function drawFooters(doc) {
-  const total = doc.getNumberOfPages()
-
-  for (let page = 1; page <= total; page += 1) {
-    doc.setPage(page)
-    const footerY = PAGE.height - 12
-
-    setDraw(doc, COLOR.line)
-    doc.setLineWidth(0.2)
-    doc.line(MARGIN.left, footerY, CONTENT_RIGHT, footerY)
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    setColor(doc, COLOR.muted)
-    doc.text(
-      'Exportado pelo Produzzy conforme a LGPD · Dúvidas: lucasmedbasil@gmail.com',
-      MARGIN.left,
-      footerY + 5,
-    )
-    doc.text(`Página ${page} de ${total}`, CONTENT_RIGHT, footerY + 5, {
-      align: 'right',
-    })
-  }
-}
-
-function sectionTitle(ctx, text) {
-  const { doc } = ctx
-  ensureSpace(ctx, 16)
-  ctx.y += 4
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  setColor(doc, COLOR.blue)
-  doc.text(text.toUpperCase(), MARGIN.left, ctx.y)
-
-  ctx.y += 2.5
-  setDraw(doc, COLOR.line)
-  doc.setLineWidth(0.3)
-  doc.line(MARGIN.left, ctx.y, CONTENT_RIGHT, ctx.y)
-  ctx.y += 6
-}
-
-// Two-column "label  value" row with wrapping values (used for the account box).
-function field(ctx, label, value) {
-  const { doc } = ctx
-  const labelX = MARGIN.left
-  const valueX = MARGIN.left + 42
-  const valueWidth = CONTENT_RIGHT - valueX
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  const valueLines = doc.splitTextToSize(String(value ?? '—'), valueWidth)
-  const rowHeight = Math.max(valueLines.length * 5, 5)
-
-  ensureSpace(ctx, rowHeight + 1)
-
-  setColor(doc, COLOR.muted)
-  doc.text(label, labelX, ctx.y)
-
-  setColor(doc, COLOR.navy)
-  doc.text(valueLines, valueX, ctx.y)
-
-  ctx.y += rowHeight + 1
-}
-
-function bulletLines(ctx, primary, secondary) {
-  const { doc } = ctx
-  const textX = MARGIN.left + 5
-  const textWidth = CONTENT_RIGHT - textX
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  const primaryLines = doc.splitTextToSize(primary, textWidth)
-  const secondaryLines = secondary
-    ? doc.splitTextToSize(secondary, textWidth)
-    : []
-  const blockHeight = (primaryLines.length + secondaryLines.length) * 5
-
-  ensureSpace(ctx, blockHeight + 1)
-
-  const bulletY = ctx.y - 1.4
-  setFill(doc, COLOR.blue)
-  doc.circle(MARGIN.left + 1.4, bulletY, 0.7, 'F')
-
-  setColor(doc, COLOR.navy)
-  doc.text(primaryLines, textX, ctx.y)
-  ctx.y += primaryLines.length * 5
-
-  if (secondaryLines.length) {
-    setColor(doc, COLOR.muted)
-    doc.text(secondaryLines, textX, ctx.y)
-    ctx.y += secondaryLines.length * 5
-  }
-
-  ctx.y += 1.5
-}
-
-function emptyRow(ctx, text) {
-  const { doc } = ctx
-  ensureSpace(ctx, 6)
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(10)
-  setColor(doc, COLOR.muted)
-  doc.text(text, MARGIN.left + 5, ctx.y)
-  ctx.y += 6
-}
-
-function note(ctx, text) {
-  const { doc } = ctx
-  ensureSpace(ctx, 6)
-  ctx.y += 1
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(9)
-  setColor(doc, COLOR.muted)
-  const lines = doc.splitTextToSize(text, CONTENT_WIDTH)
-  doc.text(lines, MARGIN.left, ctx.y)
-  ctx.y += lines.length * 4.5
-}
-
 /** Renders the raw export payload into a formatted jsPDF document. */
 function buildDataExportPdf(data, logo = null) {
   const account = data?.account ?? {}
@@ -281,83 +519,102 @@ function buildDataExportPdf(data, logo = null) {
   const activity = data?.activity ?? []
 
   const doc = new jsPDF({ format: 'a4', unit: 'mm' })
-  drawHeader(doc, data?.exported_at, logo)
+  const ctx = { doc, ownerName: String(account.name ?? ''), y: MARGIN.top }
 
-  const ctx = { doc, y: HEADER_HEIGHT + 12 }
+  drawCover(ctx, data, logo)
+  drawProfileCard(ctx, account)
 
-  sectionTitle(ctx, 'Conta')
-  field(ctx, 'Nome', account.name ?? '—')
-  field(ctx, 'E-mail', account.email ?? '—')
-  field(
+  const sum = (key) => summaries.reduce((total, item) => total + (Number(item[key]) || 0), 0)
+  drawStatTiles(ctx, [
+    { label: 'Workspaces', value: memberships.length },
+    { label: 'Produtos', value: sum('products') },
+    { label: 'Movimentações', value: sum('movements') },
+    { label: 'Ações suas', value: activity.length },
+  ])
+
+  sectionTitle(ctx, 'Dados da conta')
+  drawFieldGrid(ctx, [
+    { label: 'Nome', value: account.name },
+    { label: 'E-mail', value: account.email },
+    {
+      label: 'Forma de login',
+      value: account.auth_provider === 'google' ? 'Google' : 'E-mail e senha',
+    },
+    { label: 'E-mail confirmado', value: account.email_verified ? 'Sim' : 'Não' },
+    {
+      label: 'E-mail de recuperação',
+      value: account.recovery_email
+        ? `${account.recovery_email} (${
+            account.recovery_email_verified ? 'confirmado' : 'pendente'
+          })`
+        : 'Não configurado',
+    },
+    { label: 'Foto de perfil', value: account.avatar_url ? 'Sim' : 'Não' },
+    { label: 'Conta criada em', value: formatDate(account.created_at) },
+    { label: 'Última atualização', value: formatDate(account.updated_at) },
+  ])
+
+  sectionTitle(
     ctx,
-    'Forma de login',
-    account.auth_provider === 'google' ? 'Google' : 'E-mail e senha',
+    'Seus workspaces',
+    'Onde você participa, com qual permissão e o que cada workspace guarda hoje.',
   )
-  field(ctx, 'E-mail confirmado', account.email_verified ? 'Sim' : 'Não')
-  field(
-    ctx,
-    'E-mail de recuperação',
-    account.recovery_email
-      ? `${account.recovery_email} (${
-          account.recovery_email_verified ? 'confirmado' : 'pendente'
-        })`
-      : 'Não configurado',
-  )
-  field(ctx, 'Conta criada em', formatDate(account.created_at))
-
-  sectionTitle(ctx, 'Workspaces que você participa')
   if (memberships.length) {
-    memberships.forEach((item) => {
-      const title = item.title ? ` · Cargo: ${item.title}` : ''
-      bulletLines(
-        ctx,
-        `${item.workspace ?? '—'} — Permissão: ${roleLabel(item.role)}${title}`,
-      )
+    const ownedByName = new Map(owned.map((item) => [item.name, item]))
+    const rows = memberships.map((item, index) => {
+      const summary = summaries[index] ?? {}
+      const ownedWorkspace = item.role === 'owner' ? ownedByName.get(item.workspace) : null
+      return {
+        categories: formatNumber(summary.categories),
+        movements: formatNumber(summary.movements),
+        products: formatNumber(summary.products),
+        role: { sub: item.title || null, text: roleLabel(item.role) },
+        workspace: {
+          sub: ownedWorkspace ? `Criado em ${formatDate(ownedWorkspace.created_at)}` : null,
+          text: item.workspace ?? '—',
+        },
+      }
     })
+    drawTable(
+      ctx,
+      [
+        { bold: true, key: 'workspace', title: 'Workspace', width: 0.34 },
+        { key: 'role', title: 'Permissão', width: 0.21 },
+        { align: 'right', key: 'products', title: 'Produtos', width: 0.14 },
+        { align: 'right', key: 'categories', title: 'Categorias', width: 0.15 },
+        { align: 'right', key: 'movements', title: 'Mov.', width: 0.16 },
+      ],
+      rows,
+    )
   } else {
-    emptyRow(ctx, '(nenhum)')
+    emptyState(ctx, 'Você ainda não participa de nenhum workspace.')
   }
 
-  sectionTitle(ctx, 'Workspaces que você é dono')
-  if (owned.length) {
-    owned.forEach((item) => {
-      bulletLines(
-        ctx,
-        `${item.name ?? '—'} — criado em ${formatDate(item.created_at)}`,
-      )
-    })
-  } else {
-    emptyRow(ctx, '(nenhum)')
-  }
-
-  sectionTitle(ctx, 'Resumo dos seus workspaces')
-  if (summaries.length) {
-    summaries.forEach((item) => {
-      bulletLines(
-        ctx,
-        `${item.workspace ?? '—'} (${roleLabel(item.role)})`,
-        `${item.products} produto(s), ${item.categories} categoria(s), ` +
-          `${item.movements} movimentação(ões)`,
-      )
-    })
-  } else {
-    emptyRow(ctx, '(nenhum)')
-  }
-
-  sectionTitle(ctx, 'Seu histórico de atividade')
+  sectionTitle(
+    ctx,
+    'Seu histórico de atividade',
+    'As ações feitas pela sua conta, da mais recente para a mais antiga.',
+  )
   if (activity.length) {
-    activity.forEach((item) => {
-      const where = item.workspace ? ` (${item.workspace})` : ''
-      bulletLines(
-        ctx,
-        `${formatDateTime(item.at)} · ${humanizeAuditAction(item.action)}${where}`,
-      )
-    })
-    note(ctx, 'Mostramos as ações mais recentes; registros antigos podem não aparecer.')
+    drawTable(
+      ctx,
+      [
+        { key: 'at', title: 'Data e hora', width: 0.24 },
+        { key: 'action', title: 'Ação', width: 0.46 },
+        { key: 'workspace', title: 'Workspace', width: 0.3 },
+      ],
+      activity.map((item) => ({
+        action: humanizeAuditAction(item.action),
+        at: formatDateTime(item.at),
+        workspace: item.workspace ?? '—',
+      })),
+    )
+    note(ctx, 'Mostramos até as 200 ações mais recentes.')
   } else {
-    emptyRow(ctx, '(nenhuma atividade registrada)')
+    emptyState(ctx, 'Nenhuma atividade registrada.')
   }
 
+  drawRightsBox(ctx)
   drawFooters(doc)
 
   return doc
