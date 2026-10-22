@@ -442,6 +442,9 @@ class WorkspaceInvite(Base):
     )
     email = Column(String(255), nullable=False, index=True)
     role = Column(String(20), nullable=False)
+    # Display title the member gets on acceptance (cosmetic, like
+    # WorkspaceMember.title).
+    title = Column(String(50), nullable=True)
     token = Column(String(255), nullable=False, unique=True, index=True)
     status = Column(String(20), nullable=False, default="pending", index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)

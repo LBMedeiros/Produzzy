@@ -164,10 +164,12 @@ def create_workspace_invite(
             schemas.WorkspaceRole.viewer.value,
         }
     ):
-        raise PermissionDenied("Admin só pode convidar employee ou viewer.")
+        raise PermissionDenied("Admin só pode convidar Funcionários e Visualizadores.")
 
     if role == schemas.WorkspaceRole.owner.value:
         raise ValidationError("Convites não podem criar novos owners.")
+
+    title = normalize_member_title(invite_data.title)
 
     if invite_data.email:
         email = normalize_email(invite_data.email)
@@ -184,6 +186,7 @@ def create_workspace_invite(
         workspace_id=workspace_id,
         email=email,
         role=role,
+        title=title,
         token=secrets.token_urlsafe(32),
         status=schemas.InviteStatus.pending.value,
         expires_at=aware_utc_now() + timedelta(days=7),
@@ -226,7 +229,7 @@ def create_workspace_invite_link(
     role = normalize_role(invite_data.role)
 
     if role != schemas.WorkspaceRole.viewer.value:
-        raise ValidationError("Links de convite usam o cargo viewer por padrão.")
+        raise ValidationError("Links compartilháveis dão a permissão de Visualizador.")
 
     active_links = (
         db.query(models.WorkspaceInviteLink)
@@ -429,6 +432,7 @@ def accept_workspace_invite(
         workspace_id=invite.workspace_id,
         user_id=current_user.id,
         role=invite.role,
+        title=invite.title,
     )
     db.add(member)
     db.flush()
@@ -617,7 +621,7 @@ def revoke_workspace_invite(
         current_member.role == schemas.WorkspaceRole.admin.value
         and invite.role not in ADMIN_MEMBER_TARGET_ROLES
     ):
-        raise PermissionDenied("Admin só pode revogar convites de employee ou viewer.")
+        raise PermissionDenied("Admin só pode revogar convites de Funcionários e Visualizadores.")
 
     if invite.status == schemas.InviteStatus.pending.value and is_expired(
         invite.expires_at,

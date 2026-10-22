@@ -61,7 +61,8 @@ With Produzzy, teams can:
 - Fully isolated data between workspaces
 - Invite users through individual invitations or shareable invite links
 - Member management with role-based permissions (owner, admin, employee, viewer)
-- Custom member titles (e.g. "Sócio", "Gerente") — cosmetic labels the owner assigns, independent from access roles
+- Custom member titles (e.g. "Sócio", "Gerente") — cosmetic labels the owner or an admin assigns (also at invite time), independent from access roles
+- Invite by e-mail or as a single-use link without e-mail, choosing the permission and title up front
 - Workspace deletion with confirmation
 
 ### Dashboard

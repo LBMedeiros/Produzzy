@@ -26,7 +26,7 @@ INVITE_MANAGE_ROLES = {"owner", "admin"}
 AUDIT_LOG_READ_ROLES = {"owner", "admin"}
 ADMIN_MEMBER_TARGET_ROLES = {"employee", "viewer"}
 # Only the workspace owner assigns display titles ("dono define de todos").
-MEMBER_TITLE_MANAGE_ROLES = {"owner"}
+MEMBER_TITLE_MANAGE_ROLES = {"owner", "admin"}
 
 # Fixed catalog of cosmetic display titles the owner can assign to members.
 # Purely a label — no effect on permissions (those stay on `role`).
@@ -173,3 +173,18 @@ def require_workspace_role(
         raise PermissionDenied("Permissão insuficiente neste workspace.")
 
     return member
+
+
+def normalize_member_title(title):
+    if title is None:
+        return None
+
+    normalized = str(title).strip()
+
+    if not normalized:
+        return None
+
+    if normalized not in WORKSPACE_MEMBER_TITLES:
+        raise ValidationError("Cargo inválido.")
+
+    return normalized

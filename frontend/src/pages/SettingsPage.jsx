@@ -48,7 +48,7 @@ const permissionsByRole = {
     'Acessar configurações em modo somente leitura',
   ],
   member: [
-    'Visualizar os dados liberados para o seu cargo',
+    'Visualizar os dados liberados para a sua permissão',
     'Realizar ações conforme as permissões definidas pela equipe',
   ],
 }
@@ -1200,7 +1200,10 @@ function WorkspaceTeamSection({ canInvite, currentMemberRole, workspaceId }) {
                     </span>
                     <div>
                       <strong>{isLinkInvite(invite) ? 'Link de convite' : invite.email}</strong>
-                      <span>{formatWorkspaceRole(invite.role)}</span>
+                      <span>
+                        {formatWorkspaceRole(invite.role)}
+                        {invite.title ? ` · ${invite.title}` : ''}
+                      </span>
                     </div>
                     <Badge tone="muted">Pendente</Badge>
                   </li>
@@ -1336,9 +1339,15 @@ function WorkspaceSettingsSection({
           <dd>{formatDate(activeWorkspace?.created_at)}</dd>
         </div>
         <div>
-          <dt>Seu cargo atual</dt>
-          <dd>{activeWorkspace?.current_user_title || roleLabel}</dd>
+          <dt>Sua permissão</dt>
+          <dd>{roleLabel}</dd>
         </div>
+        {activeWorkspace?.current_user_title ? (
+          <div>
+            <dt>Seu cargo</dt>
+            <dd>{activeWorkspace.current_user_title}</dd>
+          </div>
+        ) : null}
       </dl>
     </Card>
   )
@@ -1754,7 +1763,7 @@ function SettingsPage() {
           >
             <div className="settings-permissions__header">
               <p className="settings-section__description">
-                Resumo das ações disponíveis para seu cargo neste workspace.
+                Resumo das ações disponíveis para a sua permissão neste workspace.
               </p>
               <span className="settings-role-badge">{roleLabel}</span>
             </div>

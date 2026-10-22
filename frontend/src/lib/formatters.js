@@ -19,7 +19,7 @@ export function getFirstName(name) {
 }
 
 export const workspaceRoleLabels = {
-  admin: 'Admin',
+  admin: 'Administrador',
   employee: 'Funcionário',
   member: 'Membro',
   owner: 'Dono',
@@ -79,7 +79,7 @@ export const auditActionLabels = {
   'invite_link.expired': 'Link de convite expirado',
   'invite_link.revoked': 'Link de convite revogado',
   'member.removed': 'Membro removido',
-  'member.role_updated': 'Papel de membro atualizado',
+  'member.role_updated': 'Permissão de membro atualizada',
   'member.title_updated': 'Cargo de membro atualizado',
   'product.created': 'Produto criado',
   'product.deleted': 'Produto enviado para lixeira',
