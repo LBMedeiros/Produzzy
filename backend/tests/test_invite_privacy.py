@@ -114,3 +114,42 @@ def test_cleanup_keeps_invite_link_placeholders():
         invites_crud.cleanup_old_invites(db, now=now)
 
         assert db.query(models.WorkspaceInvite).count() == 1
+
+
+def test_invite_without_email_is_a_single_use_link(
+    client, user_factory, workspace_factory
+):
+    owner = user_factory(name="Owner")
+    workspace = workspace_factory(owner["headers"])
+
+    invite = send_invite(client, owner["headers"], workspace["id"], "", role="employee")
+    assert invite["is_open_invite"] is True
+    assert invite["role"] == "employee"
+
+    team = client.get(f"/workspaces/{workspace['id']}/team", headers=owner["headers"])
+    assert [item["is_open_invite"] for item in team.json()["pending_invites"]] == [True]
+
+    first = user_factory(name="First")
+    accepted = client.post(f"/invites/{invite['token']}/accept", headers=first["headers"])
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["role"] == "employee"
+
+    # Single use: a second person can't reuse the same link.
+    second = user_factory(name="Second")
+    reused = client.post(f"/invites/{invite['token']}/accept", headers=second["headers"])
+    assert reused.status_code == 400, reused.text
+
+
+def test_admin_cannot_create_admin_invite_without_email(
+    client, user_factory, workspace_factory, workspace_member_factory
+):
+    owner = user_factory(name="Owner")
+    workspace = workspace_factory(owner["headers"])
+    admin = workspace_member_factory(owner["headers"], workspace["id"], "admin")
+
+    response = client.post(
+        f"/workspaces/{workspace['id']}/invites",
+        json={"role": "admin"},
+        headers=admin["headers"],
+    )
+    assert response.status_code == 403, response.text
