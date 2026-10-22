@@ -155,6 +155,12 @@ def authenticate_google_user(google_claims: dict, db: Session):
         existing_email_user.auth_provider = "google"
         existing_email_user.provider_user_id = provider_user_id
         existing_email_user.email_verified = True
+        # Sign-up doesn't confirm e-mails, so a password account for this
+        # address may have been created by someone else ("pre-hijacking").
+        # Google now proves ownership: drop that password, which also ends
+        # every session issued with it (session fingerprint). The owner can
+        # keep using Google.
+        existing_email_user.hashed_password = None
         db.commit()
         db.refresh(existing_email_user)
 
