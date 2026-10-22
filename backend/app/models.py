@@ -480,6 +480,11 @@ class WorkspaceInvite(Base):
     def invite_url(self):
         return f"/invites/{self.token}/accept"
 
+    @property
+    def is_open_invite(self):
+        # Created without an e-mail (see crud.base.OPEN_INVITE_EMAIL_DOMAIN).
+        return self.email.endswith("@open-invite.produzzy.local")
+
 
 class WorkspaceInviteLink(Base):
     __tablename__ = "workspace_invite_links"

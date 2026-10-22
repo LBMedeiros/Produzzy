@@ -169,13 +169,16 @@ def create_workspace_invite(
     if role == schemas.WorkspaceRole.owner.value:
         raise ValidationError("Convites não podem criar novos owners.")
 
-    email = normalize_email(invite_data.email)
-    existing_user = get_user_by_email(email, db)
+    if invite_data.email:
+        email = normalize_email(invite_data.email)
+        existing_user = get_user_by_email(email, db)
 
-    if existing_user and get_workspace_member(workspace_id, existing_user.id, db):
-        raise ValidationError("Usuário já é membro deste workspace.")
+        if existing_user and get_workspace_member(workspace_id, existing_user.id, db):
+            raise ValidationError("Usuário já é membro deste workspace.")
 
-    expire_pending_invites_for_email(workspace_id, email, current_user, db)
+        expire_pending_invites_for_email(workspace_id, email, current_user, db)
+    else:
+        email = f"open-{secrets.token_hex(8)}@{OPEN_INVITE_EMAIL_DOMAIN}"
 
     invite = models.WorkspaceInvite(
         workspace_id=workspace_id,
@@ -409,6 +412,7 @@ def accept_workspace_invite(
 
     if (
         not is_invite_link
+        and not invite.is_open_invite
         and normalize_email(current_user.email) != normalize_email(invite.email)
     ):
         raise PermissionDenied("O e-mail do usuário não corresponde ao convite.")

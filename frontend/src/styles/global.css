@@ -4525,6 +4525,23 @@ a {
   font-weight: 800;
 }
 
+/* A labelled custom control (e.g. SelectMenu) styled like the labels above. */
+.workspace-form__field {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-form__field > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.workspace-form .field-optional {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .workspace-form__actions {
   display: flex;
   flex-wrap: wrap;

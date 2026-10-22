@@ -83,10 +83,15 @@ function normalizeMember(member) {
 }
 
 function normalizeInvite(invite) {
-  const isLinkInvite = invite.email?.endsWith('@invite.produzzy.local')
+  const isLinkInvite =
+    invite.is_open_invite || invite.email?.endsWith('@invite.produzzy.local')
 
   return {
-    email: isLinkInvite ? 'Link compartilhável' : invite.email,
+    email: invite.is_open_invite
+      ? 'Link de uso único'
+      : isLinkInvite
+        ? 'Link compartilhável'
+        : invite.email,
     id: `invite-${invite.id}`,
     inviteId: invite.id,
     initials: isLinkInvite ? 'LK' : getInitials(invite.email?.split('@')[0], 'CV'),
@@ -706,7 +711,11 @@ function Header({ onNavigated }) {
             !currentMember.isInvite || currentMember.inviteId !== inviteId,
         ),
       )
-      setMembersFeedback(`Convite para ${invite.email} revogado.`)
+      setMembersFeedback(
+        invite.name === 'Link de convite'
+          ? 'Link de convite revogado.'
+          : `Convite para ${invite.email} revogado.`,
+      )
     } catch (error) {
       if (activeWorkspaceIdRef.current === workspaceId) {
         setMembersError(getInviteRevokeError(error))

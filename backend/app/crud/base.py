@@ -62,6 +62,8 @@ ACTIVE_REPLENISHMENT_STATUSES = (
     schemas.ReplenishmentStatus.completed.value,
 )
 INVITE_LINK_EMAIL_DOMAIN = "invite.produzzy.local"
+# Placeholder address of an individual invite created without an e-mail.
+OPEN_INVITE_EMAIL_DOMAIN = "open-invite.produzzy.local"
 
 def normalize_search_value(value: str):
     normalized_value = unicodedata.normalize("NFKD", value)

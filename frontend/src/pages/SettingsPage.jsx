@@ -1136,7 +1136,7 @@ function ProfileSettingsSection({
 }
 
 function isLinkInvite(invite) {
-  return invite.email?.endsWith('@invite.produzzy.local')
+  return invite.is_open_invite || invite.email?.endsWith('@invite.produzzy.local')
 }
 
 // Members and pending invites, each on its own line (docs/redesign Fase 6).

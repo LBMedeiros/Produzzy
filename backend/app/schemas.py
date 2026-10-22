@@ -351,7 +351,10 @@ class WorkspaceMemberTitleUpdate(BaseModel):
 
 
 class WorkspaceInviteCreate(BaseModel):
-    email: str = Field(
+    # Without an e-mail the invite is an open, single-use link: whoever accepts
+    # it first joins with the chosen role.
+    email: Optional[str] = Field(
+        default=None,
         min_length=3,
         max_length=255,
         pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
@@ -361,7 +364,8 @@ class WorkspaceInviteCreate(BaseModel):
     @field_validator("email", mode="before")
     @classmethod
     def normalize_email(cls, value):
-        return normalize_email_input(value)
+        value = normalize_email_input(value)
+        return value or None
 
 
 class WorkspaceInviteLinkCreate(BaseModel):
@@ -372,6 +376,7 @@ class WorkspaceInviteResponse(BaseModel):
     id: int
     workspace_id: int
     email: str
+    is_open_invite: bool = False
     role: str
     token: str
     status: str

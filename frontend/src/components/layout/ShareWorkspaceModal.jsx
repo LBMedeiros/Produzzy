@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../ui/Button'
 import ModalPortal from '../ui/ModalPortal'
+import SelectMenu from '../ui/SelectMenu'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import {
   createWorkspaceInvite,
@@ -27,6 +28,12 @@ function buildSharedInviteLink(inviteLink) {
   return `${window.location.origin}/join/${encodeURIComponent(
     inviteLink.token,
   )}`
+}
+
+const LINK_STATUS_LABELS = {
+  active: 'Ativo',
+  expired: 'Expirado',
+  revoked: 'Revogado',
 }
 
 function formatDate(value) {
@@ -67,16 +74,16 @@ function getRevokeError(error) {
 function getRoleOptions(currentMemberRole) {
   if (currentMemberRole === 'owner') {
     return [
-      { label: 'Admin', value: 'admin' },
-      { label: 'Employee', value: 'employee' },
-      { label: 'Viewer', value: 'viewer' },
+      { label: 'Administrador', value: 'admin' },
+      { label: 'Funcionário', value: 'employee' },
+      { label: 'Visualizador', value: 'viewer' },
     ]
   }
 
   if (currentMemberRole === 'admin') {
     return [
-      { label: 'Employee', value: 'employee' },
-      { label: 'Viewer', value: 'viewer' },
+      { label: 'Funcionário', value: 'employee' },
+      { label: 'Visualizador', value: 'viewer' },
     ]
   }
 
@@ -193,22 +200,29 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
       return
     }
 
-    if (!individualEmail.trim()) {
-      setError('Informe o e-mail da pessoa que você quer convidar.')
+    const email = individualEmail.trim()
+
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setError('Informe um e-mail válido ou deixe o campo em branco.')
       return
     }
 
     setIsSubmitting(true)
 
     try {
+      // Without an e-mail the API creates a single-use link.
       const invite = await createWorkspaceInvite(workspaceId, {
-        email: individualEmail,
+        email: email || null,
         role: selectedIndividualRole,
       })
 
       setCreatedIndividualInvite(invite)
       setIndividualEmail('')
-      setFeedback('Convite individual criado.')
+      setFeedback(
+        email
+          ? `Convite criado. Envie o link para ${email}.`
+          : 'Link de convite criado. Ele vale para uma pessoa e expira em 7 dias.',
+      )
       await refreshTeamContext()
     } catch (submitError) {
       setError(getInviteError(submitError))
@@ -332,7 +346,10 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
                     <code>Gere o link para copiar a URL de entrada.</code>
                   )}
                   <div className="invite-link__meta">
-                    <span>Status: {activeInviteLink.status}</span>
+                    <span>
+                      Status:{' '}
+                      {LINK_STATUS_LABELS[activeInviteLink.status] ?? activeInviteLink.status}
+                    </span>
                     <span>Validade: {formatDate(activeInviteLink.expires_at)}</span>
                     <span>
                       Pessoas que entraram: {activeInviteLink.usage_count ?? 0}
@@ -375,37 +392,45 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
             </>
           ) : (
             <form noValidate className="workspace-form" onSubmit={handleCreateIndividualInvite}>
+              <p className="workspace-modal__text">
+                Gera um link para uma pessoa entrar com a permissão escolhida.
+                Com e-mail, só essa pessoa consegue usar o link. Sem e-mail, o
+                link vale para quem entrar primeiro.
+              </p>
+
               <label>
-                E-mail
+                <span>
+                  E-mail <span className="field-optional">(opcional)</span>
+                </span>
                 <input
                   autoComplete="email"
                   disabled={isSubmitting}
                   onChange={(event) => setIndividualEmail(event.target.value)}
                   placeholder="pessoa@empresa.com"
-                  required
                   type="email"
                   value={individualEmail}
                 />
               </label>
 
-              <label>
-                Cargo
-                <select
+              <div className="workspace-form__field">
+                <span>Permissão</span>
+                <SelectMenu
+                  ariaLabel="Permissão do convidado"
                   disabled={isSubmitting || !roleOptions.length}
-                  onChange={(event) => setIndividualRole(event.target.value)}
+                  onChange={setIndividualRole}
+                  options={roleOptions}
+                  portal
                   value={selectedIndividualRole}
-                >
-                  {roleOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                />
+              </div>
 
               {individualInviteLink ? (
                 <div className="invite-link">
-                  <span>Link individual</span>
+                  <span>
+                    {createdIndividualInvite?.is_open_invite
+                      ? 'Link de uso único'
+                      : 'Link individual'}
+                  </span>
                   <code>{individualInviteLink}</code>
                   <Button
                     disabled={copiedTarget === 'individual'}
@@ -423,7 +448,11 @@ function ShareWorkspaceModal({ currentMemberRole, onClose, onInviteCreated }) {
                   disabled={isSubmitting || !canInvite || !roleOptions.length}
                   type="submit"
                 >
-                  {isSubmitting ? 'Criando...' : 'Criar convite'}
+                  {isSubmitting
+                    ? 'Criando...'
+                    : individualEmail.trim()
+                      ? 'Criar convite'
+                      : 'Gerar link de convite'}
                 </Button>
                 <Button disabled={isSubmitting} onClick={onClose} variant="secondary">
                   Fechar
