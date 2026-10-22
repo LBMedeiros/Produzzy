@@ -1,6 +1,6 @@
 import LegalLayout from '../components/legal/LegalLayout'
 
-const UPDATED_AT = '30 de setembro de 2026'
+const UPDATED_AT = '22 de outubro de 2026'
 const CONTACT_EMAIL = 'lucasmedbasil@gmail.com'
 
 function PrivacyPage() {
@@ -15,9 +15,11 @@ function PrivacyPage() {
 
       <h2>1. Quem é o controlador</h2>
       <p>
-        O responsável pelo tratamento dos dados é o Produzzy. Para qualquer
-        assunto relacionado a privacidade ou ao exercício dos seus direitos,
-        entre em contato pelo e-mail{' '}
+        O controlador dos dados, isto é, quem decide sobre o tratamento, é{' '}
+        <strong>Lucas Medeiros</strong> (pessoa física), desenvolvedor e
+        responsável pelo Produzzy. Para qualquer assunto relacionado a
+        privacidade ou ao exercício dos seus direitos, entre em contato pelo
+        e-mail{' '}
         <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
       </p>
 
@@ -37,6 +39,13 @@ function PrivacyPage() {
           <strong>Dados que você insere:</strong> workspaces, produtos,
           categorias, movimentações de estoque e demais informações operacionais
           cadastradas por você ou pela sua equipe.
+        </li>
+        <li>
+          <strong>Dados de outras pessoas informados por você:</strong> ao
+          convidar alguém para um workspace, guardamos o e-mail dessa pessoa para
+          enviar e identificar o convite, mesmo que ela ainda não tenha conta.
+          Convites pendentes podem ser cancelados pelo dono ou administrador do
+          workspace.
         </li>
         <li>
           <strong>Dados de uso:</strong> registros técnicos como data/hora de
@@ -78,6 +87,12 @@ function PrivacyPage() {
         <li><strong>Envio de e-mail</strong> e <strong>login com Google</strong>, quando usados.</li>
       </ul>
       <p>Esses provedores tratam os dados conforme nossas instruções e suas próprias políticas.</p>
+      <p>
+        <strong>Dentro do workspace:</strong> os membros de um mesmo workspace
+        veem o nome, o e-mail e a foto uns dos outros, além de quem fez cada
+        movimentação, para que a equipe saiba com quem trabalha e quem é
+        responsável por cada ação.
+      </p>
 
       <h2>6. Cookies e armazenamento local</h2>
       <p>
@@ -100,11 +115,23 @@ function PrivacyPage() {
         login e tráfego por HTTPS. Nenhum sistema é 100% imune, mas trabalhamos
         para proteger suas informações.
       </p>
+      <p>
+        Se ocorrer um incidente de segurança que possa trazer risco ou dano
+        relevante a você, comunicaremos os usuários afetados e a Autoridade
+        Nacional de Proteção de Dados (ANPD), conforme o art. 48 da LGPD,
+        informando o que aconteceu, quais dados foram envolvidos e as medidas
+        tomadas.
+      </p>
 
       <h2>9. Retenção</h2>
       <p>
-        Mantemos seus dados enquanto sua conta estiver ativa. Ao excluir a conta,
-        seus dados pessoais são anonimizados ou removidos; alguns registros podem
+        Mantemos seus dados enquanto sua conta estiver ativa. Algumas
+        informações são apagadas automaticamente antes disso: reposições
+        canceladas são removidas após <strong>7 dias</strong>, e as mensagens do
+        chat de reposições finalizadas, após <strong>30 dias</strong>.
+      </p>
+      <p>
+        Ao excluir a conta, seus dados pessoais são anonimizados ou removidos; alguns registros podem
         ser mantidos de forma anonimizada quando necessário para integridade,
         segurança ou cumprimento de obrigações legais.
       </p>
@@ -122,11 +149,17 @@ function PrivacyPage() {
           <strong>Configurações → Privacidade e dados → Excluir minha conta</strong>
           {' '}(seus dados pessoais são anonimizados/removidos);
         </li>
-        <li>revogar consentimentos e obter informações sobre o tratamento.</li>
+        <li>
+          confirmar se tratamos seus dados, saber com quem eles são
+          compartilhados, revogar consentimentos e pedir a eliminação de dados
+          desnecessários ou tratados em desconformidade com a LGPD (art. 18).
+        </li>
       </ul>
       <p>
         Também é possível exercer esses direitos pelo e-mail{' '}
-        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. Os pedidos são
+        respondidos em até <strong>15 dias</strong> (LGPD, art. 19). Você também
+        pode apresentar reclamação à ANPD.
       </p>
 
       <h2>11. Crianças e adolescentes</h2>
@@ -144,8 +177,9 @@ function PrivacyPage() {
 
       <h2>13. Encarregado (DPO) e contato</h2>
       <p>
-        Para dúvidas, solicitações ou reclamações sobre privacidade, fale com o
-        nosso encarregado pelo e-mail{' '}
+        O encarregado pelo tratamento de dados é <strong>Lucas Medeiros</strong>.
+        Para dúvidas, solicitações ou reclamações sobre privacidade, fale com ele
+        pelo e-mail{' '}
         <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
       </p>
     </LegalLayout>

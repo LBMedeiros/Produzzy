@@ -1,6 +1,6 @@
 import LegalLayout from '../components/legal/LegalLayout'
 
-const UPDATED_AT = '30 de setembro de 2026'
+const UPDATED_AT = '22 de outubro de 2026'
 const CONTACT_EMAIL = 'lucasmedbasil@gmail.com'
 
 function TermsPage() {
@@ -18,16 +18,17 @@ function TermsPage() {
         O Produzzy permite cadastrar produtos e categorias, controlar
         movimentações de estoque, gerar QR Codes e etiquetas, acompanhar
         necessidades de reposição e colaborar em equipe por meio de workspaces.
-        O serviço é fornecido pela internet, no estado em que se encontra, e pode
-        evoluir ou mudar ao longo do tempo.
+        O Produzzy é desenvolvido e mantido por <strong>Lucas Medeiros</strong>{' '}
+        (pessoa física), responsável pelo serviço. O serviço é fornecido pela
+        internet, no estado em que se encontra, e pode evoluir ou mudar ao longo
+        do tempo.
       </p>
 
       <h2>2. Conta e cadastro</h2>
       <ul>
         <li>Você deve fornecer informações verdadeiras e mantê-las atualizadas.</li>
         <li>
-          É necessário confirmar o e-mail para ativar o acesso. Você é
-          responsável por manter sua senha em segurança e por toda atividade
+          Você é responsável por manter sua senha em segurança e por toda atividade
           realizada na sua conta.
         </li>
         <li>
@@ -76,10 +77,12 @@ function TermsPage() {
 
       <h2>7. Limitação de responsabilidade</h2>
       <p>
-        Na máxima extensão permitida pela lei, o Produzzy não se responsabiliza
-        por danos indiretos, lucros cessantes ou perda de dados decorrentes do
-        uso ou da impossibilidade de uso do serviço. Recomendamos que você
-        mantenha cópias próprias de informações críticas.
+        Na extensão permitida pela lei, o responsável pelo Produzzy não responde por
+        danos indiretos ou lucros cessantes decorrentes do uso ou da
+        impossibilidade de uso do serviço, exceto em caso de culpa ou dolo.
+        Esta cláusula não afasta direitos garantidos pelo Código de Defesa do
+        Consumidor, quando aplicável. Recomendamos que você mantenha cópias
+        próprias de informações críticas.
       </p>
 
       <h2>8. Encerramento</h2>
