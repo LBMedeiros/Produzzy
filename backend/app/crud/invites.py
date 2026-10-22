@@ -90,6 +90,49 @@ def expire_stale_pending_invites(
     if expired_any:
         db.commit()
 
+# Retention: an invite holds someone else's e-mail only to deliver the
+# invitation, so it is deleted 30 days after it stops being usable (LGPD art.
+# 15/16). Invite-link rows carry a synthetic address and are left alone.
+INVITE_RETENTION_AFTER_EXPIRY = timedelta(days=30)
+INVITE_CLEANUP_INTERVAL = timedelta(hours=24)
+
+# Per-process throttle, same approach as the replenishment retention cleanup.
+_last_invite_cleanup_at = None
+
+
+def cleanup_old_invites(db: Session, now=None):
+    """Delete e-mail invites (any status) whose expiry is more than 30 days
+    old. Accepted and revoked invites also expire, so this covers them too."""
+    now = now or aware_utc_now()
+    cutoff = now - INVITE_RETENTION_AFTER_EXPIRY
+
+    db.query(models.WorkspaceInvite).filter(
+        models.WorkspaceInvite.expires_at < cutoff,
+        ~models.WorkspaceInvite.email.like(f"%@{INVITE_LINK_EMAIL_DOMAIN}"),
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
+
+def maybe_cleanup_old_invites(db: Session):
+    """Runs the invite cleanup at most once a day per process, and never lets a
+    cleanup failure break the request that triggered it."""
+    global _last_invite_cleanup_at
+    now = aware_utc_now()
+
+    if (
+        _last_invite_cleanup_at is not None
+        and now - _last_invite_cleanup_at < INVITE_CLEANUP_INTERVAL
+    ):
+        return
+
+    _last_invite_cleanup_at = now
+
+    try:
+        cleanup_old_invites(db, now=now)
+    except Exception:
+        db.rollback()
+
 def get_workspace_invite_link_email(workspace_id: int):
     return f"workspace-{workspace_id}@{INVITE_LINK_EMAIL_DOMAIN}"
 
@@ -283,6 +326,7 @@ def list_workspace_invites(
         db,
         INVITE_MANAGE_ROLES,
     )
+    maybe_cleanup_old_invites(db)
     expire_stale_pending_invites(workspace_id, current_user, db)
 
     query = (
@@ -309,6 +353,7 @@ def get_workspace_team(
         db,
         INVITE_MANAGE_ROLES,
     )
+    maybe_cleanup_old_invites(db)
     expire_stale_pending_invites(workspace_id, current_user, db)
 
     members = (
