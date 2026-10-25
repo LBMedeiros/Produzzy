@@ -43,12 +43,15 @@ def get_user_by_provider_user_id(
         .first()
     )
 
+DUPLICATE_EMAIL_MESSAGE = "Já existe um usuário com esse e-mail."
+
+
 def create_user(user_data: schemas.UserCreate, db: Session):
     email = normalize_email(user_data.email)
     existing_user = get_user_by_email(email, db)
 
     if existing_user:
-        raise ValidationError("Já existe um usuário com esse e-mail.")
+        raise ValidationError(DUPLICATE_EMAIL_MESSAGE)
 
     new_user = models.User(
         name=user_data.name.strip(),
@@ -62,7 +65,15 @@ def create_user(user_data: schemas.UserCreate, db: Session):
     )
 
     db.add(new_user)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two sign-ups with the same e-mail at the same moment: both pass the
+        # check above, and the unique index on users.email stops the second.
+        db.rollback()
+        raise ValidationError(DUPLICATE_EMAIL_MESSAGE)
+
     db.refresh(new_user)
 
     return new_user
