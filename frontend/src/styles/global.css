@@ -7965,3 +7965,119 @@ a {
 .auth-page .auth-feedback p {
   color: var(--muted);
 }
+
+/* --------------------------------------------------------------------------
+   Product photos: thumbnail next to the name, large photo in the detail
+   drawer and in the movement modal header.
+   ========================================================================== */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.product-thumb {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  box-shadow: 0 0 0 1px var(--border);
+  object-fit: cover;
+}
+
+.product-thumb--empty {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.product-cell--with-thumb {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.product-cell--with-thumb .product-thumb {
+  grid-row: span 2;
+}
+
+.product-cell--with-thumb strong,
+.product-cell--with-thumb > span:not(.product-thumb) {
+  grid-column: 2;
+}
+
+.product-photo {
+  display: grid;
+  gap: 10px;
+}
+
+.product-photo__image {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 14px;
+  background: var(--surface-elevated);
+  box-shadow: 0 0 0 1px var(--border);
+  object-fit: contain;
+}
+
+.product-photo__empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.product-photo__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.product-photo__actions .button.product-photo__remove {
+  color: var(--danger-text);
+}
+
+.stock-modal__product {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Phone rows: photo with the full name beside it, status under the name. */
+@media (max-width: 639px) {
+  .stock-row__top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .stock-row__top > .product-cell {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .stock-row__top > .badge {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    margin-left: 52px;
+  }
+
+  .stock-row__top > :last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .stock-row__top .product-cell--with-thumb strong,
+  .stock-row__top .product-cell--with-thumb > span:not(.product-thumb) {
+    white-space: normal;
+  }
+}
+

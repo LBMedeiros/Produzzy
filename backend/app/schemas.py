@@ -469,6 +469,7 @@ class ProductResponse(BaseModel):
     category_id: Optional[int] = None
     quantity: int
     minimum_quantity: int
+    image_url: Optional[str] = None
     is_active: bool
     deleted_at: Optional[datetime] = None
     deleted_by_user_id: Optional[int] = None

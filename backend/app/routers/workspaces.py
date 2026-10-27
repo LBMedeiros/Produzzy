@@ -7,6 +7,7 @@ from app.config import (
     PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS,
 )
 from app.dependencies import get_current_user, get_db
+from app.services import product_image_service
 from app.services.rate_limit_service import (
     build_rate_limit_key,
     run_with_failure_rate_limit,
@@ -111,7 +112,10 @@ def delete_workspace(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    crud.delete_workspace(workspace_id, current_user, db)
+    product_image_ids = crud.delete_workspace(workspace_id, current_user, db)
+
+    for public_id in product_image_ids:
+        product_image_service.delete_product_image_quietly(public_id)
 
     return None
 

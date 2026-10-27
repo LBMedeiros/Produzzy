@@ -562,7 +562,8 @@ def delete_account(
     account, keeping the row so system records (movements, audit) stay valid.
     Solo workspaces are deleted; owning a shared workspace blocks deletion.
 
-    Returns (deleted_workspace_names, previous_avatar_public_id)."""
+    Returns (deleted_workspace_names, previous_avatar_public_id,
+    product_image_public_ids of the deleted workspaces)."""
     # Password accounts must confirm; Google-only accounts rely on the session.
     if current_user.hashed_password:
         if not current_password or not verify_password(
@@ -600,6 +601,14 @@ def delete_account(
 
     deleted_names = [workspace.name for workspace in solo]
     previous_avatar_public_id = current_user.avatar_public_id
+    product_image_ids = (
+        db.query(models.Product.image_public_id)
+        .filter(models.Product.workspace_id.in_([workspace.id for workspace in solo]))
+        .filter(models.Product.image_public_id.isnot(None))
+        .all()
+        if solo
+        else []
+    )
 
     # Delete solo workspaces (ON DELETE CASCADE removes their data + member rows).
     for workspace in solo:
@@ -633,7 +642,7 @@ def delete_account(
 
     db.commit()
 
-    return deleted_names, previous_avatar_public_id
+    return deleted_names, previous_avatar_public_id, [row[0] for row in product_image_ids]
 
 def update_current_user_avatar(
     current_user: models.User,

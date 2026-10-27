@@ -60,6 +60,22 @@ export function updateProduct(workspaceId, productId, data) {
   })
 }
 
+export function uploadProductImage(workspaceId, productId, file) {
+  const formData = new FormData()
+  formData.set('file', file)
+
+  return request(`/workspaces/${workspaceId}/products/${productId}/image`, {
+    body: formData,
+    method: 'POST',
+  })
+}
+
+export function removeProductImage(workspaceId, productId) {
+  return request(`/workspaces/${workspaceId}/products/${productId}/image`, {
+    method: 'DELETE',
+  })
+}
+
 export function deleteProduct(workspaceId, productId) {
   return request(`/workspaces/${workspaceId}/products/${productId}`, {
     method: 'DELETE',

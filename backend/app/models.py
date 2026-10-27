@@ -118,6 +118,10 @@ class Product(Base):
     quantity = Column(Integer, nullable=False, default=0)
     minimum_quantity = Column(Integer, nullable=False, default=0)
 
+    # Optional photo stored on Cloudinary (services/product_image_service).
+    image_url = Column(String(500), nullable=True)
+    image_public_id = Column(String(255), nullable=True)
+
     is_active = Column(Boolean, nullable=False, default=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     deleted_by_user_id = Column(

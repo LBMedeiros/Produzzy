@@ -80,6 +80,7 @@ With Produzzy, teams can:
 - Search and filter inventory, with filter chips and counts (All, Below minimum, Out of stock, History, Trash)
 - Paginated product lists, with no cap on how many products a workspace can have
 - Stock level bar per product and its last movement ("Lucas · exit of 6 · 1 h ago")
+- Optional product photo (stored on Cloudinary), shown as a thumbnail in the stock list, large in the product detail and in the stock-movement window
 - Soft delete products with a trash and restore workflow
 - Product and category names are unique per workspace, case-insensitively (e.g. "Café" and "café" are the same name)
 - Product status derived from inventory levels
@@ -173,7 +174,7 @@ The system calculates replenishment needs based on the product's current and min
 - Alembic (migrations)
 - python-jose (JWT) · passlib + bcrypt (password hashing)
 - Pillow, `qrcode`, and `python-barcode` (QR/barcode/label generation)
-- Cloudinary (avatar/media storage)
+- Cloudinary (profile and product photos)
 - SMTP (provider-agnostic) for password-reset and recovery e-mails
 
 ### Database
@@ -430,7 +431,7 @@ PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30
 PRODUZZY_GOOGLE_CLIENT_ID=
 PRODUZZY_GOOGLE_CLIENT_SECRET=
 
-# Optional — profile photo upload (all three required together)
+# Optional — profile and product photo upload (all three required together)
 PRODUZZY_CLOUDINARY_CLOUD_NAME=
 PRODUZZY_CLOUDINARY_API_KEY=
 PRODUZZY_CLOUDINARY_API_SECRET=
