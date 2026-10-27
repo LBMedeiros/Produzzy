@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from app import models, schemas
 from app.services.security_service import get_password_hash, verify_password
 from app.crud.base import *  # noqa: F401,F403
+from app.crud.products import list_product_image_ids
 
 def attach_current_user_role(
     workspace: models.Workspace,
@@ -175,12 +176,16 @@ def delete_workspace(
     if workspace.owner_id != current_user.id:
         raise PermissionDenied("Apenas o owner principal pode excluir o workspace.")
 
+    # Product photos live on Cloudinary; return their ids so the router can
+    # remove the files once the rows are gone.
+    product_image_ids = list_product_image_ids([workspace_id], db)
+
     # Every table that belongs to a workspace has ON DELETE CASCADE on its
     # workspace_id FK (migration 0014), so a single delete removes all of it.
     db.delete(workspace)
     db.commit()
 
-    return None
+    return product_image_ids
 
 def list_workspace_members(
     workspace_id: int,

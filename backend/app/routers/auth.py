@@ -37,6 +37,7 @@ from app.services import (
     avatar_storage_service,
     email_service,
     google_auth_service,
+    product_image_service,
 )
 from app.services.security_service import (
     create_email_verification_token,
@@ -557,7 +558,7 @@ def delete_current_user_account(
     db: Session = Depends(get_db),
 ):
     """LGPD erasure — anonymizes and deactivates the account."""
-    _deleted_workspaces, previous_avatar_public_id = crud.delete_account(
+    _deleted_workspaces, previous_avatar_public_id, product_image_ids = crud.delete_account(
         current_user,
         deletion_data.current_password,
         db,
@@ -569,6 +570,9 @@ def delete_current_user_account(
             avatar_storage_service.delete_avatar(previous_avatar_public_id)
         except Exception:
             logger.exception("Failed to remove avatar during account deletion.")
+
+    for public_id in product_image_ids:
+        product_image_service.delete_product_image_quietly(public_id)
 
     return schemas.MessageResponse(
         message="Conta excluída. Seus dados pessoais foram removidos."

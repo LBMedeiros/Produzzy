@@ -29,7 +29,7 @@ aplique só os ajustes de configuração descritos aqui.
 | `DB_POOL_RECYCLE_SECONDS` | `1800` | Opcional. Recicla conexões antes do Postgres do Render derrubar as ociosas (evita 500 intermitente após inatividade). Default já é 1800. |
 | `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | `5` / `10` | Opcional. Ajuste conforme o limite de conexões do plano do banco. |
 | `PRODUZZY_GOOGLE_CLIENT_ID` / `_SECRET` | credenciais OAuth | Só se usar login com Google. |
-| `PRODUZZY_CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | credenciais Cloudinary | **As três juntas** para o upload de foto de perfil funcionar (Configurações → Foto de perfil). Pegue em cloudinary.com → Dashboard. Faltando qualquer uma, o upload responde **503 "Upload de foto de perfil ainda não configurado."** e o botão não funciona. O disco do Render é efêmero, por isso a foto vai para o Cloudinary, não para o servidor. |
+| `PRODUZZY_CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | credenciais Cloudinary | **As três juntas** para o upload de foto de perfil (Configurações → Foto de perfil) e de foto de produto (Estoque → detalhe do produto) funcionarem. Pegue em cloudinary.com → Dashboard. Faltando qualquer uma, o upload responde **503** ("Upload de foto de perfil ainda não configurado." / "Upload de foto de produto ainda não configurado.") e o botão não funciona. O disco do Render é efêmero, por isso as fotos vão para o Cloudinary, não para o servidor. |
 | `PRODUZZY_SMTP_*` + `PRODUZZY_APP_BASE_URL` | credenciais de e-mail | Só para a **recuperação de senha** ("esqueci minha senha") enviar o link. Ver **seção 7**. Sem isso o app funciona, mas o e-mail de reset não sai. |
 
 > `RENDER_GIT_COMMIT` é injetado pelo Render automaticamente e vira o
@@ -145,6 +145,8 @@ curl -s -X POST $API/auth/login -H 'content-type: application/json' \
       corrigido neste deploy).
 - [ ] Se configurou o Cloudinary: em Configurações → Foto de perfil, enviar uma
       imagem (JPG/PNG/WebP), confirmar que aparece, e depois "Remover foto".
+- [ ] Idem para produto: Estoque → abrir um produto → "Adicionar foto"; conferir
+      a miniatura na lista e depois "Remover foto".
 
 ## 9. Limitações conhecidas (aceitáveis para teste, revisar antes de "produção real")
 

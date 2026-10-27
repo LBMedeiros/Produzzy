@@ -279,6 +279,50 @@ def update_product(
 
     return product
 
+def set_product_image(
+    product_id: int,
+    image_url: str | None,
+    image_public_id: str | None,
+    db: Session,
+    workspace_id: int,
+    user_id: int,
+):
+    """Sets (or clears, with None) the product photo. Returns the product and
+    the previous Cloudinary public id so the caller can delete that file."""
+    product = get_product_by_id(product_id, db, workspace_id)
+    previous_public_id = product.image_public_id
+
+    product.image_url = image_url
+    product.image_public_id = image_public_id
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        action="product.image_updated" if image_url else "product.image_removed",
+        entity_type="product",
+        entity_id=product.id,
+        metadata={"name": product.name},
+    )
+
+    db.commit()
+    db.refresh(product)
+
+    return product, previous_public_id
+
+def list_product_image_ids(workspace_ids, db: Session):
+    """Cloudinary ids of every product photo in these workspaces, collected
+    before the workspaces are deleted so the files can be removed too."""
+    if not workspace_ids:
+        return []
+
+    return [
+        row[0]
+        for row in db.query(models.Product.image_public_id)
+        .filter(models.Product.workspace_id.in_(list(workspace_ids)))
+        .filter(models.Product.image_public_id.isnot(None))
+        .all()
+    ]
+
 def delete_product(
     product_id: int,
     db: Session,

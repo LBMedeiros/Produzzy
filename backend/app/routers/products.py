@@ -1,10 +1,12 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user
 from app import crud, schemas, models
+from app.services import product_image_service
+
 
 
 router = APIRouter(
@@ -155,6 +157,101 @@ def delete_product(
         workspace_id,
         deleted_by_user_id=current_user.id,
     )
+
+
+def raise_product_image_storage_error(error: Exception):
+    if isinstance(error, product_image_service.ProductImageStorageNotConfiguredError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(error),
+        ) from error
+
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=str(error),
+    ) from error
+
+
+@router.post("/{product_id}/image", response_model=schemas.ProductResponse)
+async def upload_product_image(
+    workspace_id: int,
+    product_id: int,
+    file: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.PRODUCT_WRITE_ROLES,
+    )
+    # 404 before uploading anything for a product outside this workspace.
+    crud.get_product_by_id(product_id, db, workspace_id)
+
+    try:
+        content = await product_image_service.prepare_product_image(file)
+    except product_image_service.ProductImageValidationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    try:
+        uploaded = product_image_service.upload_product_image(
+            content,
+            workspace_id,
+            product_id,
+        )
+    except (
+        product_image_service.ProductImageStorageNotConfiguredError,
+        product_image_service.ProductImageStorageError,
+    ) as error:
+        raise_product_image_storage_error(error)
+
+    try:
+        product, previous_public_id = crud.set_product_image(
+            product_id,
+            uploaded.url,
+            uploaded.public_id,
+            db,
+            workspace_id,
+            user_id=current_user.id,
+        )
+    except Exception:
+        product_image_service.delete_product_image_quietly(uploaded.public_id)
+        raise
+
+    if previous_public_id and previous_public_id != uploaded.public_id:
+        product_image_service.delete_product_image_quietly(previous_public_id)
+
+    return product
+
+
+@router.delete("/{product_id}/image", response_model=schemas.ProductResponse)
+def remove_product_image(
+    workspace_id: int,
+    product_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    crud.require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        crud.PRODUCT_WRITE_ROLES,
+    )
+    product, previous_public_id = crud.set_product_image(
+        product_id,
+        None,
+        None,
+        db,
+        workspace_id,
+        user_id=current_user.id,
+    )
+    product_image_service.delete_product_image_quietly(previous_public_id)
+
+    return product
 
 
 @router.post("/{product_id}/restore", response_model=schemas.ProductResponse)

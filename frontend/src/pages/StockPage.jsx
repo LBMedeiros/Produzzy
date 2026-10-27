@@ -5,6 +5,8 @@ import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
 import DataTable from '../components/ui/DataTable'
 import PageHeader from '../components/ui/PageHeader'
+import ProductThumb from '../components/ui/ProductThumb'
+import { productImageSrc } from '../lib/productImage'
 import ModalPortal from '../components/ui/ModalPortal'
 import Pagination from '../components/ui/Pagination'
 import SelectMenu from '../components/ui/SelectMenu'
@@ -29,8 +31,10 @@ import {
   getProduct,
   listAllProducts,
   listProductStockMovements,
+  removeProductImage,
   restoreProduct,
   updateProduct,
+  uploadProductImage,
 } from '../services/productService'
 import { listWorkspaceStockMovements } from '../services/stockMovementService'
 import {
@@ -321,6 +325,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [detailProduct, setDetailProduct] = useState(null)
+  const [isSavingImage, setIsSavingImage] = useState(false)
+  const [imageError, setImageError] = useState('')
+  const imageInputRef = useRef(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
   const [detailError, setDetailError] = useState('')
   const [stockMovements, setStockMovements] = useState([])
@@ -923,6 +930,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     setIsDetailOpen(false)
     setDetailProduct(null)
     setDetailError('')
+    setImageError('')
     setStockMovements([])
     setMovementsPage(1)
     setHasMoreMovements(false)
@@ -1439,13 +1447,69 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     }
   }
 
+  // Product photo (detail drawer): upload, replace or remove, then reflect
+  // the new URL in the open drawer and in the list without a full reload.
+  async function handleProductImageChange(file) {
+    if (!file || !detailProduct) {
+      return
+    }
+
+    setIsSavingImage(true)
+    setImageError('')
+
+    try {
+      const updated = await uploadProductImage(workspaceId, detailProduct.id, file)
+      applyProductImage(updated)
+      setSuccessMessage('Foto do produto atualizada.')
+    } catch (uploadError) {
+      setImageError(getFriendlyError(uploadError))
+    } finally {
+      setIsSavingImage(false)
+
+      if (imageInputRef.current) {
+        imageInputRef.current.value = ''
+      }
+    }
+  }
+
+  async function handleRemoveProductImage() {
+    if (!detailProduct) {
+      return
+    }
+
+    setIsSavingImage(true)
+    setImageError('')
+
+    try {
+      const updated = await removeProductImage(workspaceId, detailProduct.id)
+      applyProductImage(updated)
+      setSuccessMessage('Foto do produto removida.')
+    } catch (removeError) {
+      setImageError(getFriendlyError(removeError))
+    } finally {
+      setIsSavingImage(false)
+    }
+  }
+
+  function applyProductImage(updated) {
+    setDetailProduct((current) =>
+      current?.id === updated.id ? { ...current, image_url: updated.image_url } : current,
+    )
+    setProducts((currentProducts) =>
+      currentProducts.map((product) =>
+        product.id === updated.id ? { ...product, image_url: updated.image_url } : product,
+      ),
+    )
+  }
+
   function renderCompactProductName(product, options = {}) {
     return (
       <button
-        className="product-cell product-cell--button product-cell--compact"
+        className="product-cell product-cell--button product-cell--compact product-cell--with-thumb"
         type="button"
         onClick={() => loadProductDetail(product, options)}
       >
+        <ProductThumb name={product.name} src={product.image_url} />
         <strong>{product.name}</strong>
         <span>{product.category} · ID {product.id}</span>
       </button>
@@ -1883,6 +1947,61 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               <p className="stock-feedback stock-feedback--error">{detailError}</p>
             ) : detailProduct ? (
               <>
+                <section className="product-photo" aria-label="Foto do produto">
+                  {detailProduct.image_url ? (
+                    <img
+                      alt={`Foto de ${detailProduct.name}`}
+                      className="product-photo__image"
+                      src={productImageSrc(detailProduct.image_url, 560)}
+                    />
+                  ) : (
+                    <div className="product-photo__empty">
+                      <ProductThumb name={detailProduct.name} size={56} />
+                      <span>
+                        {canWriteProduct && detailProduct.is_active
+                          ? 'Adicione uma foto para a equipe reconhecer o produto.'
+                          : 'Este produto ainda não tem foto.'}
+                      </span>
+                    </div>
+                  )}
+                  {canWriteProduct && detailProduct.is_active ? (
+                    <div className="product-photo__actions">
+                      <input
+                        accept="image/jpeg,image/png,image/webp"
+                        className="visually-hidden"
+                        onChange={(event) => handleProductImageChange(event.target.files?.[0])}
+                        ref={imageInputRef}
+                        tabIndex={-1}
+                        type="file"
+                      />
+                      <Button
+                        disabled={isSavingImage}
+                        onClick={() => imageInputRef.current?.click()}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {isSavingImage
+                          ? 'Enviando...'
+                          : detailProduct.image_url
+                            ? 'Trocar foto'
+                            : 'Adicionar foto'}
+                      </Button>
+                      {detailProduct.image_url ? (
+                        <Button
+                          className="product-photo__remove"
+                          disabled={isSavingImage}
+                          onClick={handleRemoveProductImage}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Remover foto
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {imageError ? <p className="form-error">{imageError}</p> : null}
+                </section>
+
                 <div className="product-detail-drawer__title">
                   <Badge tone={getProductStatus(detailProduct).tone}>
                     {getProductStatus(detailProduct).label}
@@ -2205,9 +2324,19 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
         <div className="modal-backdrop" role="presentation">
           <section className="workspace-modal stock-modal" role="dialog" aria-modal="true">
             <div className="workspace-modal__header">
-              <div>
-                <span>Movimentação</span>
-                <h2>{movementProduct.name}</h2>
+              <div className="stock-modal__product">
+                <ProductThumb
+                  name={movementProduct.name}
+                  size={48}
+                  src={
+                    movementProduct.image_url ??
+                    products.find((product) => product.id === movementProduct.id)?.image_url
+                  }
+                />
+                <div>
+                  <span>Movimentação</span>
+                  <h2>{movementProduct.name}</h2>
+                </div>
               </div>
               <button
                 aria-label="Fechar modal"

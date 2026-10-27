@@ -83,6 +83,8 @@ export const auditActionLabels = {
   'member.title_updated': 'Cargo de membro atualizado',
   'product.created': 'Produto criado',
   'product.deleted': 'Produto enviado para lixeira',
+  'product.image_removed': 'Foto do produto removida',
+  'product.image_updated': 'Foto do produto atualizada',
   'product.restored': 'Produto restaurado',
   'product.updated': 'Produto atualizado',
   'replenishment.assignee_added': 'Responsável adicionado à reposição',
