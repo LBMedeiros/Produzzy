@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import ActionMenu from '../components/ui/ActionMenu'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -926,6 +927,22 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     )
   }
 
+  // Esc closes the detail panel (it no longer blocks the page on desktop).
+  useEffect(() => {
+    if (!isDetailOpen) {
+      return undefined
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape' && !movementProduct && !productModal) {
+        closeDetail()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  })
+
   function closeDetail() {
     setIsDetailOpen(false)
     setDetailProduct(null)
@@ -1505,7 +1522,9 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   function renderCompactProductName(product, options = {}) {
     return (
       <button
-        className="product-cell product-cell--button product-cell--compact product-cell--with-thumb"
+        className={`product-cell product-cell--button product-cell--compact product-cell--with-thumb${
+          isDetailOpen && detailProduct?.id === product.id ? ' is-selected' : ''
+        }`}
         type="button"
         onClick={() => loadProductDetail(product, options)}
       >
@@ -1735,7 +1754,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   ]
 
   return (
-    <div className="page-stack">
+    <div className={`page-stack${isDetailOpen ? ' page-stack--with-detail' : ''}`}>
       <PageHeader
         actions={
           <>
@@ -1918,7 +1937,10 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
         )}
       </Card>
 
-      {isDetailOpen ? (
+      {/* Portal'd to <body>: an animated ancestor would otherwise trap the
+          fixed panel and make it scroll with the page. No scroll lock, so the
+          list stays usable while it is open. */}
+      {isDetailOpen ? createPortal(
         <div className="drawer-backdrop" role="presentation">
           <aside
             className="product-detail-drawer"
@@ -2195,7 +2217,8 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               </>
             ) : null}
           </aside>
-        </div>
+        </div>,
+        document.body,
       ) : null}
 
       {productModal ? (
