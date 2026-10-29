@@ -8014,13 +8014,17 @@ a {
   gap: 10px;
 }
 
+/* Whole photo, never cropped: a fixed-height frame with the image fitted
+   inside it (letterboxed on the sides or top/bottom as needed). */
 .product-photo__image {
+  display: block;
   width: 100%;
-  max-height: 320px;
+  height: 240px;
   border-radius: 14px;
   background: var(--surface-elevated);
   box-shadow: 0 0 0 1px var(--border);
   object-fit: contain;
+  padding: 10px;
 }
 
 .product-photo__empty {
