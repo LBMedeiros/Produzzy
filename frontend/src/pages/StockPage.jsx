@@ -1974,7 +1974,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                     <img
                       alt={`Foto de ${detailProduct.name}`}
                       className="product-photo__image"
-                      src={productImageSrc(detailProduct.image_url, 560)}
+                      src={productImageSrc(detailProduct.image_url, 360, { fit: 'contain' })}
                     />
                   ) : (
                     <div className="product-photo__empty">
