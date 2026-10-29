@@ -1,625 +1,178 @@
-# Produzzy
-
-> Inventory, stock movement, and replenishment management in one collaborative workspace.
-
-Produzzy is a full-stack inventory management SaaS designed to help teams organize products, monitor stock levels, track movements, manage replenishment workflows, and maintain accountability across collaborative workspaces.
-
-The project was inspired by a real operational inventory problem and evolved into a multi-workspace application focused on simplicity, traceability, and efficient stock management.
-
----
-
-## Overview
-
-Managing inventory becomes increasingly difficult when products, stock movements, replenishment needs, and team responsibilities are tracked separately.
-
-Produzzy brings these operations into a single workflow.
-
-With Produzzy, teams can:
-
-- organize products and categories;
-- monitor current and minimum stock levels;
-- record stock entries and withdrawals;
-- identify low-stock and out-of-stock products;
-- manage replenishment workflows;
-- track who performed each stock movement;
-- collaborate through shared workspaces with custom member titles;
-- hand off replenishment work through a per-request chat;
-- generate QR Codes, barcodes, and printable product labels;
-- scan a product's QR Code or barcode with the camera to jump straight to its stock movement;
-- see what needs attention at a glance on a dashboard with a 7-day movement chart.
-
----
-
-## Features
-
-### Authentication & Account
-
-- User registration and login with email and password (accounts are active right after sign-up, with automatic login)
-- Password policy enforced on both backend and frontend: 8+ characters with at least one number and one special character, with a live checklist while typing
-- JWT-based authentication with protected routes and session handling
-- "Remember me" keeps the session for 30 days (configurable); otherwise the session ends with the browser
-- Changing the password signs out every other session (tokens carry a password fingerprint)
-- Google OAuth (Sign in with Google)
-- Change email and change password from the account settings
-- Password recovery ("forgot password") via a single-use e-mail reset link
-- Optional backup recovery e-mail (confirmed by link) that also receives the reset link, with a Pending/Confirmed status and a "resend confirmation" action
-- Profile photo upload with an in-app crop/framing editor (stored on Cloudinary)
-- Login, registration, forgot-password and invite-acceptance rate limiting, keyed on the real client IP behind the Render proxy
-- Input validation
-
-> Google authentication requires OAuth credentials, and password recovery requires SMTP e-mail settings, both configured through environment variables. See [`DEPLOY.md`](./DEPLOY.md) for the full setup.
-
-### Privacy & LGPD
-
-- Public Terms of Use (`/termos`) and Privacy Policy (`/privacidade`) pages
-- "Download my data": a formatted PDF export of the account, workspaces, per-workspace summary, and activity history (generated client-side with jsPDF)
-- Account deletion from Settings (personal data is anonymized and the account deactivated)
-
-### Workspaces & Collaboration
-
-- Create and switch between multiple workspaces
-- Fully isolated data between workspaces
-- Invite users through individual invitations or shareable invite links
-- Member management with role-based permissions (owner, admin, employee, viewer)
-- Custom member titles (e.g. "Sócio", "Gerente") — cosmetic labels the owner or an admin assigns (also at invite time), independent from access roles
-- Invite by e-mail or as a single-use link without e-mail, choosing the permission and title up front
-- Workspace deletion with confirmation
-
-### Dashboard
-
-- Greeting with summary tiles (active products, below minimum, out of stock, movements today)
-- "Needs attention" list of low and out-of-stock products, linked to their replenishment
-- Stalled replenishments (no update for 3+ days) and replenishments ready to stock
-- 7-day chart of stock entries and exits (in the user's time zone)
-- Readable recent-activity feed with the member's photo and name
-
-### Product Management
-
-- Create and edit products
-- Organize products by category (with a trash/restore workflow for categories)
-- Search and filter inventory, with filter chips and counts (All, Below minimum, Out of stock, History, Trash)
-- Paginated product lists, with no cap on how many products a workspace can have
-- Stock level bar per product and its last movement ("Lucas · exit of 6 · 1 h ago")
-- Optional product photo (stored on Cloudinary), shown as a thumbnail in the stock list, large in the product detail and in the stock-movement window
-- Soft delete products with a trash and restore workflow
-- Product and category names are unique per workspace, case-insensitively (e.g. "Café" and "café" are the same name)
-- Product status derived from inventory levels
-- Global search across the workspace
-
-### Inventory Control
-
-- Stock entries and withdrawals
-- Negative stock prevention
-- Quantities capped at 1,000,000,000 (clean validation error instead of a database overflow)
-- Minimum stock configuration
-- Low-stock and out-of-stock detection
-- Persistent stock movement history
-
-### Audit Trail & Activity
-
-Stock movements and workspace actions are recorded with operational context such as:
-
-- responsible user;
-- movement type;
-- previous quantity, new quantity, and difference;
-- reason;
-- date and time.
-
-The dashboard surfaces a recent-activity feed (products, categories, replenishments, members, invites, and stock movements), so teams can see who did what and quickly review inventory inconsistencies.
-
-### Replenishment Workflow
-
-Products below their configured minimum stock can enter a replenishment workflow.
-
-Current workflow stages include:
-
-- Replenishment needed
-- In progress
-- Ready to stock
-- Stocked
-- Cancelled
-
-The system calculates replenishment needs based on the product's current and minimum quantities.
-
-- Three-column board (Replenishment needed, In progress, Ready to stock), each column scrolling on its own, with stocked and cancelled requests in a paginated history
-- Product search that filters every column and the history (accent and case insensitive)
-- Each card shows the stock level, the assignee and how long the request has been open or stalled, plus a single next action
-- On phones, one stage at a time through chips
-- Confirming a new replenishment assigns its creator and starts it directly as *In progress*
-- Additional assignees can be attached to a replenishment
-- **Handoff chat**: each request has its own message thread, so assignees can leave notes on where they stopped; everyone with board access can read it
-- **Retention**: cancelled requests are removed after 7 days, and the chat of finalized requests after 30 days (cleanup runs lazily, at most once a day)
-
-### QR Codes, Barcodes & Labels
-
-- One label per product with both a QR Code (Produzzy logo in the center) and a Code 128 barcode
-- Product picker with search, select all and pagination, plus a copies counter
-- Live preview of the real A4 sheet generated by the API
-- Download as PDF or print directly (up to 120 labels per request)
-- **Camera scanner**: read a product's QR Code or barcode with the device camera to open its stock-movement flow directly
-
-### Interface & UX
-
-- Redesigned interface (spec in [`docs/redesign/`](./docs/redesign/)): one visual system for colors, status badges and stock levels
-- Desktop: compact icon sidebar; phones: one-line header, bottom tab bar and a "+" quick-action button
-- Login landing page with the sign-in card centered and a product showcase revealed as you scroll
-- Light and dark modes with a persistent theme preference and an in-menu toggle
-- Team popover with member photos and pending invites listed separately
-- Accessibility: AA text contrast in both themes, visible keyboard focus, and form validation messages in Portuguese
-- Loading, empty, error, and confirmation states
-- Subtle interface transitions and motion (respects "reduce motion")
-
----
-
-## Tech Stack
-
-### Frontend
-
-- React 19
-- Vite
-- JavaScript (JSX)
-- React Router (`react-router-dom`)
-- TanStack Query (React Query) for server-state
-- ZXing (`@zxing/browser`) for QR / barcode scanning
-- jsPDF for the personal-data PDF export
-- Plain CSS
-- Context API
-
-### Backend
-
-- Python
-- FastAPI
-- SQLAlchemy
-- Pydantic
-- Alembic (migrations)
-- python-jose (JWT) · passlib + bcrypt (password hashing)
-- Pillow, `qrcode`, and `python-barcode` (QR/barcode/label generation)
-- Cloudinary (profile and product photos)
-- SMTP (provider-agnostic) for password-reset and recovery e-mails
-
-### Database
-
-- PostgreSQL (hosted on Neon in production)
-
-### Deployment
-
-- Render (API web service and static frontend) + Neon (managed PostgreSQL)
-
-### Development Tools
-
-- Git & GitHub
-- Swagger / OpenAPI
-- Pytest
-- ESLint
-- GitHub Actions (CI)
-
----
-
-## Architecture
-
-```text
-                    ┌─────────────────────────┐
-                    │     React + Vite SPA     │
-                    │  React Query · ZXing     │
-                    └────────────┬────────────┘
-                                 │ REST API (JWT)
-                                 ▼
-      ┌────────────────────────────────────────────────┐
-      │                    FastAPI                       │
-      │  Authentication · Workspace-scoped access        │
-      │  Business rules · Audit logging                  │
-      │  QR / barcode / label generation                 │
-      └───────┬─────────────────┬──────────────────┬─────┘
-              │                 │                  │
-         SQLAlchemy      Cloudinary (media)   Google OAuth
-              │          SMTP (e-mails)        (sign-in)
-              ▼
-      ┌─────────────────────┐
-      │ PostgreSQL (Neon)   │
-      └─────────────────────┘
-```
-
-The application follows a workspace-scoped architecture, ensuring that products, inventory operations, replenishments, and members remain isolated between workspaces.
-
----
-
-## Project Structure
-
-```text
-Produzzy/
-├── backend/
-│   ├── alembic/                 # database migrations
-│   ├── app/
-│   │   ├── routers/             # thin HTTP layer (auth, products, stock_movements,
-│   │   │                        #   replenishment, categories, workspaces, qrcode,
-│   │   │                        #   dashboard, search, audit_logs)
-│   │   ├── crud/                # business layer (base, users, products, stock,
-│   │   │                        #   categories, workspaces, invites, replenishment,
-│   │   │                        #   dashboard, search, audit)
-│   │   ├── services/            # security, google_auth, rate_limit,
-│   │   │                        #   qrcode, avatar_storage, email
-│   │   ├── assets/              # brand icon used on QR codes/labels
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── dependencies.py
-│   │   ├── errors.py
-│   │   ├── main.py
-│   │   ├── models.py
-│   │   └── schemas.py
-│   ├── tests/
-│   ├── .env.example
-│   ├── Procfile
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/          # ui, layout, dashboard, replenishment, settings,
-│   │   │                        #   labels, auth, legal
-│   │   ├── contexts/            # Auth, Workspace, Theme
-│   │   ├── pages/               # dashboard, stock, production, labels, settings,
-│   │   │                        #   auth flows, terms/privacy, invite acceptance
-│   │   ├── services/            # API layer per domain
-│   │   ├── lib/                 # api client, formatters, pagination, activity,
-│   │   │                        #   replenishment helpers, password policy,
-│   │   │                        #   PDF data export, login motion
-│   │   └── styles/
-│   ├── .env.example
-│   └── package.json
-│
-├── docs/redesign/               # interface redesign spec and prototype
-├── .github/workflows/ci.yml     # CI: lint, build and backend tests
-├── render.yaml                  # Render Blueprint
-├── DEPLOY.md                    # deployment checklist
-├── .gitignore
-└── README.md
-```
-
----
-
-## Running Locally
-
-### Requirements
-
-Make sure you have installed:
-
-- Python 3
-- Node.js
-- npm
-- PostgreSQL
-- Git
-
----
-
-### 1. Clone the repository
+# Produzzy — estoque e reposição em equipe
+
+SaaS full-stack para organizar produtos, registrar entradas e saídas e acompanhar a reposição do que está acabando, com a equipe inteira trabalhando no mesmo workspace. Feito com **React**, **FastAPI** e **PostgreSQL**, com deploy no Render e banco no Neon.
+
+<p align="center">
+  <img src="docs/screenshots/vitrine-login.gif" alt="Página de login: ao rolar, o card sai de cena e a vitrine do produto entra no lugar; na volta, o caminho é o inverso" width="800">
+</p>
+
+## Telas
+
+| Dashboard | Estoque |
+| --- | --- |
+| ![Dashboard com indicadores, itens que precisam de atenção, gráfico de movimentações dos últimos 7 dias e atividade recente](docs/screenshots/dashboard.png) | ![Lista de produtos com nível de estoque, status, último movimento e reposições prontas para estocar](docs/screenshots/estoque.png) |
+
+| Quadro de reposição | Chat da reposição |
+| --- | --- |
+| ![Quadro com as colunas Necessário repor, Em andamento e Pronto para estocar](docs/screenshots/reposicao.png) | ![Chat de uma reposição com recados entre os responsáveis](docs/screenshots/chat-reposicao.png) |
+
+| Etiquetas | Tema escuro |
+| --- | --- |
+| ![Seleção de produtos e prévia da folha A4 com QR Code e código de barras](docs/screenshots/etiquetas.png) | ![Dashboard no tema escuro](docs/screenshots/dashboard-escuro.png) |
+
+| Login | Celular |
+| --- | --- |
+| ![Tela de login](docs/screenshots/login.png) | <img src="docs/screenshots/mobile-dashboard.png" alt="Dashboard no celular" width="190"> <img src="docs/screenshots/mobile-reposicao.png" alt="Quadro de reposição no celular" width="190"> |
+
+## Funcionalidades
+
+- **Dashboard:** produtos ativos, itens abaixo do mínimo, zerados e movimentações do dia, com uma lista do que precisa de atenção, reposições paradas há 3 dias ou mais, gráfico de entradas e saídas dos últimos 7 dias e feed de atividade da equipe.
+- **Estoque:** produtos por categoria, com foto opcional, barra de nível, status calculado pelo estoque mínimo e último movimento ("Ana · saída de 2 · 23/10"). Tem filtros, busca, paginação, histórico e lixeira com restauração.
+- **Movimentações:** entradas, saídas e ajustes com motivo, registrando quem fez, a quantidade antes e depois e o horário.
+- **Reposição:** quadro com as etapas *Necessário repor*, *Em andamento* e *Pronto para estocar*. Cada card mostra o responsável, há quanto tempo está aberto e a próxima ação. Há um chat por pedido para a passagem de turno. No celular, uma etapa por vez.
+- **Etiquetas:** QR Code (com o logo no centro) e código de barras Code 128 na mesma etiqueta, com prévia da folha A4 gerada pela API e download em PDF ou impressão.
+- **Leitor pela câmera:** escanear a etiqueta abre direto a movimentação daquele produto.
+- **Workspaces:** vários por conta, com dados isolados. Convites por e-mail ou por link, com papéis (dono, admin, funcionário, leitor) e cargos livres ("Gerente", "Estoquista").
+- **Conta:** login com e-mail e senha ou com Google, "lembrar de mim" por 30 dias, recuperação de senha por e-mail, e-mail de recuperação reserva e foto de perfil com recorte.
+- **LGPD:** Termos de Uso, Política de Privacidade, exportação dos dados pessoais em PDF e exclusão da conta.
+- **Interface:** tema claro e escuro, layout próprio para celular (barra inferior e botão "+"), contraste AA, foco visível no teclado e respeito à opção "reduzir movimento".
+
+## Decisões técnicas
+
+- **Workspace em todas as rotas.** Toda rota de dados fica sob `/workspaces/{id}/...` e passa pela checagem de papel antes de qualquer leitura ou escrita, então um membro nunca enxerga outro workspace.
+- **Estoque nunca fica negativo.** A regra é validada no código e também no banco, com um `CHECK (quantity >= 0)`. Movimentações simultâneas no mesmo produto travam a linha com `SELECT ... FOR UPDATE`, e há um teste de concorrência cobrindo esse caso.
+- **Soft delete com nomes únicos.** Produtos e categorias excluídos vão para a lixeira, e um índice único parcial (`WHERE is_active`) impede nomes repetidos só entre os ativos. Assim, dá para recriar um item com o mesmo nome do que foi excluído.
+- **Uma reposição ativa por produto.** Também é garantido por índice único, não só pela interface.
+- **Trocar a senha encerra as outras sessões.** O JWT carrega uma impressão digital do hash da senha. Quando a senha muda, os tokens antigos deixam de valer, e o link de redefinição só funciona uma vez.
+- **Rate limit com o IP real.** O limite de tentativas no login, no cadastro, em "esqueci a senha" e no aceite de convite usa o último IP do `X-Forwarded-For`, que é o único confiável atrás do proxy do Render.
+- **Retenção preguiçosa.** Reposições canceladas somem depois de 7 dias, e o chat das finalizadas depois de 30. A limpeza roda no máximo uma vez por dia, quando o quadro é aberto, sem precisar de cron.
+- **Trilha de auditoria.** Cada ação relevante gera um registro com metadados em JSONB, que alimenta o feed de atividade do dashboard.
+- **Camadas finas.** Os routers só tratam HTTP, as regras ficam em `crud/` e as integrações (e-mail, Google, Cloudinary, QR Code) em `services/`.
+
+## Tecnologias
+
+| Frontend | Backend | Infra |
+| --- | --- | --- |
+| React 19 | Python e FastAPI | PostgreSQL (Neon) |
+| Vite e React Router | SQLAlchemy e Alembic | Render (API e site estático) |
+| TanStack Query | Pydantic | GitHub Actions (CI) |
+| ZXing (leitor de QR e código de barras) | JWT (python-jose) e bcrypt | Cloudinary (fotos) |
+| jsPDF | Pillow, qrcode e python-barcode | SMTP (e-mails) |
+| CSS puro (sem framework) | Pytest | |
+
+## Como rodar
+
+Requisitos: **Python 3**, **Node.js** e **PostgreSQL**.
 
 ```bash
 git clone https://github.com/LBMedeiros/Produzzy.git
 cd Produzzy
 ```
 
----
-
-### 2. Backend setup
-
-Enter the backend directory:
+**Backend** (em um terminal):
 
 ```bash
 cd backend
-```
-
-Create a virtual environment:
-
-```bash
 python -m venv venv
-```
-
-Activate it on Linux/macOS:
-
-```bash
-source venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
+source venv/bin/activate        # no Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-Create your local environment file:
-
-```bash
-cp .env.example .env
-```
-
-Configure your PostgreSQL connection and application secrets in `.env`.
-
-Run database migrations:
-
-```bash
+cp .env.example .env            # ajuste a DATABASE_URL e o PRODUZZY_SECRET_KEY
 alembic upgrade head
-```
-
-Start the API:
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-The API will be available at:
-
-```text
-http://127.0.0.1:8000
-```
-
-Swagger documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
----
-
-### 3. Frontend setup
-
-Open another terminal:
+**Frontend** (em outro terminal):
 
 ```bash
 cd frontend
-```
-
-Install dependencies:
-
-```bash
 npm install
-```
-
-Create the local environment file:
-
-```bash
 cp .env.example .env.local
-```
-
-Start the development server:
-
-```bash
 npm run dev
 ```
 
-The frontend will normally be available at:
+Abra **http://localhost:5173** e crie uma conta. A API fica em `http://127.0.0.1:8000`, com a documentação interativa em `/docs`.
 
-```text
-http://localhost:5173
+| Comando | Onde | O que faz |
+| --- | --- | --- |
+| `uvicorn app.main:app --reload` | `backend/` | Sobe a API com recarga automática |
+| `alembic upgrade head` | `backend/` | Aplica as migrations |
+| `python -m pytest` | `backend/` | Roda os testes (exige `DATABASE_URL_TEST`) |
+| `npm run dev` | `frontend/` | Sobe o frontend em `localhost:5173` |
+| `npm run build` | `frontend/` | Gera o build de produção |
+| `npm run lint` | `frontend/` | Verifica o código com ESLint |
+
+## Variáveis de ambiente
+
+`backend/.env` (lista completa em [`backend/.env.example`](backend/.env.example)):
+
+| Variável | Obrigatória | Descrição |
+| --- | --- | --- |
+| `DATABASE_URL` | Sim | Conexão com o PostgreSQL |
+| `PRODUZZY_SECRET_KEY` | Sim | Segredo que assina os tokens (longo e aleatório em produção) |
+| `PRODUZZY_ALLOWED_ORIGINS` | Não | Endereços do frontend liberados no CORS, separados por vírgula |
+| `DATABASE_URL_TEST` | Para testes | Banco separado para a suíte de testes |
+| `PRODUZZY_GOOGLE_CLIENT_ID` / `_SECRET` | Não | Login com Google |
+| `PRODUZZY_CLOUDINARY_*` | Não | Upload de foto de perfil e de produto (as três juntas) |
+| `PRODUZZY_SMTP_*` | Não | Envio dos e-mails de recuperação de senha |
+
+`frontend/.env.local`:
+
+| Variável | Descrição |
+| --- | --- |
+| `VITE_API_URL` | Endereço da API (padrão `http://127.0.0.1:8000`) |
+| `VITE_GOOGLE_CLIENT_ID` | Client ID do Google, se o login com Google estiver ativo |
+
+## API
+
+Rotas autenticadas exigem `Authorization: Bearer <token>`. A referência completa fica no Swagger, em `/docs`.
+
+| Grupo | Rotas principais |
+| --- | --- |
+| Autenticação | `POST /auth/register`, `POST /auth/login`, `POST /auth/google`, `POST /auth/forgot-password`, `GET /auth/me` |
+| Workspaces | `GET/POST /workspaces`, membros, convites (`/invites`, `/invite-links`) |
+| Produtos | `GET/POST /workspaces/{id}/products`, `/low-stock`, `/{produto}/restore`, `/{produto}/image` |
+| Movimentações | `POST /workspaces/{id}/products/{produto}/stock`, `GET /workspaces/{id}/stock-movements` |
+| Reposição | `GET/POST /workspaces/{id}/replenishments`, responsáveis, `/{pedido}/messages` |
+| Etiquetas | QR Code, código de barras e folha A4 por produto |
+| Painel | `GET /workspaces/{id}/dashboard`, busca global e audit log |
+| Saúde | `GET /health` e `GET /ready` |
+
+## Qualidade e deploy
+
+- **155 testes de integração** com Pytest, rodando contra um PostgreSQL de verdade. Cobrem permissões, isolamento entre workspaces, concorrência no estoque, convites, reposição e recuperação de senha.
+- **CI no GitHub Actions** em todo pull request: lint e build do frontend e a suíte do backend com PostgreSQL 16.
+- **Deploy no Render** pelo Blueprint [`render.yaml`](render.yaml). As migrations rodam antes de cada deploy, e o banco é um PostgreSQL gerenciado no Neon. O passo a passo completo está em [`DEPLOY.md`](DEPLOY.md).
+
+## Estrutura
+
+```
+├── backend/
+│   ├── app/
+│   │   ├── routers/         # Camada HTTP: auth, produtos, estoque, reposição, workspaces...
+│   │   ├── crud/            # Regras de negócio
+│   │   ├── services/        # Segurança, Google, e-mail, Cloudinary, QR Code, rate limit
+│   │   ├── models.py        # Tabelas (SQLAlchemy)
+│   │   └── schemas.py       # Validação de entrada e saída (Pydantic)
+│   ├── alembic/             # Migrations
+│   └── tests/               # Testes de integração
+├── frontend/
+│   └── src/
+│       ├── pages/           # Dashboard, Estoque, Reposição, Etiquetas, Configurações, login...
+│       ├── components/      # Layout, UI, reposição, etiquetas, auth
+│       ├── contexts/        # Sessão, workspace ativo e tema
+│       ├── services/        # Chamadas à API por domínio
+│       └── lib/             # Cliente HTTP, formatação, senha, exportação em PDF
+├── docs/                    # Spec do redesign e imagens deste README
+├── render.yaml              # Blueprint do Render
+└── DEPLOY.md                # Checklist de deploy
 ```
 
----
+## Próximos passos
 
-## Environment Variables
+- QA ponta a ponta de todos os fluxos
+- Ampliar a cobertura de testes automatizados
+- Monitoramento e backups em produção
 
-### Backend
+## Autor
 
-Example (see [`backend/.env.example`](./backend/.env.example) for the full list):
-
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/produzzy
-# Dedicated test database (must differ from DATABASE_URL)
-# DATABASE_URL_TEST=postgresql://user:password@localhost:5432/produzzy_test
-
-PRODUZZY_ENV=development
-PRODUZZY_API_VERSION=
-PRODUZZY_ALLOWED_ORIGINS=http://localhost:5173
-
-PRODUZZY_SECRET_KEY=replace-with-a-long-random-secret-key
-PRODUZZY_JWT_ALGORITHM=HS256
-PRODUZZY_ACCESS_TOKEN_EXPIRE_MINUTES=60
-# Session length when "remember me" is checked
-PRODUZZY_REMEMBER_ME_EXPIRE_DAYS=30
-
-PRODUZZY_LOGIN_RATE_LIMIT_ATTEMPTS=5
-PRODUZZY_LOGIN_RATE_LIMIT_WINDOW_SECONDS=300
-PRODUZZY_REGISTER_RATE_LIMIT_ATTEMPTS=5
-PRODUZZY_REGISTER_RATE_LIMIT_WINDOW_SECONDS=300
-PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_ATTEMPTS=5
-PRODUZZY_INVITE_ACCEPT_RATE_LIMIT_WINDOW_SECONDS=300
-PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_ATTEMPTS=5
-PRODUZZY_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_SECONDS=900
-
-# Lifetime of e-mailed links, in minutes
-PRODUZZY_PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=30
-# PRODUZZY_EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES=
-
-# Optional — Sign in with Google
-PRODUZZY_GOOGLE_CLIENT_ID=
-PRODUZZY_GOOGLE_CLIENT_SECRET=
-
-# Optional — profile and product photo upload (all three required together)
-PRODUZZY_CLOUDINARY_CLOUD_NAME=
-PRODUZZY_CLOUDINARY_API_KEY=
-PRODUZZY_CLOUDINARY_API_SECRET=
-
-# Optional — SMTP e-mail, required for password recovery and recovery-e-mail confirmation
-PRODUZZY_SMTP_HOST=
-PRODUZZY_SMTP_PORT=587
-PRODUZZY_SMTP_USER=
-PRODUZZY_SMTP_PASSWORD=
-PRODUZZY_SMTP_FROM=
-PRODUZZY_SMTP_FROM_NAME=Produzzy
-PRODUZZY_SMTP_USE_TLS=true
-# Public frontend URL used in the reset link (defaults to first allowed origin)
-PRODUZZY_APP_BASE_URL=
-
-# Optional — PostgreSQL connection pool tuning
-# DB_POOL_RECYCLE_SECONDS=1800
-# DB_POOL_SIZE=5
-# DB_MAX_OVERFLOW=10
-```
-
-### Frontend
-
-```env
-VITE_API_URL=http://127.0.0.1:8000
-VITE_GOOGLE_CLIENT_ID=
-```
-
-Never commit real secrets, database credentials, access tokens, or OAuth client secrets.
-
----
-
-## Database Migrations
-
-Produzzy uses Alembic for database schema migrations.
-
-Apply all migrations:
-
-```bash
-alembic upgrade head
-```
-
-Check the current migration:
-
-```bash
-alembic current
-```
-
-Check the latest available migration:
-
-```bash
-alembic heads
-```
-
----
-
-## Quality Checks
-
-### Frontend
-
-Run ESLint:
-
-```bash
-npm run lint
-```
-
-Create a production build:
-
-```bash
-npm run build
-```
-
-### Backend
-
-Run the test suite (integration tests against a real PostgreSQL database; requires `DATABASE_URL_TEST`):
-
-```bash
-python -m pytest
-```
-
-Compile the backend modules:
-
-```bash
-python -m compileall app alembic tests
-```
-
-### Continuous Integration
-
-Every pull request runs [GitHub Actions](./.github/workflows/ci.yml): the frontend lint and build, and the backend test suite against a PostgreSQL 16 service.
-
----
-
-## Deployment
-
-Produzzy is deployed on **Render** using the [`render.yaml`](./render.yaml) Blueprint, which provisions the FastAPI API and the static React frontend. The database is an external managed PostgreSQL on **Neon** (pooled connection string with `sslmode=require` in `DATABASE_URL`); the Blueprint keeps a commented-out Render Postgres block as an alternative.
-
-- Migrations run automatically as a pre-deploy step (`alembic upgrade head`).
-- The API exposes `/health` and `/ready` probes.
-- The frontend is served as an SPA with a `/* → /index.html` rewrite.
-
-The full operational checklist (required environment variables, Neon, Google OAuth, Cloudinary, SMTP, and post-deploy smoke tests) lives in [`DEPLOY.md`](./DEPLOY.md).
-
----
-
-## Screenshots
-
-> Screenshots and a live demo will be added as the public release is finalized.
-
-Suggested showcase:
-
-- Dashboard
-- Inventory
-- Replenishment workflow
-- QR Code, barcode & labels
-- Camera scanner
-- Workspace settings
-- Dark mode
-- Mobile experience
-
----
-
-## Current Status
-
-**Produzzy is under active development and deployed to production.**
-
-The core SaaS architecture and inventory workflow are implemented, the full interface redesign has shipped, and the app is live on Render. Current work focuses on:
-
-- end-to-end quality assurance;
-- permission and workspace isolation testing;
-- concurrent inventory operation testing;
-- expanded automated test coverage;
-- production monitoring and backups.
-
----
-
-## Roadmap
-
-- [x] Email/password authentication
-- [x] JWT authentication
-- [x] Google OAuth
-- [x] Multi-workspace architecture
-- [x] Workspace invitations (individual and link-based)
-- [x] Role-based access
-- [x] Custom member titles
-- [x] Product and category management
-- [x] Stock movements
-- [x] Negative stock validation
-- [x] Low-stock monitoring
-- [x] Replenishment workflow
-- [x] Replenishment handoff chat and data retention
-- [x] Activity & stock movement audit trail
-- [x] Product soft delete
-- [x] QR Code, barcode, and label generation
-- [x] Camera QR / barcode scanner
-- [x] Profile photo upload with crop editor
-- [x] Light and dark themes
-- [x] Mobile-responsive interface
-- [x] Password recovery and backup recovery e-mail
-- [x] Password strength policy
-- [x] Terms of Use, Privacy Policy, and LGPD data rights (PDF export, account deletion)
-- [x] Production deployment (Render + Neon)
-- [x] Continuous integration (GitHub Actions)
-- [x] Dashboard with 7-day movement chart
-- [x] Full interface redesign (desktop and mobile)
-- [x] A4 label sheets with PDF download
-- [ ] Complete end-to-end QA
-- [ ] Expanded automated test coverage
-- [ ] Production monitoring and backups
-
----
-
-## Why Produzzy?
-
-Produzzy started from a real inventory and replenishment challenge involving a large number of products that needed to be organized, located, monitored, and replenished efficiently.
-
-Instead of building another tutorial CRUD application, the goal of Produzzy is to explore how a real operational problem can evolve into a structured full-stack product with authentication, multi-user collaboration, inventory rules, auditability, and scalable software architecture.
-
----
-
-## Author
-
-**Lucas Medeiros**
-
-Software Engineering Student & Full Stack Developer
-
-- GitHub: [LBMedeiros](https://github.com/LBMedeiros)
-- LinkedIn: [linkedin.com/in/lbmedeiros](https://linkedin.com/in/lbmedeiros)
-
----
-
-Built with React, FastAPI and PostgreSQL.
+Feito por **Lucas Medeiros** · [GitHub](https://github.com/LBMedeiros) · [LinkedIn](https://linkedin.com/in/lbmedeiros)
