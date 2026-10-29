@@ -2,6 +2,8 @@
 
 SaaS full-stack para organizar produtos, registrar entradas e saídas e acompanhar a reposição do que está acabando, com a equipe inteira trabalhando no mesmo workspace. Feito com **React**, **FastAPI** e **PostgreSQL**, com deploy no Render e banco no Neon.
 
+**🔗 Acesse: [produzzy.onrender.com](https://produzzy.onrender.com)**
+
 <p align="center">
   <img src="docs/screenshots/vitrine-login.gif" alt="Página de login: ao rolar, o card sai de cena e a vitrine do produto entra no lugar; na volta, o caminho é o inverso" width="800">
 </p>
@@ -141,7 +143,7 @@ Rotas autenticadas exigem `Authorization: Bearer <token>`. A referência complet
 
 - **155 testes de integração** com Pytest, rodando contra um PostgreSQL de verdade. Cobrem permissões, isolamento entre workspaces, concorrência no estoque, convites, reposição e recuperação de senha.
 - **CI no GitHub Actions** em todo pull request: lint e build do frontend e a suíte do backend com PostgreSQL 16.
-- **Deploy no Render** pelo Blueprint [`render.yaml`](render.yaml). As migrations rodam antes de cada deploy, e o banco é um PostgreSQL gerenciado no Neon. O passo a passo completo está em [`DEPLOY.md`](DEPLOY.md).
+- **Em produção** em [produzzy.onrender.com](https://produzzy.onrender.com), com deploy no Render pelo Blueprint [`render.yaml`](render.yaml). As migrations rodam antes de cada deploy, e o banco é um PostgreSQL gerenciado no Neon. O passo a passo completo está em [`DEPLOY.md`](DEPLOY.md).
 
 ## Estrutura
 
