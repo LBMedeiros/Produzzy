@@ -49,6 +49,7 @@ ACTIVE_PRODUCT_NAME_EXISTS = (
 ANOTHER_ACTIVE_PRODUCT_NAME_EXISTS = (
     "Já existe outro produto ativo com esse nome neste workspace."
 )
+DUPLICATE_CATEGORY_NAME = "Já existe uma categoria com esse nome neste workspace."
 ANOTHER_ACTIVE_CATEGORY_NAME_EXISTS = (
     "Já existe outra categoria ativa com esse nome neste workspace."
 )
