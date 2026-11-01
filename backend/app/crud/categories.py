@@ -80,7 +80,7 @@ def create_category(
     )
 
     if existing_category:
-        raise ValidationError("Já existe uma categoria com esse nome neste workspace.")
+        raise ValidationError(DUPLICATE_CATEGORY_NAME)
 
     new_category = models.Category(
         workspace_id=workspace_id,
@@ -88,26 +88,24 @@ def create_category(
         description=category_data.description,
     )
 
-    db.add(new_category)
-    db.flush()
-    create_audit_log(
-        db=db,
-        workspace_id=workspace_id,
-        user_id=user_id,
-        action="category.created",
-        entity_type="category",
-        entity_id=new_category.id,
-        metadata={"name": new_category.name},
-    )
-
+    # Two admins creating the same name at once both pass the check above; the
+    # unique index stops the second one at flush, so keep the flush inside try.
     try:
+        db.add(new_category)
+        db.flush()
+        create_audit_log(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            action="category.created",
+            entity_type="category",
+            entity_id=new_category.id,
+            metadata={"name": new_category.name},
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise ValidationError(
-            "Não foi possível criar a categoria com esse nome. "
-            "No SQLite atual ainda pode existir uma constraint global antiga."
-        )
+        raise ValidationError(DUPLICATE_CATEGORY_NAME)
 
     db.refresh(new_category)
 
@@ -165,7 +163,7 @@ def update_category(
         )
 
         if existing_category and existing_category.id != category.id:
-            raise ValidationError("Já existe uma categoria com esse nome neste workspace.")
+            raise ValidationError(DUPLICATE_CATEGORY_NAME)
 
         update_data["name"] = new_name
 
@@ -174,37 +172,35 @@ def update_category(
     for field, value in update_data.items():
         setattr(category, field, value)
 
-    if "name" in update_data and category.name != old_name:
-        # Keep the denormalized product.category in sync with the rename.
-        db.query(models.Product).filter(
-            models.Product.workspace_id == workspace_id,
-            models.Product.category_id == category.id,
-        ).update(
-            {models.Product.category: category.name},
-            synchronize_session=False,
-        )
-
-    create_audit_log(
-        db=db,
-        workspace_id=workspace_id,
-        user_id=user_id,
-        action="category.updated",
-        entity_type="category",
-        entity_id=category.id,
-        metadata={
-            "name": category.name,
-            "fields": sorted(update_data.keys()),
-        },
-    )
-
+    # The product sync below autoflushes the new name, which is where a
+    # concurrent rename to the same name hits the unique index.
     try:
+        if "name" in update_data and category.name != old_name:
+            # Keep the denormalized product.category in sync with the rename.
+            db.query(models.Product).filter(
+                models.Product.workspace_id == workspace_id,
+                models.Product.category_id == category.id,
+            ).update(
+                {models.Product.category: category.name},
+                synchronize_session=False,
+            )
+
+        create_audit_log(
+            db=db,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            action="category.updated",
+            entity_type="category",
+            entity_id=category.id,
+            metadata={
+                "name": category.name,
+                "fields": sorted(update_data.keys()),
+            },
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise ValidationError(
-            "Não foi possível atualizar a categoria com esse nome. "
-            "No SQLite atual ainda pode existir uma constraint global antiga."
-        )
+        raise ValidationError(DUPLICATE_CATEGORY_NAME)
 
     db.refresh(category)
 
