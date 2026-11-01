@@ -1,23 +1,38 @@
+from contextlib import nullcontext
+
+from anyio import Semaphore, to_thread
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
-from app.database import SessionLocal
+from app.database import POOL_CAPACITY, SessionLocal
 from app.services.security_service import decode_access_token, session_fingerprint
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
-def get_db():
-    db = SessionLocal()
+# Sync endpoints run on the shared request threadpool (40 threads), and so do
+# their response serialization and the session close. With a plain generator
+# dependency a burst of requests (e.g. 100 logins at once) could leave every
+# thread blocked waiting for a pooled connection (5 + 10) while the
+# connections belonged to requests waiting for a thread to finish: a deadlock
+# that only ended when the pool timed out (500s after 30s). Capping requests
+# that hold a session at the pool size makes the wait happen here, on the
+# event loop, so a thread never blocks on the pool.
+_db_slots = Semaphore(POOL_CAPACITY) if POOL_CAPACITY else nullcontext()
 
-    try:
-        yield db
-    finally:
-        db.close()
+
+async def get_db():
+    async with _db_slots:
+        db = SessionLocal()
+
+        try:
+            yield db
+        finally:
+            await to_thread.run_sync(db.close)
 
 
 def get_current_user(

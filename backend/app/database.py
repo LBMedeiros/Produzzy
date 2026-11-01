@@ -25,6 +25,13 @@ if not is_sqlite_database:
     engine_options["pool_size"] = _int_env("DB_POOL_SIZE", 5)
     engine_options["max_overflow"] = _int_env("DB_MAX_OVERFLOW", 10)
 
+# How many connections the pool hands out at most (None = unbounded, SQLite).
+POOL_CAPACITY = (
+    None
+    if is_sqlite_database
+    else engine_options["pool_size"] + engine_options["max_overflow"]
+)
+
 
 engine = create_engine(
     DATABASE_URL,
