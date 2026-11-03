@@ -8,8 +8,8 @@ A referência visual é o protótipo **`docs/redesign/prototipo.html`**: abra no
 botões **Computador / Celular** e **Escuro / Claro** no topo. O protótipo é estático (dados de
 exemplo, sem requisições); a implementação deve usar os dados reais da API.
 
-> **Para quem for implementar (incluindo o Claude Code):** leia este arquivo inteiro, o
-> `AGENTS.md` e o `CLAUDE.md` antes de começar. Implemente **uma fase por vez** (seção 5), rode as
+> **Para quem for implementar (incluindo o Claude Code):** leia este arquivo inteiro e o
+> `CLAUDE.md` antes de começar. Implemente **uma fase por vez** (seção 5), rode as
 > verificações da seção 6 ao final de cada fase e pare para revisão humana antes da próxima.
 
 ---
@@ -39,7 +39,7 @@ exemplo, sem requisições); a implementação deve usar os dados reais da API.
 - **Geração de QR Codes / etiquetas** (`backend/app/services/qrcode_service.py`): os QR Codes reais
   têm a **logo do Produzzy no centro** com correção de erro **H**. Manter exatamente assim. A tela
   de Etiquetas deve exibir as imagens reais geradas pela API, não desenhos.
-- Regras de negócio, permissões, isolamento por workspace e auditoria do `AGENTS.md`.
+- Regras de negócio, permissões, isolamento por workspace e auditoria do `CLAUDE.md`.
 - Stack: React 19 + Vite, **CSS puro em `src/styles/global.css`**, sem biblioteca de componentes,
   sem CSS-in-JS, sem Tailwind. Serviços em `services/*Service.js` chamando `lib/api.js`.
 - Paginação existente (`components/ui/Pagination.jsx`, `lib/pagination.js`) e a busca de todas
@@ -156,7 +156,7 @@ seção 6 e pare.
   escala, cores dos tokens.
 - **Atividade recente legível**: "Ana deu entrada de +20 cx. em Luva nitrílica P · há 10 min"
   (nunca "Item relacionado: 1").
-- **Backend necessário** (seguir o padrão router → crud → schema e as regras do `AGENTS.md`, com
+- **Backend necessário** (seguir o padrão router → crud → schema e as regras do `CLAUDE.md`, com
   testes): incluir no retorno do dashboard (a) o nome do usuário de cada atividade e dados
   suficientes para a frase legível (nome do produto, quantidade, tipo), (b) movimentações por dia
   dos últimos 7 dias (entradas e saídas), (c) reposições "paradas" (em andamento sem atualização
