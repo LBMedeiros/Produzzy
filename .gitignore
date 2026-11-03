@@ -17,6 +17,5 @@ frontend/.env.*.local
 .DS_Store
 .vscode/
 
-# Root enviroment
+# Root environment
 .env
-.atlas/

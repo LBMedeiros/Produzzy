@@ -31,7 +31,7 @@ function buildSharedInviteLink(inviteLink) {
   )}`
 }
 
-// What each permission allows (mirrors the role matrix in AGENTS.md).
+// What each permission allows (mirrors the role matrix in CLAUDE.md).
 const ROLE_DESCRIPTIONS = {
   admin:
     'Cadastra produtos e categorias, movimenta o estoque, cuida das reposições e da equipe.',

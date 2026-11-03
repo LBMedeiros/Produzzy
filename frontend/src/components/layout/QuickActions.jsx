@@ -6,7 +6,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { getWorkspaceRoleValue } from '../../lib/formatters'
 import ProductPickerModal from './ProductPickerModal'
 
-// Roles allowed to move stock and to create replenishments (AGENTS.md).
+// Roles allowed to move stock and to create replenishments (CLAUDE.md).
 const ACTION_ROLES = new Set(['owner', 'admin', 'employee'])
 
 // Which quick action the "+" button runs on each page (docs/redesign §4.2).
