@@ -1898,6 +1898,76 @@ a {
   font-size: 12px;
 }
 
+/* Crown marking the workspace owner ("Responsável pelo workspace"); icon only
+   so it never widens the row. */
+.member-row__meta .member-row__crown {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  color: var(--warning);
+}
+
+.member-row__crown svg,
+.members-popover__legend-crown svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  fill: var(--warning-soft);
+}
+
+/* "O que cada cargo pode fazer?" */
+.members-popover__legend {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.members-popover__legend summary {
+  color: var(--blue);
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.members-popover__legend dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 2px;
+}
+
+.members-popover__legend dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+}
+
+.members-popover__legend dd {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+.members-popover__legend-cargos {
+  display: block;
+  color: var(--text);
+  font-weight: 650;
+}
+
+.members-popover__legend-crown {
+  display: inline-flex;
+  color: var(--warning);
+}
+
+.members-popover__legend-crown svg {
+  width: 15px;
+  height: 15px;
+}
+
 .members-popover__feedback,
 .members-popover__empty {
   border-radius: 7px;
@@ -2100,6 +2170,20 @@ a {
 .select-menu__option:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+/* Group header inside a SelectMenu (e.g. cargos grouped by access level). */
+.select-menu__group {
+  padding: 8px 10px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.select-menu__group:first-child {
+  padding-top: 2px;
 }
 
 .page-heading p {

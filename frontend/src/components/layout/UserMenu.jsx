@@ -64,8 +64,8 @@ function UserMenu({ user, onClose, onInvite }) {
   const roleLabel = formatWorkspaceRole(
     getWorkspaceRoleValue(user, activeWorkspace),
   )
-  // Cosmetic title set by the workspace owner (feature phase 1). Falls back to
-  // the access-role label until a title exists.
+  // The member's cargo; falls back to the access-level label until a cargo
+  // exists.
   const customTitle = activeWorkspace?.current_user_title?.trim() || ''
   const contextLabel = customTitle || roleLabel
   const isDark = resolvedTheme === 'dark'

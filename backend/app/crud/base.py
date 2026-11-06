@@ -12,37 +12,57 @@ from app import models, schemas
 from app.errors import *  # noqa: F401,F403 -- re-exported to every crud module
 from app.services.security_service import get_password_hash, verify_password
 
-READ_ROLES = {"owner", "admin", "employee", "viewer"}
-PRODUCT_WRITE_ROLES = {"owner", "admin"}
-CATEGORY_WRITE_ROLES = {"owner", "admin"}
-STOCK_WRITE_ROLES = {"owner", "admin", "employee"}
-REPLENISHMENT_CREATE_ROLES = {"owner", "admin", "employee"}
-REPLENISHMENT_UPDATE_ROLES = {"owner", "admin", "employee"}
-REPLENISHMENT_ASSIGN_ROLES = {"owner", "admin", "employee"}
-REPLENISHMENT_MANAGE_ASSIGNEES_ROLES = {"owner", "admin"}
+# Access levels (`WorkspaceMember.role`), from most to least access:
+#   owner     — "Responsável pelo workspace" (crown); full access, any cargo.
+#   admin     — Administração: everything, including members, cargos, invites.
+#   manager   — Gestão: everything except members, cargos and invites.
+#   employee  — Operação: stock movements and replenishment work.
+#   requester — Solicitante: read access plus opening replenishment needs.
+#   viewer    — Visualizador: read-only (shareable invite links).
+READ_ROLES = {"owner", "admin", "manager", "employee", "requester", "viewer"}
+PRODUCT_WRITE_ROLES = {"owner", "admin", "manager"}
+CATEGORY_WRITE_ROLES = {"owner", "admin", "manager"}
+STOCK_WRITE_ROLES = {"owner", "admin", "manager", "employee"}
+REPLENISHMENT_CREATE_ROLES = {"owner", "admin", "manager", "employee", "requester"}
+REPLENISHMENT_UPDATE_ROLES = {"owner", "admin", "manager", "employee"}
+REPLENISHMENT_ASSIGN_ROLES = {"owner", "admin", "manager", "employee"}
+# Who can be responsible for (assigned to) a replenishment: Operação and up.
+REPLENISHMENT_ASSIGNEE_ROLES = {"owner", "admin", "manager", "employee"}
+REPLENISHMENT_MANAGE_ASSIGNEES_ROLES = {"owner", "admin", "manager"}
 MEMBER_MANAGE_ROLES = {"owner", "admin"}
 MEMBER_ROLE_UPDATE_ROLES = {"owner", "admin"}
 INVITE_MANAGE_ROLES = {"owner", "admin"}
-AUDIT_LOG_READ_ROLES = {"owner", "admin"}
-ADMIN_MEMBER_TARGET_ROLES = {"employee", "viewer"}
-# Only the workspace owner assigns display titles ("dono define de todos").
+AUDIT_LOG_READ_ROLES = {"owner", "admin", "manager"}
+# Levels an admin may manage (assign, invite, remove). Admin-level cargos are
+# assigned only by the workspace owner.
+ADMIN_MEMBER_TARGET_ROLES = {"manager", "employee", "requester", "viewer"}
+ADMIN_MANAGE_TARGET_DENIED = (
+    "Admin só gerencia membros de Gestão, Operação, Solicitante ou Visualizador."
+)
 MEMBER_TITLE_MANAGE_ROLES = {"owner", "admin"}
 
-# Fixed catalog of cosmetic display titles the owner can assign to members.
-# Purely a label — no effect on permissions (those stay on `role`).
+# Fixed catalog of cargos. The cargo defines the member's access level
+# (`role`); the owner keeps full access whatever cargo they pick.
 # Mirrored in the frontend (lib/formatters.js: memberTitleOptions); keep in sync.
-WORKSPACE_MEMBER_TITLES = (
-    "Sócio",
-    "Gerente",
-    "Supervisor",
-    "Coordenador",
-    "Financeiro",
-    "Comprador",
-    "Estoquista",
-    "Vendedor",
-    "Produção",
-    "Assistente",
-)
+WORKSPACE_MEMBER_TITLE_ROLES = {
+    "CEO": "admin",
+    "Sócio": "admin",
+    "Gerente": "admin",
+    "Supervisor": "manager",
+    "Coordenador": "manager",
+    "Secretário(a)": "manager",
+    "Produção": "employee",
+    "Estoquista": "employee",
+    "Financeiro": "requester",
+    "Comprador": "requester",
+    "Vendedor": "requester",
+    "Assistente": "requester",
+    "Atendente": "requester",
+    "Visualizador": "viewer",
+}
+WORKSPACE_MEMBER_TITLES = tuple(WORKSPACE_MEMBER_TITLE_ROLES)
+# Cargo given to people who join through a shareable (viewer-only) link.
+INVITE_LINK_MEMBER_TITLE = "Visualizador"
 ACTIVE_PRODUCT_NAME_EXISTS = (
     "Já existe um produto ativo com esse nome neste workspace."
 )
@@ -189,3 +209,8 @@ def normalize_member_title(title):
         raise ValidationError("Cargo inválido.")
 
     return normalized
+
+
+def get_title_role(title: str | None) -> str | None:
+    """Access level granted by a cargo (None for no/unknown cargo)."""
+    return WORKSPACE_MEMBER_TITLE_ROLES.get(title) if title else None

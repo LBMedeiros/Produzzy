@@ -24,7 +24,9 @@ const navItems = [
 function Sidebar({ isCollapsed, onNavigate, onToggleCollapsed }) {
   const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
-  const role = getWorkspaceRole(user, activeWorkspace)
+  // The cargo when there is one (as in the user menu), else the access level.
+  const role =
+    activeWorkspace?.current_user_title?.trim() || getWorkspaceRole(user, activeWorkspace)
 
   return (
     <aside

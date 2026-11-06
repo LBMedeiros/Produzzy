@@ -49,8 +49,15 @@ def validate_replenishment_assignee(
     if assigned_to_user_id is None:
         return
 
-    if get_workspace_member(workspace_id, assigned_to_user_id, db) is None:
+    assignee_member = get_workspace_member(workspace_id, assigned_to_user_id, db)
+
+    if assignee_member is None:
         raise ValidationError("O responsável deve ser membro deste workspace.")
+
+    if assignee_member.role not in REPLENISHMENT_ASSIGNEE_ROLES:
+        raise ValidationError(
+            "O responsável precisa ter um cargo de Operação ou superior."
+        )
 
 def replenishment_metadata(replenishment_request):
     return {
@@ -609,15 +616,18 @@ def create_replenishment_message(
         db,
     )
 
-    # Only people assigned to the need can comment; everyone can read.
+    # The people assigned to the need and whoever opened it can comment;
+    # everyone can read.
     is_assignee = any(
         assignee.user_id == current_user.id
         for assignee in replenishment_request.assignees
     )
+    is_creator = replenishment_request.created_by_user_id == current_user.id
 
-    if not is_assignee:
+    if not (is_assignee or is_creator):
         raise PermissionDenied(
-            "Apenas responsáveis por esta reposição podem comentar."
+            "Apenas responsáveis por esta reposição ou quem a abriu podem "
+            "comentar."
         )
 
     message = models.ReplenishmentMessage(

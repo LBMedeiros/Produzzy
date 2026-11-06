@@ -16,7 +16,11 @@ import ReplenishmentCreationModal from '../components/replenishment/Replenishmen
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { formatRelativeTime } from '../lib/activity'
-import { getFirstName, getWorkspaceRoleValue } from '../lib/formatters'
+import {
+  getFirstName,
+  getWorkspaceRoleValue,
+  replenishmentCreateRoles,
+} from '../lib/formatters'
 import { usePagination } from '../lib/pagination'
 import {
   createCategory,
@@ -90,8 +94,8 @@ const MOVEMENT_TONES = {
 const MOVEMENTS_PAGE_LIMIT = 20
 const WORKSPACE_MOVEMENTS_PAGE_LIMIT = 20
 const PRODUCTS_PAGE_SIZE = 20
-const PRODUCT_WRITE_ROLES = new Set(['owner', 'admin'])
-const STOCK_WRITE_ROLES = new Set(['owner', 'admin', 'employee'])
+const PRODUCT_WRITE_ROLES = new Set(['owner', 'admin', 'manager'])
+const STOCK_WRITE_ROLES = new Set(['owner', 'admin', 'manager', 'employee'])
 
 function getFriendlyError(error) {
   if (error?.status === 403) {
@@ -267,6 +271,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   const currentRole = getWorkspaceRoleValue(user, activeWorkspace)
   const canWriteProduct = PRODUCT_WRITE_ROLES.has(currentRole)
   const canMoveStock = STOCK_WRITE_ROLES.has(currentRole)
+  const canCreateReplenishment = replenishmentCreateRoles.has(currentRole)
 
   const [products, setProducts] = useState([])
   // Every active product, kept for the chip counts whatever the filter.
@@ -898,15 +903,21 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     setSuccessMessage('')
 
     try {
+      // "Quem confirma inicia": already starts the need and assigns the
+      // creator as responsible (see ProductionPage). A Solicitante cannot be
+      // responsible, so their need stays open for the team to pick up.
+      const startsAsResponsible = STOCK_WRITE_ROLES.has(currentRole)
       await createReplenishment(workspaceId, {
         product_id: replenishmentProduct.id,
-        // "Quem confirma inicia": already starts the need and assigns the
-        // creator as responsible (see ProductionPage).
-        assigned_to_user_id: user?.id,
+        ...(startsAsResponsible ? { assigned_to_user_id: user?.id } : {}),
         ...requestData,
       })
       setReplenishmentProduct(null)
-      setSuccessMessage('Reposição iniciada. Você é o responsável.')
+      setSuccessMessage(
+        startsAsResponsible
+          ? 'Reposição iniciada. Você é o responsável.'
+          : 'Necessidade aberta. A equipe de estoque vai assumir.',
+      )
       await loadStockData()
     } catch (createError) {
       setReplenishmentError(getFriendlyError(createError))
@@ -1432,7 +1443,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
   function shouldShowReplenishmentAction(product) {
     return Boolean(
-      canMoveStock &&
+      canCreateReplenishment &&
         product.is_active &&
         product.quantity < product.minimum_quantity,
     )

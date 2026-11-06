@@ -3,11 +3,13 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
-import { getWorkspaceRoleValue } from '../../lib/formatters'
+import {
+  getWorkspaceRoleValue,
+  replenishmentCreateRoles,
+  replenishmentOperateRoles,
+} from '../../lib/formatters'
 import ProductPickerModal from './ProductPickerModal'
 
-// Roles allowed to move stock and to create replenishments (CLAUDE.md).
-const ACTION_ROLES = new Set(['owner', 'admin', 'employee'])
 
 // Which quick action the "+" button runs on each page (docs/redesign §4.2).
 const FAB_ACTIONS = {
@@ -26,7 +28,11 @@ export function QuickActionsProvider({ children }) {
   const { user } = useAuth()
   const { activeWorkspace } = useWorkspace()
   const [pickerMode, setPickerMode] = useState(null)
-  const canAct = ACTION_ROLES.has(getWorkspaceRoleValue(user, activeWorkspace))
+  const workspaceRole = getWorkspaceRoleValue(user, activeWorkspace)
+  // canAct: moves stock (Operação and up). canRequest: opens replenishment
+  // needs, which the Solicitante also does.
+  const canAct = replenishmentOperateRoles.has(workspaceRole)
+  const canRequest = replenishmentCreateRoles.has(workspaceRole)
 
   const closePicker = useCallback(() => setPickerMode(null), [])
 
@@ -62,8 +68,8 @@ export function QuickActionsProvider({ children }) {
   )
 
   const value = useMemo(
-    () => ({ canAct, openQuickAction: setPickerMode }),
-    [canAct],
+    () => ({ canAct, canRequest, openQuickAction: setPickerMode }),
+    [canAct, canRequest],
   )
 
   return (
@@ -87,7 +93,10 @@ export function QuickActionButton() {
   const quickActions = useQuickActions()
   const action = FAB_ACTIONS[pathname]
 
-  if (!action || !quickActions?.canAct) {
+  const isAllowed =
+    action?.mode === 'replenishment' ? quickActions?.canRequest : quickActions?.canAct
+
+  if (!action || !isAllowed) {
     return null
   }
 

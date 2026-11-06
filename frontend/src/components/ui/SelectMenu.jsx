@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 function SelectMenu({
@@ -150,6 +150,13 @@ function SelectMenu({
       }
     >
       {options.map((option, index) => (
+        <Fragment key={String(option.value)}>
+        {/* Options may carry a `group`; a header opens each new group. */}
+        {option.group && option.group !== options[index - 1]?.group ? (
+          <div className="select-menu__group" role="presentation">
+            {option.group}
+          </div>
+        ) : null}
         <button
           aria-disabled={option.disabled || undefined}
           aria-selected={String(option.value) === String(value)}
@@ -157,7 +164,6 @@ function SelectMenu({
             index === activeIndex ? 'is-active' : ''
           } ${String(option.value) === String(value) ? 'is-selected' : ''}`}
           disabled={option.disabled}
-          key={String(option.value)}
           role="option"
           type="button"
           onClick={() => selectOption(option)}
@@ -169,6 +175,7 @@ function SelectMenu({
             {option.label}
           </span>
         </button>
+        </Fragment>
       ))}
     </div>
   ) : null

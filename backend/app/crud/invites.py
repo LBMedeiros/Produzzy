@@ -155,21 +155,35 @@ def create_workspace_invite(
         db,
         INVITE_MANAGE_ROLES,
     )
-    role = normalize_role(invite_data.role)
+    title = normalize_member_title(invite_data.title)
+    role = (
+        normalize_role(invite_data.role) if invite_data.role is not None else None
+    )
 
-    if (
-        current_member.role == schemas.WorkspaceRole.admin.value
-        and role not in {
-            schemas.WorkspaceRole.employee.value,
-            schemas.WorkspaceRole.viewer.value,
-        }
-    ):
-        raise PermissionDenied("Admin só pode convidar Funcionários e Visualizadores.")
+    if title is not None:
+        title_role = get_title_role(title)
+
+        if role is not None and role != title_role:
+            raise ValidationError(
+                "A permissão é definida pelo cargo escolhido."
+            )
+
+        role = title_role
+
+    if role is None:
+        raise ValidationError("Selecione um cargo para o convite.")
 
     if role == schemas.WorkspaceRole.owner.value:
         raise ValidationError("Convites não podem criar novos owners.")
 
-    title = normalize_member_title(invite_data.title)
+    if (
+        current_member.role == schemas.WorkspaceRole.admin.value
+        and role not in ADMIN_MEMBER_TARGET_ROLES
+    ):
+        raise PermissionDenied(
+            "Apenas o responsável pelo workspace pode convidar para cargos de "
+            "Administração."
+        )
 
     if invite_data.email:
         email = normalize_email(invite_data.email)
@@ -503,6 +517,7 @@ def accept_workspace_invite_link(
         workspace_id=invite_link.workspace_id,
         user_id=current_user.id,
         role=schemas.WorkspaceRole.viewer.value,
+        title=INVITE_LINK_MEMBER_TITLE,
     )
     db.add(member)
     db.flush()
@@ -621,7 +636,7 @@ def revoke_workspace_invite(
         current_member.role == schemas.WorkspaceRole.admin.value
         and invite.role not in ADMIN_MEMBER_TARGET_ROLES
     ):
-        raise PermissionDenied("Admin só pode revogar convites de Funcionários e Visualizadores.")
+        raise PermissionDenied(ADMIN_MANAGE_TARGET_DENIED)
 
     if invite.status == schemas.InviteStatus.pending.value and is_expired(
         invite.expires_at,

@@ -20,7 +20,6 @@ import {
   deleteWorkspaceMember,
   getWorkspaceTeam,
   revokeWorkspaceInvite,
-  updateWorkspaceMember,
   updateWorkspaceMemberTitle,
 } from '../../services/workspaceService'
 import { searchWorkspace } from '../../services/searchService'
@@ -115,14 +114,6 @@ function getMembersError(error) {
   return error?.message ?? 'Não foi possível carregar os membros.'
 }
 
-function getRoleUpdateError(error) {
-  if (error?.status === 403) {
-    return 'Apenas o dono ou um administrador pode alterar permissões.'
-  }
-
-  return error?.message ?? 'Não foi possível atualizar a permissão.'
-}
-
 function getInviteRevokeError(error) {
   if (error?.status === 403) {
     return 'Você não tem permissão para revogar este convite.'
@@ -178,7 +169,6 @@ function Header({ onNavigated }) {
   const [membersFeedback, setMembersFeedback] = useState('')
   const [removingMemberId, setRemovingMemberId] = useState(null)
   const [revokingInviteId, setRevokingInviteId] = useState(null)
-  const [savingMemberId, setSavingMemberId] = useState(null)
   const [savingTitleMemberId, setSavingTitleMemberId] = useState(null)
   const searchContainerRef = useRef(null)
   const searchInputRef = useRef(null)
@@ -387,7 +377,6 @@ function Header({ onNavigated }) {
       setMembersError('')
       setRemovingMemberId(null)
       setRevokingInviteId(null)
-      setSavingMemberId(null)
       setWorkspaceMembers([])
       setMembersWorkspaceId(null)
       setIsMembersLoading(false)
@@ -568,7 +557,7 @@ function Header({ onNavigated }) {
 
   async function handleMemberTitleChange(memberId, title) {
     if (!canManageRoles) {
-      setMembersError('Apenas o dono ou um administrador pode definir cargos.')
+      setMembersError('Apenas o responsável pelo workspace ou a Administração podem definir cargos.')
       return
     }
 
@@ -616,59 +605,9 @@ function Header({ onNavigated }) {
     }
   }
 
-  async function handleMemberRoleChange(memberId, role) {
-    if (!canManageRoles) {
-      setMembersError('Apenas o dono ou um administrador pode alterar permissões.')
-      return
-    }
-
-    const member = workspaceMembers.find((item) => item.id === memberId)
-
-    if (!member || member.isInvite) {
-      setMembersError('Não foi possível atualizar a permissão.')
-      return
-    }
-
-    if (member.role === 'owner' || member.user_id === activeWorkspace.owner_id) {
-      setMembersError('Não é possível alterar a permissão do dono do workspace.')
-      return
-    }
-
-    setSavingMemberId(memberId)
-    setMembersError('')
-    setMembersFeedback('')
-
-    try {
-      const updatedMember = await updateWorkspaceMember(workspaceId, memberId, {
-        role,
-      })
-
-      if (activeWorkspaceIdRef.current !== workspaceId) {
-        return
-      }
-
-      const normalizedMember = normalizeMember(updatedMember)
-
-      setWorkspaceMembers((currentMembers) =>
-        currentMembers.map((currentMember) =>
-          currentMember.id === memberId ? normalizedMember : currentMember,
-        ),
-      )
-      setMembersFeedback('Permissão atualizada.')
-    } catch (error) {
-      if (activeWorkspaceIdRef.current === workspaceId) {
-        setMembersError(getRoleUpdateError(error))
-      }
-    } finally {
-      if (activeWorkspaceIdRef.current === workspaceId) {
-        setSavingMemberId(null)
-      }
-    }
-  }
-
   async function handleInviteRevoke(inviteId) {
     if (!canManageRoles) {
-      setMembersError('Apenas Dono ou Admin podem revogar convites.')
+      setMembersError('Apenas o responsável pelo workspace ou a Administração podem revogar convites.')
       return
     }
 
@@ -725,7 +664,7 @@ function Header({ onNavigated }) {
 
   async function handleMemberRemove(memberId) {
     if (!canManageRoles) {
-      setMembersError('Apenas Dono ou Admin podem remover membros.')
+      setMembersError('Apenas o responsável pelo workspace ou a Administração podem remover membros.')
       return
     }
 
@@ -746,7 +685,7 @@ function Header({ onNavigated }) {
     }
 
     if (member.role === 'owner' || member.user_id === activeWorkspace.owner_id) {
-      setMembersError('Não é possível remover o dono por esta ação.')
+      setMembersError('Não é possível remover o responsável pelo workspace por esta ação.')
       return
     }
 
@@ -1095,13 +1034,11 @@ function Header({ onNavigated }) {
                 }}
                 onInviteRevoke={handleInviteRevoke}
                 onMemberRemove={handleMemberRemove}
-                onRoleChange={handleMemberRoleChange}
                 onTitleChange={handleMemberTitleChange}
                 currentUserId={user?.id}
                 ownerUserId={activeWorkspace?.owner_id}
                 removingMemberId={removingMemberId}
                 revokingInviteId={revokingInviteId}
-                savingMemberId={savingMemberId}
                 savingTitleMemberId={savingTitleMemberId}
               />
             ) : null}

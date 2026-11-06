@@ -91,6 +91,13 @@ export function updateWorkspaceMemberTitle(workspaceId, memberId, title) {
   })
 }
 
+export function transferWorkspaceOwnership(workspaceId, data) {
+  return request(`/workspaces/${workspaceId}/transfer-ownership`, {
+    body: data,
+    method: 'POST',
+  })
+}
+
 export function deleteWorkspaceMember(workspaceId, memberId) {
   return request(`/workspaces/${workspaceId}/members/${memberId}`, {
     method: 'DELETE',

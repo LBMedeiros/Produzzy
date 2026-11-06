@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 
-import { humanizeAuditAction } from './formatters'
+import { humanizeAuditAction, workspaceRoleLabels } from './formatters'
 
 // Builds the "Baixar meus dados" (LGPD) document: a readable report in the
 // app's visual language (light surfaces, blue accent, cards, tables). Plain
@@ -26,15 +26,8 @@ const COLOR = {
   white: [255, 255, 255],
 }
 
-const ROLE_LABELS = {
-  admin: 'Administrador',
-  employee: 'Funcionário',
-  owner: 'Dono',
-  viewer: 'Visualizador',
-}
-
 function roleLabel(role) {
-  return ROLE_LABELS[role] ?? role ?? '—'
+  return workspaceRoleLabels[role] ?? role ?? '—'
 }
 
 function formatDate(value) {
