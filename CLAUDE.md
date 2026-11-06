@@ -67,13 +67,15 @@ These are invariants. Do not break them without an explicit request.
 ### Workspaces and permissions
 
 - Every business read or write must check workspace membership and filter by `workspace_id`. Never allow cross-workspace reads or mutations.
-- Roles: `owner`, `admin`, `employee`, `viewer`. Preserve the permission matrix in `app/crud/base.py`:
-  - read: `owner`, `admin`, `employee`, `viewer`;
-  - products/categories: `owner`, `admin`;
-  - stock: `owner`, `admin`, `employee`;
-  - replenishments: create/update/assign by `owner`, `admin`, `employee`; managing assignees by `owner`, `admin`;
-  - audit logs: `owner`, `admin`.
-- Protect owners: never remove or demote the last owner of a workspace.
+- Access levels (`WorkspaceMember.role`): `owner` (UI: crown, "Responsável pelo workspace"), `admin` (Administração), `manager` (Gestão), `employee` (Operação), `requester` (Solicitante), `viewer` (Visualizador). Preserve the permission matrix in `app/crud/base.py`:
+  - read: all levels;
+  - products/categories: `owner`, `admin`, `manager`;
+  - stock: `owner`, `admin`, `manager`, `employee`;
+  - replenishments: create by `owner`, `admin`, `manager`, `employee`, `requester`; update/assign by `owner`, `admin`, `manager`, `employee`; managing assignees by `owner`, `admin`, `manager`; only `owner`/`admin`/`manager`/`employee` can be assignees; assignees and the creator can comment;
+  - members, cargos and invites: `owner`, `admin` (an admin only manages `manager`/`employee`/`requester`/`viewer`);
+  - audit logs: `owner`, `admin`, `manager`.
+- Cargos (`WorkspaceMember.title`) define the access level through `WORKSPACE_MEMBER_TITLE_ROLES` in `app/crud/base.py` (mirrored in `frontend/src/lib/formatters.js`). Setting a cargo sets the role; the owner keeps `owner` whatever cargo they show. Only the owner assigns Administração cargos.
+- Protect owners: never remove or demote the last owner of a workspace. Ownership only moves through `POST /workspaces/{id}/transfer-ownership` (main owner, confirmed by the workspace name).
 
 ### Stock
 

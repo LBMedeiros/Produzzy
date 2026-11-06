@@ -256,10 +256,13 @@ def ensure_admin_can_manage_member_role(
         raise PermissionDenied("Admin não pode alterar a própria permissão.")
 
     if target_member.role not in ADMIN_MEMBER_TARGET_ROLES:
-        raise PermissionDenied("Admin só pode alterar Funcionários e Visualizadores.")
+        raise PermissionDenied(ADMIN_MANAGE_TARGET_DENIED)
 
     if new_role not in ADMIN_MEMBER_TARGET_ROLES:
-        raise PermissionDenied("Admin só pode dar a permissão de Funcionário ou Visualizador.")
+        raise PermissionDenied(
+            "Apenas o responsável pelo workspace pode atribuir cargos de "
+            "Administração."
+        )
 
 def update_workspace_member(
     workspace_id: int,
@@ -283,6 +286,15 @@ def update_workspace_member(
 
     if new_role == schemas.WorkspaceRole.owner.value:
         raise ValidationError("Não é possível tornar alguém dono por aqui.")
+
+    # The access level now follows the cargo; a member with a cargo changes
+    # level by changing cargo, so the two never disagree.
+    title_role = get_title_role(member.title)
+
+    if title_role is not None and title_role != new_role:
+        raise ValidationError(
+            "A permissão é definida pelo cargo. Altere o cargo do membro."
+        )
 
     ensure_admin_can_manage_member_role(current_member, member, new_role)
 
@@ -320,21 +332,36 @@ def update_workspace_member_title(
         db,
         MEMBER_TITLE_MANAGE_ROLES,
     )
+    workspace = get_workspace_by_id(workspace_id, db)
     member = get_member_by_id(workspace_id, member_id, db)
-
-    # Admins set titles only for the people whose permission they manage.
-    if (
-        current_member.role == schemas.WorkspaceRole.admin.value
-        and member.role not in ADMIN_MEMBER_TARGET_ROLES
-    ):
-        raise PermissionDenied(
-            "Admin só pode definir o cargo de Funcionários e Visualizadores."
-        )
-
     normalized_title = normalize_member_title(title)
 
+    if is_workspace_owner_member(member, workspace):
+        # The owner keeps full access whatever cargo they show, and only they
+        # choose it.
+        if (
+            current_member.id != member.id
+            or current_member.role != schemas.WorkspaceRole.owner.value
+        ):
+            raise PermissionDenied(
+                "Apenas o responsável pelo workspace pode alterar o próprio cargo."
+            )
+
+        new_role = member.role
+    else:
+        if normalized_title is None:
+            raise ValidationError("Selecione um cargo.")
+
+        if current_member.id == member.id:
+            raise PermissionDenied("Você não pode alterar o próprio cargo.")
+
+        new_role = get_title_role(normalized_title)
+        ensure_admin_can_manage_member_role(current_member, member, new_role)
+
     old_title = member.title
+    old_role = member.role
     member.title = normalized_title
+    member.role = new_role
     create_audit_log(
         db=db,
         workspace_id=workspace_id,
@@ -346,6 +373,8 @@ def update_workspace_member_title(
             "member_user_id": member.user_id,
             "old_title": old_title,
             "new_title": member.title,
+            "old_role": old_role,
+            "new_role": member.role,
         },
     )
 
@@ -353,6 +382,66 @@ def update_workspace_member_title(
     db.refresh(member)
 
     return member
+
+def transfer_workspace_ownership(
+    workspace_id: int,
+    transfer_data: schemas.WorkspaceOwnershipTransfer,
+    current_user: models.User,
+    db: Session,
+):
+    current_member = require_workspace_role(
+        workspace_id,
+        current_user,
+        db,
+        {schemas.WorkspaceRole.owner.value},
+    )
+    workspace = get_workspace_by_id(workspace_id, db)
+
+    if workspace.owner_id != current_user.id:
+        raise PermissionDenied(
+            "Apenas o responsável pelo workspace pode transferir a posse."
+        )
+
+    if transfer_data.confirmation_name.strip() != workspace.name.strip():
+        raise ValidationError(
+            "O nome digitado não confere com o nome do workspace."
+        )
+
+    target_member = get_member_by_id(workspace_id, transfer_data.member_id, db)
+
+    if target_member.id == current_member.id:
+        raise ValidationError("Escolha outro membro para receber a posse.")
+
+    new_title = normalize_member_title(transfer_data.new_title)
+
+    if new_title is None:
+        raise ValidationError("Selecione o seu cargo após a transferência.")
+
+    target_previous_role = target_member.role
+    target_member.role = schemas.WorkspaceRole.owner.value
+    workspace.owner_id = target_member.user_id
+    current_member.title = new_title
+    current_member.role = get_title_role(new_title)
+    create_audit_log(
+        db=db,
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        action="workspace.ownership_transferred",
+        entity_type="workspace",
+        entity_id=workspace.id,
+        metadata={
+            "from_user_id": current_user.id,
+            "to_user_id": target_member.user_id,
+            "to_member_previous_role": target_previous_role,
+            "previous_owner_new_title": current_member.title,
+            "previous_owner_new_role": current_member.role,
+        },
+    )
+
+    db.commit()
+    db.refresh(workspace)
+
+    return attach_current_user_role(workspace, current_user, db)
 
 def delete_workspace_member(
     workspace_id: int,
@@ -379,7 +468,7 @@ def delete_workspace_member(
         current_member.role == schemas.WorkspaceRole.admin.value
         and member.role not in ADMIN_MEMBER_TARGET_ROLES
     ):
-        raise PermissionDenied("Admin só pode remover Funcionários e Visualizadores.")
+        raise PermissionDenied(ADMIN_MANAGE_TARGET_DENIED)
 
     create_audit_log(
         db=db,

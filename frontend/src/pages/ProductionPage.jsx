@@ -8,7 +8,12 @@ import ReplenishmentChatModal from '../components/replenishment/ReplenishmentCha
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { getWorkspaceRoleValue, normalizeSearchText } from '../lib/formatters'
+import {
+  getWorkspaceRoleValue,
+  normalizeSearchText,
+  replenishmentCreateRoles,
+  replenishmentOperateRoles,
+} from '../lib/formatters'
 import { needsReplenishment } from '../lib/replenishment'
 import { usePagination } from '../lib/pagination'
 import { listAllProducts } from '../services/productService'
@@ -99,18 +104,25 @@ function ProductionPage({
   const [historyFilter, setHistoryFilter] = useState('stocked')
   const [search, setSearch] = useState('')
   const now = useMemo(() => new Date(), [])
-  // Owners/admins can put anyone on a replenishment; the team list is only
-  // fetched for them (the endpoint is restricted to the same roles).
+  // Owner, Administração and Gestão can put people on a replenishment; the
+  // team list is only fetched for owner/admin (the endpoint is restricted to
+  // them), so Gestão adds themselves through "Assumir".
   const workspaceRole = getWorkspaceRoleValue(user, activeWorkspace)
   const canManageAssignees = workspaceRole === 'owner' || workspaceRole === 'admin'
+  // Operação and up work on needs; the Solicitante only opens them.
+  const canOperate = replenishmentOperateRoles.has(workspaceRole)
+  const canCreate = replenishmentCreateRoles.has(workspaceRole)
   const teamQuery = useQuery({
     enabled: Boolean(workspaceId) && canManageAssignees,
     queryFn: () => getWorkspaceTeam(workspaceId),
     queryKey: ['workspace-team', workspaceId],
   })
-  // Visualizadores only read, so they aren't offered as responsáveis.
+  // Only Operação and up can be responsáveis (Solicitante and Visualizador
+  // don't execute replenishments).
   const assignableMembers = canManageAssignees
-    ? (teamQuery.data?.members ?? []).filter((member) => member.role !== 'viewer')
+    ? (teamQuery.data?.members ?? []).filter((member) =>
+        replenishmentOperateRoles.has(member.role),
+      )
     : null
   const [focusRequestId, setFocusRequestId] = useState(null)
 
@@ -369,7 +381,8 @@ function ProductionPage({
         product_id: creationModal.product.id,
         // "Quem confirma inicia": start the need and make the creator the
         // responsible in one step (no manual "Iniciar/Assumir" afterwards).
-        assigned_to_user_id: user?.id,
+        // A Solicitante cannot be responsible: their need stays open.
+        ...(canOperate ? { assigned_to_user_id: user?.id } : {}),
         ...requestData,
       })
       queryClient.setQueryData(
@@ -382,9 +395,11 @@ function ProductionPage({
         ),
       )
       setCreationModal(null)
-      setStage('in_progress')
+      setStage(canOperate ? 'in_progress' : 'open')
       setSuccessMessage(
-        `Reposição de ${requestTypeLabels[createdRequest.type].toLowerCase()} iniciada. Você é o responsável.`,
+        canOperate
+          ? `Reposição de ${requestTypeLabels[createdRequest.type].toLowerCase()} iniciada. Você é o responsável.`
+          : 'Necessidade aberta. A equipe de estoque vai assumir.',
       )
       await invalidateReplenishment()
     } catch (createError) {
@@ -512,6 +527,8 @@ function ProductionPage({
 
   const cardHandlers = {
     assignableMembers,
+    canCreate,
+    canOperate,
     currentUserId: user?.id,
     now,
     onAddAssignee: (requestItem, userId) =>

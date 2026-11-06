@@ -120,6 +120,24 @@ def delete_workspace(
     return None
 
 
+@router.post(
+    "/workspaces/{workspace_id}/transfer-ownership",
+    response_model=schemas.WorkspaceResponse,
+)
+def transfer_workspace_ownership(
+    workspace_id: int,
+    transfer_data: schemas.WorkspaceOwnershipTransfer,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return crud.transfer_workspace_ownership(
+        workspace_id,
+        transfer_data,
+        current_user,
+        db,
+    )
+
+
 @router.get(
     "/workspaces/{workspace_id}/members",
     response_model=list[schemas.WorkspaceMemberResponse],

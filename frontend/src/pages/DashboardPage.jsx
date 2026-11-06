@@ -102,6 +102,7 @@ function DashboardPage({ onNavigate }) {
   const quickActions = useQuickActions()
   const workspaceId = activeWorkspace?.id
   const canAct = Boolean(quickActions?.canAct)
+  const canRequest = Boolean(quickActions?.canRequest)
   const now = useMemo(() => new Date(), [])
 
   const { data, error, isLoading } = useQuery({
@@ -172,7 +173,7 @@ function DashboardPage({ onNavigate }) {
           <Button onClick={() => openProductReplenishment(product)} size="sm" variant="secondary">
             Ver reposição
           </Button>
-        ) : canAct ? (
+        ) : canRequest ? (
           <Button onClick={() => openProductReplenishment(product)} size="sm">
             Repor
           </Button>

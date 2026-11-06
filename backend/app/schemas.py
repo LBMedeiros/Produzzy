@@ -33,7 +33,9 @@ class StockMovementType(str, Enum):
 class WorkspaceRole(str, Enum):
     owner = "owner"
     admin = "admin"
+    manager = "manager"
     employee = "employee"
+    requester = "requester"
     viewer = "viewer"
 
 
@@ -350,6 +352,15 @@ class WorkspaceMemberTitleUpdate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=50)
 
 
+class WorkspaceOwnershipTransfer(BaseModel):
+    member_id: int
+    # The workspace name typed back as confirmation (works for Google-only
+    # accounts, which have no password to re-enter).
+    confirmation_name: str = Field(min_length=1, max_length=100)
+    # Cargo the current owner keeps after handing the workspace over.
+    new_title: str = Field(min_length=1, max_length=50)
+
+
 class WorkspaceInviteCreate(BaseModel):
     # Without an e-mail the invite is an open, single-use link: whoever accepts
     # it first joins with the chosen role.
@@ -359,7 +370,9 @@ class WorkspaceInviteCreate(BaseModel):
         max_length=255,
         pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
     )
-    role: WorkspaceRole
+    # The cargo (`title`) defines the access level. `role` alone is still
+    # accepted for invites without a cargo; sent together they must agree.
+    role: Optional[WorkspaceRole] = None
     title: Optional[str] = Field(default=None, max_length=50)
 
     @field_validator("email", mode="before")

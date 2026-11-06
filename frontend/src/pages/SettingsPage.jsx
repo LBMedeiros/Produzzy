@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AvatarCropModal from '../components/settings/AvatarCropModal'
@@ -11,7 +11,13 @@ import UserAvatar from '../components/ui/UserAvatar'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
-import { formatWorkspaceRole, getWorkspaceRoleValue } from '../lib/formatters'
+import {
+  formatWorkspaceRole,
+  getMemberTitleSelectOptions,
+  getTitleRole,
+  getWorkspaceRoleValue,
+  workspaceRoleDescriptions,
+} from '../lib/formatters'
 import { getPasswordError, PASSWORD_HINT } from '../lib/password'
 import ShareWorkspaceModal from '../components/layout/ShareWorkspaceModal'
 import Badge from '../components/ui/Badge'
@@ -19,7 +25,11 @@ import {
   exportMyData,
   resendRecoveryEmailConfirmation,
 } from '../services/authService'
-import { getWorkspaceTeam, listWorkspaceMembers } from '../services/workspaceService'
+import {
+  getWorkspaceTeam,
+  listWorkspaceMembers,
+  transferWorkspaceOwnership,
+} from '../services/workspaceService'
 
 const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024
 const allowedAvatarTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -27,21 +37,34 @@ const allowedAvatarTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const permissionsByRole = {
   owner: [
     'Gerenciar o workspace e suas configurações',
-    'Gerenciar membros do workspace',
+    'Transferir a posse do workspace',
+    'Gerenciar membros, cargos e convites',
     'Gerenciar produtos e categorias',
     'Movimentar o estoque',
     'Criar e acompanhar reposições',
+    'Consultar o histórico de ações',
   ],
   admin: [
+    'Gerenciar membros, cargos e convites (exceto cargos de Administração)',
     'Gerenciar produtos e categorias',
     'Movimentar o estoque',
     'Criar e acompanhar reposições',
-    'Gerenciar parte da equipe conforme as regras atuais',
+    'Consultar o histórico de ações',
+  ],
+  manager: [
+    'Gerenciar produtos e categorias',
+    'Movimentar o estoque',
+    'Criar e acompanhar reposições',
+    'Consultar o histórico de ações',
   ],
   employee: [
     'Visualizar produtos e categorias',
     'Movimentar o estoque',
-    'Criar e assumir reposições permitidas',
+    'Criar e assumir reposições',
+  ],
+  requester: [
+    'Visualizar os dados do workspace',
+    'Abrir necessidades de reposição e conversar sobre elas',
   ],
   viewer: [
     'Visualizar os dados do workspace',
@@ -71,7 +94,7 @@ function formatDate(value) {
 
 function getWorkspaceUpdateError(error) {
   if (error?.status === 403) {
-    return 'Apenas o Dono pode alterar o nome do workspace.'
+    return 'Apenas o responsável pelo workspace pode alterar o nome.'
   }
 
   if (error?.status === 0) {
@@ -83,7 +106,7 @@ function getWorkspaceUpdateError(error) {
 
 function getWorkspaceDeleteError(error) {
   if (error?.status === 403) {
-    return 'Apenas o Dono pode excluir este workspace.'
+    return 'Apenas o responsável pelo workspace pode excluí-lo.'
   }
 
   if (error?.status === 0) {
@@ -509,6 +532,172 @@ function DeleteWorkspaceModal({
               {isDeleting ? 'Excluindo...' : 'Excluir workspace'}
             </Button>
             <Button disabled={isDeleting} onClick={onClose} variant="secondary">
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </section>
+      </div>
+    </ModalPortal>
+  )
+}
+
+function getOwnershipTransferError(error) {
+  if (error?.status === 403) {
+    return 'Apenas o responsável pelo workspace pode transferir a posse.'
+  }
+
+  if (error?.status === 0) {
+    return 'Não foi possível conectar ao servidor.'
+  }
+
+  return error?.message ?? 'Não foi possível transferir a posse.'
+}
+
+// The owner hands the workspace (and its crown) to another member, picking the
+// cargo they keep afterwards. Confirmed by typing the workspace name, which
+// also works for Google-only accounts (no password to re-enter).
+function TransferOwnershipModal({ activeWorkspace, onClose, onTransferred, userId }) {
+  const workspaceId = activeWorkspace?.id
+  const workspaceName = activeWorkspace?.name ?? ''
+  const [memberId, setMemberId] = useState('')
+  const [newTitle, setNewTitle] = useState('')
+  const [confirmationName, setConfirmationName] = useState('')
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const teamQuery = useQuery({
+    enabled: Boolean(workspaceId),
+    queryFn: () => getWorkspaceTeam(workspaceId),
+    queryKey: ['workspace-team', workspaceId],
+  })
+  const memberOptions = (teamQuery.data?.members ?? [])
+    .filter((member) => member.user_id !== userId)
+    .map((member) => ({
+      label: member.title
+        ? `${member.user_name ?? member.user_email} · ${member.title}`
+        : (member.user_name ?? member.user_email),
+      value: member.id,
+    }))
+  const newTitleRole = getTitleRole(newTitle)
+  const canConfirm =
+    Boolean(memberId) && Boolean(newTitle) && confirmationName === workspaceName
+
+  async function handleTransfer() {
+    if (!workspaceId || !canConfirm) {
+      return
+    }
+
+    setIsSaving(true)
+    setError('')
+
+    try {
+      await transferWorkspaceOwnership(workspaceId, {
+        confirmation_name: confirmationName,
+        member_id: Number(memberId),
+        new_title: newTitle,
+      })
+      await onTransferred()
+      onClose()
+    } catch (transferError) {
+      setError(getOwnershipTransferError(transferError))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop" role="presentation">
+      <section
+        className="workspace-modal danger-confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="transfer-ownership-title"
+      >
+        <div className="workspace-modal__header">
+          <div>
+            <span>Posse do workspace</span>
+            <h2 id="transfer-ownership-title">Transferir posse</h2>
+          </div>
+          <button
+            aria-label="Fechar modal"
+            className="icon-button"
+            disabled={isSaving}
+            onClick={onClose}
+            type="button"
+          >
+            x
+          </button>
+        </div>
+
+        <div className="workspace-form">
+          <p className="workspace-modal__text">
+            A pessoa escolhida passa a ser a responsável pelo workspace, com
+            acesso total. Você continua no workspace com o cargo que escolher
+            abaixo.
+          </p>
+
+          <div className="workspace-form__field">
+            <span>Novo responsável</span>
+            <SelectMenu
+              ariaLabel="Novo responsável pelo workspace"
+              disabled={isSaving || !memberOptions.length}
+              onChange={setMemberId}
+              options={memberOptions}
+              placeholder={
+                teamQuery.isLoading
+                  ? 'Carregando equipe...'
+                  : memberOptions.length
+                    ? 'Escolha um membro'
+                    : 'Nenhum outro membro no workspace'
+              }
+              portal
+              value={memberId}
+            />
+          </div>
+
+          <div className="workspace-form__field">
+            <span>Seu cargo depois da transferência</span>
+            <SelectMenu
+              ariaLabel="Seu cargo depois da transferência"
+              disabled={isSaving}
+              onChange={setNewTitle}
+              options={getMemberTitleSelectOptions(null)}
+              placeholder="Escolha um cargo"
+              portal
+              value={newTitle}
+            />
+            {newTitleRole ? (
+              <small className="workspace-form__hint">
+                {formatWorkspaceRole(newTitleRole)}:{' '}
+                {workspaceRoleDescriptions[newTitleRole]}
+              </small>
+            ) : null}
+          </div>
+
+          <label>
+            Digite {workspaceName} para confirmar
+            <input
+              disabled={isSaving}
+              onChange={(event) => {
+                setConfirmationName(event.target.value)
+                setError('')
+              }}
+              value={confirmationName}
+            />
+          </label>
+
+          {error ? <p className="form-error">{error}</p> : null}
+
+          <div className="workspace-form__actions">
+            <Button
+              disabled={!canConfirm || isSaving}
+              onClick={handleTransfer}
+              variant="danger"
+            >
+              {isSaving ? 'Transferindo...' : 'Transferir posse'}
+            </Button>
+            <Button disabled={isSaving} onClick={onClose} variant="secondary">
               Cancelar
             </Button>
           </div>
@@ -1316,7 +1505,7 @@ function WorkspaceSettingsSection({
 
       {!canEditWorkspace && !isResolvingRole ? (
         <p className="settings-section__hint">
-          Apenas o Dono pode alterar o nome deste workspace.
+          Apenas o responsável pelo workspace pode alterar o nome.
         </p>
       ) : null}
       {workspaceError ? (
@@ -1606,9 +1795,12 @@ function SettingsPage() {
     uploadAvatar,
     user,
   } = useAuth()
-  const { activeWorkspace, deleteWorkspace, updateWorkspace } = useWorkspace()
+  const { activeWorkspace, deleteWorkspace, loadWorkspaces, updateWorkspace } =
+    useWorkspace()
+  const queryClient = useQueryClient()
   const { resolvedTheme, setThemePreference, themePreference } = useTheme()
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
   const [resolvedRole, setResolvedRole] = useState({
     role: '',
     workspaceId: null,
@@ -1666,6 +1858,16 @@ function SettingsPage() {
     [workspaceRole],
   )
   const canEditWorkspace = workspaceRole === 'owner'
+  // Only the workspace's main owner hands it over (same rule as the API).
+  const canTransferOwnership =
+    Boolean(activeWorkspace) && activeWorkspace.owner_id === user?.id
+
+  async function handleOwnershipTransferred() {
+    await loadWorkspaces().catch(() => undefined)
+    await queryClient.invalidateQueries({
+      queryKey: ['workspace-team', activeWorkspace?.id],
+    })
+  }
 
   return (
     <div className="page-stack settings-page">
@@ -1765,6 +1967,22 @@ function SettingsPage() {
           >
             <div className="settings-danger__content">
               <div>
+                <h3>Transferir posse</h3>
+                <p>
+                  Passa a responsabilidade pelo workspace para outro membro.
+                  Você continua na equipe com o cargo que escolher.
+                </p>
+              </div>
+              <Button
+                disabled={!canTransferOwnership || isResolvingRole}
+                onClick={() => setIsTransferModalOpen(true)}
+                variant="secondary"
+              >
+                Transferir posse
+              </Button>
+            </div>
+            <div className="settings-danger__content">
+              <div>
                 <h3>Excluir workspace</h3>
                 <p>
                   Remove este workspace e seus dados vinculados. Esta ação exige
@@ -1781,12 +1999,21 @@ function SettingsPage() {
             </div>
             {!canEditWorkspace && !isResolvingRole ? (
               <p className="settings-section__hint">
-                Apenas o Dono pode excluir este workspace.
+                Apenas o responsável pelo workspace pode transferir a posse ou
+                excluir este workspace.
               </p>
             ) : null}
           </Card>
         </div>
       </div>
+      {isTransferModalOpen ? (
+        <TransferOwnershipModal
+          activeWorkspace={activeWorkspace}
+          onClose={() => setIsTransferModalOpen(false)}
+          onTransferred={handleOwnershipTransferred}
+          userId={user?.id}
+        />
+      ) : null}
       {isDeleteModalOpen ? (
         <DeleteWorkspaceModal
           activeWorkspace={activeWorkspace}

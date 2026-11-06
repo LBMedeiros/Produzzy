@@ -61,6 +61,10 @@ function ChatIcon() {
 // been there, and the next action. No badge repeating the column name.
 function ReplenishmentBoardCard({
   assignableMembers,
+  // canCreate: may open a need ("Repor"); canOperate: may work on it
+  // (Operação and up). Without them the card is read-only plus the chat.
+  canCreate = true,
+  canOperate = true,
   currentUserId,
   isUpdating = false,
   now,
@@ -82,9 +86,11 @@ function ReplenishmentBoardCard({
             <h3>{product.name}</h3>
             <span>{product.category} · sem reposição aberta</span>
           </div>
-          <Button onClick={() => onCreate(product)} size="sm">
-            Repor
-          </Button>
+          {canCreate ? (
+            <Button onClick={() => onCreate(product)} size="sm">
+              Repor
+            </Button>
+          ) : null}
         </div>
         <StockLevel
           minimum={product.minimum_quantity}
@@ -97,7 +103,8 @@ function ReplenishmentBoardCard({
 
   const assignees = request.assignees ?? []
   const isAssigned = assignees.some((assignee) => assignee.id === currentUserId)
-  const canAssign = request.status === 'open' || request.status === 'in_progress'
+  const canAssign =
+    canOperate && (request.status === 'open' || request.status === 'in_progress')
   const isFinished = request.status === 'stocked' || request.status === 'canceled'
   const timeNote = getTimeNote(request, now)
   const lead = assignees[0]?.name ?? request.assigned_to_name
@@ -158,7 +165,7 @@ function ReplenishmentBoardCard({
       {request.notes ? <p className="board-card__notes">{request.notes}</p> : null}
 
       <div className="board-card__actions">
-        {request.status === 'open' ? (
+        {canOperate && request.status === 'open' ? (
           <Button
             disabled={isUpdating}
             onClick={() => onStatusChange(request, 'in_progress')}
@@ -167,7 +174,7 @@ function ReplenishmentBoardCard({
             Iniciar
           </Button>
         ) : null}
-        {request.status === 'in_progress' ? (
+        {canOperate && request.status === 'in_progress' ? (
           <Button
             disabled={isUpdating}
             onClick={() => onStatusChange(request, 'completed')}
@@ -176,7 +183,7 @@ function ReplenishmentBoardCard({
             Marcar como pronta
           </Button>
         ) : null}
-        {request.status === 'completed' ? (
+        {canOperate && request.status === 'completed' ? (
           <Button onClick={() => onEntry(request)} size="sm">
             Estocar
           </Button>
