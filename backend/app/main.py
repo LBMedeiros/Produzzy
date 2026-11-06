@@ -21,6 +21,7 @@ from app.routers import (
     search,
     workspaces,
     stock_movements,
+    stock_requests,
 )
 
 
@@ -111,6 +112,7 @@ app.include_router(dashboard.router)
 app.include_router(qrcode.router)
 app.include_router(products.router)
 app.include_router(stock_movements.router)
+app.include_router(stock_requests.router)
 app.include_router(categories.router)
 app.include_router(replenishment.router)
 app.include_router(search.router)

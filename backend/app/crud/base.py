@@ -33,6 +33,10 @@ MEMBER_MANAGE_ROLES = {"owner", "admin"}
 MEMBER_ROLE_UPDATE_ROLES = {"owner", "admin"}
 INVITE_MANAGE_ROLES = {"owner", "admin"}
 AUDIT_LOG_READ_ROLES = {"owner", "admin", "manager"}
+# Stock movement requests: the Solicitante asks, Operação and up review.
+STOCK_REQUEST_CREATE_ROLES = {"requester"}
+STOCK_REQUEST_REVIEW_ROLES = {"owner", "admin", "manager", "employee"}
+STOCK_REQUEST_READ_ROLES = STOCK_REQUEST_CREATE_ROLES | STOCK_REQUEST_REVIEW_ROLES
 # Levels an admin may manage (assign, invite, remove). Admin-level cargos are
 # assigned only by the workspace owner.
 ADMIN_MEMBER_TARGET_ROLES = {"manager", "employee", "requester", "viewer"}

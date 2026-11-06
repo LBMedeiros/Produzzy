@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import ActionMenu from '../components/ui/ActionMenu'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -13,6 +14,9 @@ import Pagination from '../components/ui/Pagination'
 import SelectMenu from '../components/ui/SelectMenu'
 import StockLevel from '../components/ui/StockLevel'
 import ReplenishmentCreationModal from '../components/replenishment/ReplenishmentCreationModal'
+import StockRequestsPanel, {
+  StockRequestCreateModal,
+} from '../components/stock/StockRequests'
 import { useAuth } from '../contexts/AuthContext'
 import { useWorkspace } from '../contexts/WorkspaceContext'
 import { formatRelativeTime } from '../lib/activity'
@@ -20,6 +24,7 @@ import {
   getFirstName,
   getWorkspaceRoleValue,
   replenishmentCreateRoles,
+  stockRequestCreateRoles,
 } from '../lib/formatters'
 import { usePagination } from '../lib/pagination'
 import {
@@ -272,6 +277,10 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
   const canWriteProduct = PRODUCT_WRITE_ROLES.has(currentRole)
   const canMoveStock = STOCK_WRITE_ROLES.has(currentRole)
   const canCreateReplenishment = replenishmentCreateRoles.has(currentRole)
+  // The Solicitante asks Operação to move stock instead of moving it.
+  const canRequestMovement = stockRequestCreateRoles.has(currentRole)
+  const queryClient = useQueryClient()
+  const [requestProduct, setRequestProduct] = useState(null)
 
   const [products, setProducts] = useState([])
   // Every active product, kept for the chip counts whatever the filter.
@@ -1454,6 +1463,11 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
       openMovementModal(product)
     }
 
+    if (action === 'request') {
+      setSuccessMessage('')
+      setRequestProduct(product)
+    }
+
     if (action === 'replenish') {
       openReplenishmentModal(product)
     }
@@ -1570,6 +1584,13 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             onClick: () => handleSecondaryProductAction(product, 'movement'),
           }
         : null,
+      canRequestMovement && options.includeRequest
+        ? {
+            id: 'request',
+            label: 'Solicitar movimentação',
+            onClick: () => handleSecondaryProductAction(product, 'request'),
+          }
+        : null,
       shouldShowReplenishmentAction(product)
         ? {
             id: 'replenish',
@@ -1604,6 +1625,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
 
   function renderActiveProductActions(product, options = {}) {
     const showMoveButton = canMoveStock && !options.compact
+    const showRequestButton = canRequestMovement && !options.compact
 
     return (
       <div className="stock-product-actions">
@@ -1616,9 +1638,19 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
             Movimentar
           </Button>
         ) : null}
+        {showRequestButton ? (
+          <Button
+            onClick={() => handleSecondaryProductAction(product, 'request')}
+            size="sm"
+            variant="secondary"
+          >
+            Solicitar
+          </Button>
+        ) : null}
         <ActionMenu
           items={getActiveProductActionItems(product, {
             includeMovement: !showMoveButton,
+            includeRequest: !showRequestButton,
           })}
           label={`Ações de ${product.name}`}
         />
@@ -1768,6 +1800,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
     <div className={`page-stack${isDetailOpen ? ' page-stack--with-detail' : ''}`}>
       <PageHeader
         actions={
+          canWriteProduct ? (
           <>
             <SelectMenu
               ariaLabel="Ações de categorias"
@@ -1784,6 +1817,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
               Novo produto
             </Button>
           </>
+          ) : null
         }
         subtitle="Gerencie produtos, categorias e quantidades do workspace"
         title="Estoque"
@@ -1820,6 +1854,13 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           </ul>
         </section>
       ) : null}
+
+      <StockRequestsPanel
+        currentUserId={user?.id}
+        onStockChanged={loadStockData}
+        role={currentRole}
+        workspaceId={workspaceId}
+      />
 
       <Card className="stock-panel">
         <div className="stock-toolbar">
@@ -2097,6 +2138,14 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                             Movimentar estoque
                           </Button>
                         ) : null}
+                        {canRequestMovement ? (
+                          <Button
+                            onClick={() => handleSecondaryProductAction(detailProduct, 'request')}
+                            variant="secondary"
+                          >
+                            Solicitar movimentação
+                          </Button>
+                        ) : null}
                         {canWriteProduct ? (
                           <>
                             <Button
@@ -2114,7 +2163,7 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
                             </Button>
                           </>
                         ) : null}
-                        {!canMoveStock && !canWriteProduct ? (
+                        {!canMoveStock && !canWriteProduct && !canRequestMovement ? (
                           <p className="product-detail-actions__hint">
                             Você pode consultar o histórico deste produto.
                           </p>
@@ -2341,6 +2390,23 @@ function StockPage({ navigationIntent, onNavigationIntentHandled }) {
           </section>
         </div>
         </ModalPortal>
+      ) : null}
+
+      {requestProduct ? (
+        <StockRequestCreateModal
+          onClose={() => setRequestProduct(null)}
+          onCreated={async () => {
+            setRequestProduct(null)
+            setSuccessMessage(
+              'Solicitação enviada. Quem cuida do estoque vai aprovar ou recusar.',
+            )
+            await queryClient.invalidateQueries({
+              queryKey: ['stock-requests', workspaceId],
+            })
+          }}
+          product={requestProduct}
+          workspaceId={workspaceId}
+        />
       ) : null}
 
       {replenishmentProduct ? (

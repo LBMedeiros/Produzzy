@@ -943,3 +943,153 @@ class ReplenishmentMessage(Base):
     @property
     def user_avatar_url(self):
         return self.user.avatar_url if self.user else None
+
+
+class StockMovementRequest(Base):
+    """A Solicitante's request to move stock (entrada/saída). Operação and up
+    approve it — which records the real stock movement, possibly with a changed
+    quantity — or reject it; the requester can cancel while it is pending."""
+
+    __tablename__ = "stock_movement_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "movement_type IN ('entrada', 'saida')",
+            name="ck_stock_movement_requests_movement_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected', 'canceled')",
+            name="ck_stock_movement_requests_status",
+        ),
+        CheckConstraint(
+            "requested_quantity > 0",
+            name="ck_stock_movement_requests_requested_quantity_positive",
+        ),
+        CheckConstraint(
+            "approved_quantity IS NULL OR approved_quantity > 0",
+            name="ck_stock_movement_requests_approved_quantity_positive",
+        ),
+        Index(
+            "ix_stock_movement_requests_workspace_status",
+            "workspace_id",
+            "status",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    requested_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    reviewed_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+    stock_movement_id = Column(
+        Integer,
+        ForeignKey("stock_movements.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    movement_type = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    requested_quantity = Column(Integer, nullable=False)
+    approved_quantity = Column(Integer, nullable=True)
+    # Why the requester needs the movement.
+    reason = Column(String(255), nullable=False)
+    # Reviewer's note: why the quantity changed or why it was rejected.
+    review_note = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+    )
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+    product = relationship("Product")
+    requested_by_user = relationship("User", foreign_keys=[requested_by_user_id])
+    reviewed_by_user = relationship("User", foreign_keys=[reviewed_by_user_id])
+    messages = relationship(
+        "StockMovementRequestMessage",
+        back_populates="request",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="StockMovementRequestMessage.created_at",
+    )
+
+    @property
+    def product_name(self):
+        return self.product.name if self.product else None
+
+    @property
+    def product_quantity(self):
+        return self.product.quantity if self.product else None
+
+    @property
+    def requested_by_name(self):
+        return self.requested_by_user.name if self.requested_by_user else None
+
+    @property
+    def reviewed_by_name(self):
+        return self.reviewed_by_user.name if self.reviewed_by_user else None
+
+
+class StockMovementRequestMessage(Base):
+    """Conversation between the requester and whoever reviews the request."""
+
+    __tablename__ = "stock_movement_request_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(
+        Integer,
+        ForeignKey("stock_movement_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    workspace_id = Column(
+        Integer,
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+    body = Column(String(1000), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+    request = relationship("StockMovementRequest", back_populates="messages")
+    user = relationship("User", foreign_keys=[user_id])
+
+    @property
+    def user_name(self):
+        return self.user.name if self.user else None
+
+    @property
+    def user_avatar_url(self):
+        return self.user.avatar_url if self.user else None

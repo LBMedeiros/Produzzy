@@ -737,9 +737,10 @@ function ProductionPage({
 
       {chatRequest ? (
         <ReplenishmentChatModal
-          canPost={(chatRequest.assignees ?? []).some(
-            (assignee) => assignee.id === user?.id,
-          )}
+          canPost={
+            chatRequest.created_by_user_id === user?.id ||
+            (chatRequest.assignees ?? []).some((assignee) => assignee.id === user?.id)
+          }
           currentUserId={user?.id}
           onClose={() => setChatRequest(null)}
           productLabel={chatRequest.product_name ?? 'Reposição'}

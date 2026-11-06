@@ -72,6 +72,7 @@ These are invariants. Do not break them without an explicit request.
   - products/categories: `owner`, `admin`, `manager`;
   - stock: `owner`, `admin`, `manager`, `employee`;
   - replenishments: create by `owner`, `admin`, `manager`, `employee`, `requester`; update/assign by `owner`, `admin`, `manager`, `employee`; managing assignees by `owner`, `admin`, `manager`; only `owner`/`admin`/`manager`/`employee` can be assignees; assignees and the creator can comment;
+  - stock movement requests (`/stock-requests`): created only by `requester` (entrada/saída, never ajuste); approved or rejected by `owner`, `admin`, `manager`, `employee`; a requester only sees and cancels their own; the requester and reviewers share the request's conversation;
   - members, cargos and invites: `owner`, `admin` (an admin only manages `manager`/`employee`/`requester`/`viewer`);
   - audit logs: `owner`, `admin`, `manager`.
 - Cargos (`WorkspaceMember.title`) define the access level through `WORKSPACE_MEMBER_TITLE_ROLES` in `app/crud/base.py` (mirrored in `frontend/src/lib/formatters.js`). Setting a cargo sets the role; the owner keeps `owner` whatever cargo they show. Only the owner assigns Administração cargos.
@@ -83,6 +84,7 @@ These are invariants. Do not break them without an explicit request.
 - Stock only changes through a real stock movement, and every change creates a `stock_movements` row preserving `quantity_before`, `quantity_after`, user, product, workspace and an audit log.
 - Creating a replenishment, or marking it `completed`, does not change stock.
 - Inactive products cannot have stock moved.
+- A stock movement request never moves stock by itself. Approving it records the real movement (in the reviewer's name, linked through `stock_movement_id`) under every rule above; a quantity different from the requested one needs a review note, and rejecting needs one too.
 
 ### Replenishment
 

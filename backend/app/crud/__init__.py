@@ -10,3 +10,4 @@ from app.crud.replenishment import *  # noqa: F401,F403
 from app.crud.stock import *  # noqa: F401,F403
 from app.crud.search import *  # noqa: F401,F403
 from app.crud.dashboard import *  # noqa: F401,F403
+from app.crud.stock_requests import *  # noqa: F401,F403
