@@ -7027,6 +7027,151 @@ a {
   font-size: 12.5px;
 }
 
+/* "Solicitações de movimentação" on the Estoque page (Solicitante asks,
+   Operação approves). Same card rhythm as .stock-ready, in the blue accent. */
+.stock-requests {
+  display: grid;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--blue) 28%, var(--border));
+  border-radius: 14px;
+  background: var(--blue-soft);
+  padding: 14px 16px;
+}
+
+.stock-requests__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stock-requests__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--blue);
+  font-weight: 800;
+}
+
+.stock-requests__count {
+  min-width: 22px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--card);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  padding: 1px 7px;
+  text-align: center;
+}
+
+.stock-requests__views {
+  display: flex;
+  gap: 6px;
+}
+
+.stock-requests__empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stock-requests__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stock-requests__item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 10px;
+  background: var(--card);
+  padding: 10px 12px;
+}
+
+.stock-requests__info {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.stock-requests__info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-requests__info span {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.stock-requests__info .stock-requests__reason {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.stock-requests__info .stock-requests__note {
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.stock-requests__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* Request summary at the top of the approve/reject modal. */
+.stock-request-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  padding: 12px;
+}
+
+.stock-request-summary dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stock-request-summary dd {
+  margin: 2px 0 0;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.stock-request-summary__wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .stock-requests__item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stock-requests__actions {
+    justify-content: flex-start;
+  }
+
+  .stock-request-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Filter chips with counts */
 .filter-pill {
   display: inline-flex;

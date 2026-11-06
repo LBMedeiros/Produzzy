@@ -23,7 +23,10 @@ def create_stock_movement(
     movement_data: schemas.StockMovementCreate,
     db: Session,
     user_id: int | None = None,
+    commit: bool = True,
 ):
+    # commit=False lets a caller (e.g. approving a stock request) record the
+    # movement and its own changes in one transaction.
     product = get_product_by_id(
         product_id,
         db,
@@ -128,6 +131,10 @@ def create_stock_movement(
             entity_id=replenishment_request.id,
             metadata=replenishment_metadata(replenishment_request),
         )
+
+    if not commit:
+        db.flush()
+        return movement
 
     db.commit()
     db.refresh(movement)

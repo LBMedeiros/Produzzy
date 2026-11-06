@@ -60,11 +60,13 @@ const permissionsByRole = {
   employee: [
     'Visualizar produtos e categorias',
     'Movimentar o estoque',
+    'Aprovar ou recusar solicitações de movimentação',
     'Criar e assumir reposições',
   ],
   requester: [
     'Visualizar os dados do workspace',
     'Abrir necessidades de reposição e conversar sobre elas',
+    'Solicitar entradas e saídas de estoque para aprovação',
   ],
   viewer: [
     'Visualizar os dados do workspace',

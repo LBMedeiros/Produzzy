@@ -595,6 +595,98 @@ class ReplenishmentMessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class StockMovementRequestStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    canceled = "canceled"
+
+
+def _strip_text(value):
+    return value.strip() if isinstance(value, str) else value
+
+
+class StockMovementRequestCreate(BaseModel):
+    product_id: int = Field(gt=0)
+    # Only entrada/saída can be requested; ajuste stays with Operação and up
+    # (validated in crud.create_stock_movement_request).
+    movement_type: StockMovementType
+    quantity: int = Field(gt=0, le=MAX_QUANTITY)
+    reason: str = Field(min_length=1, max_length=255)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def strip_reason(cls, value):
+        return _strip_text(value)
+
+
+class StockMovementRequestApprove(BaseModel):
+    # Omitted = approve the requested quantity. A different quantity needs a
+    # note explaining the change.
+    quantity: Optional[int] = Field(default=None, gt=0, le=MAX_QUANTITY)
+    note: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def strip_note(cls, value):
+        value = _strip_text(value)
+        return value or None
+
+
+class StockMovementRequestReject(BaseModel):
+    note: str = Field(min_length=1, max_length=255)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def strip_note(cls, value):
+        return _strip_text(value)
+
+
+class StockMovementRequestResponse(BaseModel):
+    id: int
+    workspace_id: int
+    product_id: int
+    product_name: Optional[str] = None
+    product_quantity: Optional[int] = None
+    movement_type: str
+    status: str
+    requested_quantity: int
+    approved_quantity: Optional[int] = None
+    reason: str
+    review_note: Optional[str] = None
+    requested_by_user_id: int
+    requested_by_name: Optional[str] = None
+    reviewed_by_user_id: Optional[int] = None
+    reviewed_by_name: Optional[str] = None
+    stock_movement_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StockMovementRequestMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def strip_body(cls, value):
+        return _strip_text(value)
+
+
+class StockMovementRequestMessageResponse(BaseModel):
+    id: int
+    request_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    user_avatar_url: Optional[str] = None
+    body: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=255)

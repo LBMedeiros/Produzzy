@@ -35,7 +35,7 @@ export const workspaceRoleDescriptions = {
   employee: 'Movimenta o estoque e cuida das reposições.',
   manager: 'Acesso completo, exceto membros, cargos e convites.',
   owner: 'Acesso total. Pode transferir a posse do workspace.',
-  requester: 'Consulta tudo e abre necessidades de reposição.',
+  requester: 'Consulta tudo, abre necessidades e solicita movimentações.',
   viewer: 'Apenas consulta.',
 }
 
@@ -57,6 +57,11 @@ export const replenishmentCreateRoles = new Set([
   'requester',
 ])
 export const replenishmentOperateRoles = new Set(['owner', 'admin', 'manager', 'employee'])
+
+// Stock movement requests: the Solicitante asks, Operação and up review.
+// Mirror of STOCK_REQUEST_CREATE_ROLES / STOCK_REQUEST_REVIEW_ROLES.
+export const stockRequestCreateRoles = new Set(['requester'])
+export const stockRequestReviewRoles = new Set(['owner', 'admin', 'manager', 'employee'])
 
 export function formatWorkspaceRole(role, fallback = 'Membro') {
   const normalizedRole = String(role ?? '').toLowerCase()
@@ -163,6 +168,10 @@ export const auditActionLabels = {
   'replenishment.stocked': 'Entrada da reposição registrada',
   'replenishment.updated': 'Necessidade de reposição atualizada',
   'stock.movement_created': 'Estoque movimentado',
+  'stock_request.approved': 'Solicitação de movimentação aprovada',
+  'stock_request.canceled': 'Solicitação de movimentação cancelada',
+  'stock_request.created': 'Movimentação solicitada',
+  'stock_request.rejected': 'Solicitação de movimentação recusada',
   'workspace.created': 'Workspace criado',
   'workspace.ownership_transferred': 'Posse do workspace transferida',
   'workspace.updated': 'Workspace atualizado',
@@ -173,6 +182,7 @@ export const auditEntityLabels = {
   product: 'Produto',
   replenishment_request: 'Reposição',
   stock_movement: 'Movimento de estoque',
+  stock_movement_request: 'Solicitação de movimentação',
   workspace: 'Workspace',
   workspace_invite: 'Convite',
   workspace_invite_link: 'Link de convite',
